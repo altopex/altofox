@@ -12,29 +12,45 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { projectId, instruction, provider, model, apiKey } = body;
+    const { projectId, files: directFiles, instruction, provider, model, apiKey } = body;
 
-    if (!projectId || !instruction || !instruction.trim()) {
+    if (!instruction || !instruction.trim()) {
       return NextResponse.json(
-        { success: false, error: "Project ID and change instructions are required." },
+        { success: false, error: "Change instructions are required." },
         { status: 400 }
       );
     }
 
-    // 1. Fetch current project and files
-    const project = await db.project.findUnique({
-      where: { id: projectId },
-      include: { files: true },
-    });
+    let filesToRefine: { path: string; content: string }[] = [];
+    let providerType: ProviderType = (provider || "openai") as ProviderType;
+    let targetModel = model;
 
-    if (!project) {
+    // 1. Resolve files to edit (prefer directly provided files from client state)
+    if (Array.isArray(directFiles) && directFiles.length > 0) {
+      filesToRefine = directFiles;
+    } else if (projectId) {
+      try {
+        const project = await db.project.findUnique({
+          where: { id: projectId },
+          include: { files: true },
+        });
+        if (project) {
+          filesToRefine = project.files;
+          if (!provider) providerType = project.provider as ProviderType;
+          if (!targetModel) targetModel = project.model;
+        }
+      } catch {
+        // DB optional
+      }
+    }
+
+    if (filesToRefine.length === 0) {
       return NextResponse.json(
-        { success: false, error: "Project not found." },
-        { status: 404 }
+        { success: false, error: "No files found to update." },
+        { status: 400 }
       );
     }
 
-    const providerType = (provider || project.provider || "openai") as ProviderType;
     let creds;
     try {
       creds = await getProviderCredentials(providerType, apiKey);
@@ -51,17 +67,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const targetModel =
-      model || project.model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel;
+    const finalModel =
+      targetModel || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel;
 
     const ai = createAIProvider(providerType, {
       apiKey: creds.apiKey,
       baseUrl: creds.baseUrl,
-      defaultModel: targetModel,
+      defaultModel: finalModel,
     });
 
     // 2. Format existing files for context
-    const currentFilesSummary = project.files
+    const currentFilesSummary = filesToRefine
       .map((f) => `=== FILE: ${f.path} ===\n${f.content}\n=== END FILE ===`)
       .join("\n\n");
 
@@ -85,13 +101,13 @@ Return the complete updated files strictly in the required JSON format:
 }
 `;
 
-    console.log(`[Refine] Updating project ${projectId} with: ${instruction.slice(0, 50)}...`);
+    console.log(`[Refine] Updating static site with: ${instruction.slice(0, 50)}...`);
 
     // 3. Call AI
     const result = await ai.generate({
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
-      model: targetModel,
+      model: finalModel,
       temperature: 0.5,
       maxTokens: 8192,
     });
@@ -100,66 +116,72 @@ Return the complete updated files strictly in the required JSON format:
     const parsed = extractAndParseJSON(result.text);
     const validated = validateGeneratedWebsite(parsed);
 
-    // 5. Update files in Database
-    await db.$transaction(async (tx) => {
-      // Upsert or replace files
-      for (const file of validated.files) {
-        await tx.projectFile.upsert({
-          where: {
-            projectId_path: {
-              projectId: project.id,
-              path: file.path,
+    // 5. Try updating files in Database if available (optional)
+    if (projectId) {
+      try {
+        await db.$transaction(async (tx) => {
+          for (const file of validated.files) {
+            await tx.projectFile.upsert({
+              where: {
+                projectId_path: {
+                  projectId,
+                  path: file.path,
+                },
+              },
+              update: {
+                content: file.content,
+                mimeType: file.path.endsWith(".html")
+                  ? "text/html"
+                  : file.path.endsWith(".css")
+                  ? "text/css"
+                  : file.path.endsWith(".js")
+                  ? "application/javascript"
+                  : "text/plain",
+              },
+              create: {
+                projectId,
+                path: file.path,
+                content: file.content,
+                mimeType: file.path.endsWith(".html")
+                  ? "text/html"
+                  : file.path.endsWith(".css")
+                  ? "text/css"
+                  : file.path.endsWith(".js")
+                  ? "application/javascript"
+                  : "text/plain",
+              },
+            });
+          }
+
+          await tx.project.update({
+            where: { id: projectId },
+            data: {
+              notes: validated.notes || `Updated: ${instruction.slice(0, 80)}`,
+              updatedAt: new Date(),
             },
-          },
-          update: {
-            content: file.content,
-            mimeType: file.path.endsWith(".html")
-              ? "text/html"
-              : file.path.endsWith(".css")
-              ? "text/css"
-              : file.path.endsWith(".js")
-              ? "application/javascript"
-              : "text/plain",
-          },
-          create: {
-            projectId: project.id,
-            path: file.path,
-            content: file.content,
-            mimeType: file.path.endsWith(".html")
-              ? "text/html"
-              : file.path.endsWith(".css")
-              ? "text/css"
-              : file.path.endsWith(".js")
-              ? "application/javascript"
-              : "text/plain",
-          },
+          });
         });
+      } catch (dbErr) {
+        console.warn("Database update skipped (stateless mode):", dbErr);
       }
-
-      await tx.project.update({
-        where: { id: project.id },
-        data: {
-          notes: validated.notes || `Updated: ${instruction.slice(0, 80)}`,
-          updatedAt: new Date(),
-        },
-      });
-    });
-
-    // Fetch updated project files
-    const updatedFiles = await db.projectFile.findMany({
-      where: { projectId: project.id },
-    });
+    }
 
     return NextResponse.json({
       success: true,
-      projectId: project.id,
+      projectId: projectId || "stateless",
       notes: validated.notes,
-      files: updatedFiles.map((f) => ({
+      files: validated.files.map((f) => ({
         path: f.path,
         content: f.content,
-        mimeType: f.mimeType,
+        mimeType: f.path.endsWith(".html")
+          ? "text/html"
+          : f.path.endsWith(".css")
+          ? "text/css"
+          : f.path.endsWith(".js")
+          ? "application/javascript"
+          : "text/plain",
       })),
-      downloadUrl: `/api/projects/${project.id}/download`,
+      downloadUrl: projectId ? `/api/projects/${projectId}/download` : undefined,
     });
   } catch (error) {
     console.error("Refinement error:", error);

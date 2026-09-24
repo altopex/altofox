@@ -117,48 +117,57 @@ export async function POST(req: NextRequest) {
       (instructionsText && instructionsText.split(" ").slice(0, 4).join(" ").replace(/[^a-zA-Z0-9 ]/g, "")) ||
       (targetLocation && serviceCategory ? `${targetLocation} ${serviceCategory}` : "Static Website");
 
-    // 7. Store Project and Files in Database
-    const project = await db.project.create({
-      data: {
-        name: projectName,
-        prompt: instructionsText || `${targetLocation || ""} ${serviceCategory || ""}`.trim() || projectName,
-        provider: providerType,
-        model: targetModel,
-        status: "ready",
-        notes: validated.notes || "Complete static website generated with HTML, CSS, and JS.",
-        files: {
-          create: validated.files.map((f) => ({
-            path: f.path,
-            content: f.content,
-            mimeType: f.path.endsWith(".html")
-              ? "text/html"
-              : f.path.endsWith(".css")
-              ? "text/css"
-              : f.path.endsWith(".js")
-              ? "application/javascript"
-              : "text/plain",
-          })),
+    // 7. Store Project in Database (optional, non-blocking)
+    let projectId = "site-" + Date.now();
+    try {
+      const project = await db.project.create({
+        data: {
+          name: projectName,
+          prompt: instructionsText || `${targetLocation || ""} ${serviceCategory || ""}`.trim() || projectName,
+          provider: providerType,
+          model: targetModel,
+          status: "ready",
+          notes: validated.notes || "Complete static website generated with HTML, CSS, and JS.",
+          files: {
+            create: validated.files.map((f) => ({
+              path: f.path,
+              content: f.content,
+              mimeType: f.path.endsWith(".html")
+                ? "text/html"
+                : f.path.endsWith(".css")
+                ? "text/css"
+                : f.path.endsWith(".js")
+                ? "application/javascript"
+                : "text/plain",
+            })),
+          },
         },
-      },
-      include: {
-        files: true,
-      },
-    });
+      });
+      projectId = project.id;
+    } catch (dbErr) {
+      console.warn("Database storage skipped (running in stateless mode):", dbErr);
+    }
 
     return NextResponse.json({
       success: true,
-      projectId: project.id,
-      name: project.name,
-      notes: project.notes,
-      provider: project.provider,
-      model: project.model,
-      createdAt: project.createdAt,
-      files: project.files.map((f) => ({
+      projectId,
+      name: projectName,
+      notes: validated.notes || "Complete static website generated with HTML, CSS, and JS.",
+      provider: providerType,
+      model: targetModel,
+      createdAt: new Date().toISOString(),
+      files: validated.files.map((f) => ({
         path: f.path,
         content: f.content,
-        mimeType: f.mimeType,
+        mimeType: f.path.endsWith(".html")
+          ? "text/html"
+          : f.path.endsWith(".css")
+          ? "text/css"
+          : f.path.endsWith(".js")
+          ? "application/javascript"
+          : "text/plain",
       })),
-      downloadUrl: `/api/projects/${project.id}/download`,
+      downloadUrl: `/api/projects/${projectId}/download`,
     });
   } catch (error) {
     console.error("Website generation failed:", error);

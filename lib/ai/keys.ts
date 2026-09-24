@@ -26,13 +26,13 @@ export async function getProviderCredentials(
     };
   }
 
-  // 2. Check Database for encrypted key
-  const record = await db.apiKey.findUnique({
-    where: { provider },
-  });
+  // 2. Check Database for encrypted key (optional)
+  try {
+    const record = await db.apiKey.findUnique({
+      where: { provider },
+    });
 
-  if (record) {
-    try {
+    if (record) {
       const decrypted = decryptApiKey({
         encryptedKey: record.encryptedKey,
         iv: record.iv,
@@ -43,9 +43,9 @@ export async function getProviderCredentials(
         baseUrl: record.baseUrl || PROVIDER_PRESETS[provider]?.defaultBaseUrl,
         defaultModel: record.defaultModel || PROVIDER_PRESETS[provider]?.defaultModel,
       };
-    } catch (err) {
-      console.error(`Failed to decrypt key for ${provider}:`, err);
     }
+  } catch {
+    // Database is optional; fallback to environment variables
   }
 
   // 3. Fallback to environment variables

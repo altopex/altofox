@@ -19,8 +19,16 @@ export async function GET(
       return new Response("Project not found", { status: 404 });
     }
 
-    // Find main HTML file
-    let htmlFile = project.files.find((f) => f.path.toLowerCase() === "index.html");
+    const { searchParams } = new URL(req.url);
+    const targetPage = searchParams.get("page") || "index.html";
+
+    // Find requested HTML file or fallback to index.html
+    let htmlFile = project.files.find(
+      (f) => f.path.toLowerCase() === targetPage.toLowerCase()
+    );
+    if (!htmlFile) {
+      htmlFile = project.files.find((f) => f.path.toLowerCase() === "index.html");
+    }
     if (!htmlFile) {
       htmlFile = project.files.find((f) => f.path.toLowerCase().endsWith(".html"));
     }
@@ -30,6 +38,12 @@ export async function GET(
     }
 
     let renderedHtml = htmlFile.content;
+
+    // Rewrite relative .html navigation links so clicking links stays inside the preview iframe
+    renderedHtml = renderedHtml.replace(
+      /href="([a-zA-Z0-9_\-]+\.html)"/g,
+      (match, p1) => `href="?page=${p1}"`
+    );
 
     // Inline styles.css if present to make preview self-contained
     const cssFile = project.files.find((f) => f.path.toLowerCase() === "styles.css");
