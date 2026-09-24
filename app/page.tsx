@@ -1,247 +1,776 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { Navbar } from "@/components/Navbar";
-import { ApiKeyModal } from "@/components/ApiKeyModal";
-import { RecentProjectsModal } from "@/components/RecentProjectsModal";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { TopBar } from "@/components/TopBar";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { LivePreview, ProjectData } from "@/components/LivePreview";
+import { ToastContainer, ToastMessage } from "@/components/Toast";
 import { ProviderType } from "@/lib/ai/types";
+import {
+  THEMES,
+  getThemeById,
+  getRecommendedThemeIds,
+  resolveThemeColors,
+  CustomThemeOverrides,
+  Theme,
+} from "@/lib/themes";
+import { ThemeMiniPreview } from "@/components/ThemeMiniPreview";
 import {
   Sparkles,
   Key,
   Loader2,
-  MapPin,
-  Search,
-  Phone,
-  Tag,
   Building2,
+  MapPin,
   FileText,
   Palette,
+  CheckCircle2,
+  ArrowRight,
+  ArrowLeft,
+  Plus,
+  X,
+  Lightbulb,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  RotateCcw,
+  ShieldCheck,
+  Check,
   Globe,
+  Phone,
   Mail,
   Clock,
-  CheckSquare,
-  FileSpreadsheet,
+  Layers,
+  Star,
+  Image as ImageIcon,
+  DollarSign,
+  BookOpen,
 } from "lucide-react";
 
-const DEFAULT_PAGES = [
-  "Home",
-  "About",
-  "Services",
-  "Contact",
-  "FAQ",
-  "Service Areas",
+// Popular Local Business Types for the Searchable Dropdown
+const POPULAR_INDUSTRIES = [
+  "Plumber",
+  "Electrician",
+  "HVAC & Air Conditioning",
+  "Roofing Contractor",
+  "Dentist & Orthodontics",
+  "Restaurant & Cafe",
+  "Hair Salon & Barbershop",
+  "Law Firm & Attorney",
+  "Real Estate Agency",
+  "Cleaning Service",
+  "Auto Repair & Mechanic",
+  "Landscaping & Lawn Care",
+  "Gym & Fitness Center",
+  "Home Healthcare",
+  "General Contractor",
+  "Pest Control",
+  "Painter & Decorator",
+  "Other (Custom)",
 ];
 
-const LOCAL_BUSINESS_EXAMPLE = {
+// Available Pages in Step 3
+interface PageOption {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  defaultIncluded: boolean;
+  required?: boolean;
+}
+
+const AVAILABLE_PAGES: PageOption[] = [
+  {
+    id: "Home",
+    name: "Home",
+    description: "Main landing page with hero, services overview, and call-to-action.",
+    icon: <Building2 className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+    required: true,
+  },
+  {
+    id: "About",
+    name: "About Us",
+    description: "Company story, licensed credentials, values, and trust badges.",
+    icon: <FileText className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+  },
+  {
+    id: "Services",
+    name: "Services",
+    description: "Detailed service descriptions, pricing notes, and process steps.",
+    icon: <Layers className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+  },
+  {
+    id: "Contact",
+    name: "Contact",
+    description: "Interactive quote request form, Google Map, and full NAP info.",
+    icon: <Phone className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+  },
+  {
+    id: "FAQ",
+    name: "FAQ",
+    description: "Interactive accordion answering common customer questions.",
+    icon: <Lightbulb className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+  },
+  {
+    id: "Service Areas",
+    name: "Service Areas",
+    description: "Dedicated regional coverage details for local neighborhood SEO.",
+    icon: <MapPin className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: true,
+  },
+  {
+    id: "Reviews",
+    name: "Reviews",
+    description: "Customer testimonials, 5-star badges, and feedback quotes.",
+    icon: <Star className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: false,
+  },
+  {
+    id: "Gallery",
+    name: "Gallery",
+    description: "Project showcase grid and recent completed work photos.",
+    icon: <ImageIcon className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: false,
+  },
+  {
+    id: "Pricing",
+    name: "Pricing & Estimates",
+    description: "Upfront pricing tiers, coupons, and estimate breakdown.",
+    icon: <DollarSign className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: false,
+  },
+  {
+    id: "Blog",
+    name: "Blog / Tips",
+    description: "Helpful homeowner maintenance articles for content marketing.",
+    icon: <BookOpen className="w-4 h-4 text-[#4F46E5]" />,
+    defaultIncluded: false,
+  },
+];
+
+// Local Business Example template
+const EXAMPLE_DATA = {
   businessName: "Lone Star Plumbing & Rooter",
-  businessType: "Emergency Plumbing & Drain Cleaning",
-  businessDescription: "Family-owned residential and commercial plumbing company providing 24/7 fast-dispatch repairs, drain clearing, and water heater installation across Dallas-Fort Worth.",
-  servicesOffered: "24/7 Emergency Plumbing, Hydro-Jetting Drain Cleaning, Tankless Water Heater Repair, Slab Leak Detection, Sewer Line Camera Inspection, Fixture Installation",
+  businessType: "Plumber",
+  businessDescription:
+    "Family-owned residential and commercial plumbing company providing 24/7 fast-dispatch repairs, drain clearing, and water heater installation across Dallas-Fort Worth.",
+  services: [
+    "24/7 Emergency Plumbing",
+    "Hydro-Jetting Drain Cleaning",
+    "Water Heater Repair & Install",
+    "Slab Leak Detection",
+    "Sewer Camera Inspection",
+  ],
   streetAddress: "4512 Main Street",
   city: "Dallas",
   stateRegion: "TX",
   zipPostalCode: "75201",
   country: "USA",
-  serviceAreas: "Dallas, Plano, Frisco, McKinney, Irving, Richardson, Garland, Carrollton",
+  serviceAreas: ["Dallas", "Plano", "Frisco", "McKinney", "Irving", "Richardson"],
   phone: "(214) 555-0198",
   email: "dispatch@lonestarplumbingdfw.com",
-  businessHours: "Monday - Sunday: 24/7 Emergency Dispatch Available",
+  businessHours: "Monday - Sunday: 24/7 Emergency Dispatch",
   websiteDomain: "www.lonestarplumbingdfw.com",
-  targetKeywords: "emergency plumber in Dallas TX, 24/7 drain cleaning Dallas, water heater repair Dallas TX, slab leak detection",
-  pagesToCreate: ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"],
-  brandColors: "Deep Navy Blue (#0a2540) and Safety Gold/Amber (#f59e0b)",
-  styleTone: "Authoritative, trustworthy, professional, and conversion-focused",
-  googleMaps: "https://maps.google.com/?q=Dallas+TX",
-  socialLinks: "Facebook: facebook.com/lonestarplumbing, Yelp: yelp.com/biz/lone-star-plumbing",
-  logoUrl: "",
-  extraInstructions: "Include top 24/7 emergency dispatch call bar with direct link, 45-minute response guarantee badge, '$50 OFF Any First Service' coupon, and working quote form.",
-};
-
-const SUGGESTED_MODELS: Record<string, string[]> = {
-  gemini: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp"],
-  openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
-  openrouter: [
-    "anthropic/claude-3.5-sonnet",
-    "meta-llama/llama-3.3-70b-instruct",
-    "openai/gpt-4o",
-    "deepseek/deepseek-chat",
+  keywords: [
+    "emergency plumber in Dallas TX",
+    "24/7 drain cleaning Dallas",
+    "water heater repair Dallas TX",
+    "slab leak detection",
   ],
-  custom: ["llama3", "qwen2.5-coder", "mistral"],
+  pages: ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"],
+  selectedThemeId: "modern-pro",
+  logoUrl: "",
+  yearsInBusiness: "20+",
+  uniqueSellingPoints: "45-min arrival, upfront flat rates, licensed master technicians",
+  separateServicePages: false,
+  separateAreaPages: false,
+  googleMaps: "https://maps.google.com/?q=Dallas+TX",
+  socialLinks: "Facebook: facebook.com/lonestarplumbing",
 };
 
-export default function HomePage() {
-  // Navigation & Modals
-  const [keysModalOpen, setKeysModalOpen] = useState(false);
-  const [recentModalOpen, setRecentModalOpen] = useState(false);
+export default function BuilderPage() {
+  // Wizard Step State (1: Business, 2: Location/SEO, 3: Pages, 4: Theme, 5: Generate)
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [maxCompletedStep, setMaxCompletedStep] = useState<number>(1);
+
+  // Settings Panel State
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"models" | "preferences">("models");
+  const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+
+  const handleOpenSettings = (
+    tab: "models" | "preferences" = "models",
+    message: string | null = null
+  ) => {
+    setSettingsTab(tab);
+    setSettingsMessage(message);
+    setSettingsOpen(true);
+  };
 
   // Active Provider & Model
   const [activeProvider, setActiveProvider] = useState<ProviderType>("gemini");
   const [activeModel, setActiveModel] = useState<string>("gemini-1.5-pro");
   const [hasKey, setHasKey] = useState(false);
 
-  // Form Fields
+  // Form Fields State
   const [businessName, setBusinessName] = useState("");
-  const [businessType, setBusinessType] = useState("");
+  const [businessType, setBusinessType] = useState("Plumber");
+  const [customBusinessType, setCustomBusinessType] = useState("");
   const [businessDescription, setBusinessDescription] = useState("");
-  const [servicesOffered, setServicesOffered] = useState("");
+  const [services, setServices] = useState<string[]>([
+    "24/7 Emergency Repairs",
+    "Drain Cleaning & Rooter",
+    "Water Heater Installation",
+  ]);
+  const [serviceInput, setServiceInput] = useState("");
+  const [logoUrl, setLogoUrl] = useState("");
+  const [yearsInBusiness, setYearsInBusiness] = useState("");
+  const [uniqueSellingPoints, setUniqueSellingPoints] = useState("");
+
+  // Step 2 Fields
   const [streetAddress, setStreetAddress] = useState("");
   const [city, setCity] = useState("");
   const [stateRegion, setStateRegion] = useState("");
   const [zipPostalCode, setZipPostalCode] = useState("");
   const [country, setCountry] = useState("USA");
-  const [serviceAreas, setServiceAreas] = useState("");
+  const [serviceAreas, setServiceAreas] = useState<string[]>([]);
+  const [areaInput, setAreaInput] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [businessHours, setBusinessHours] = useState("");
+  const [businessHours, setBusinessHours] = useState("Monday - Sunday: 24/7 Emergency Dispatch");
   const [websiteDomain, setWebsiteDomain] = useState("");
-  const [targetKeywords, setTargetKeywords] = useState("");
-  const [selectedPages, setSelectedPages] = useState<string[]>(DEFAULT_PAGES);
-  const [customPageInput, setCustomPageInput] = useState("");
-  const [brandColors, setBrandColors] = useState("Trust Navy Blue & Amber Gold");
-  const [styleTone, setStyleTone] = useState("Authoritative, trustworthy, and modern");
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState("");
   const [googleMaps, setGoogleMaps] = useState("");
   const [socialLinks, setSocialLinks] = useState("");
-  const [logoUrl, setLogoUrl] = useState("");
-  const [extraInstructions, setExtraInstructions] = useState("");
+  const [showCollapsibleSeo, setShowCollapsibleSeo] = useState(false);
 
-  // Generation State
+  // Step 3 Fields
+  const [selectedPages, setSelectedPages] = useState<string[]>([
+    "Home",
+    "About",
+    "Services",
+    "Contact",
+    "FAQ",
+    "Service Areas",
+  ]);
+  const [separateServicePages, setSeparateServicePages] = useState(false);
+  const [separateAreaPages, setSeparateAreaPages] = useState(false);
+
+  // Step 4 Theme Fields
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("modern-pro");
+  const [customThemeColors, setCustomThemeColors] = useState<CustomThemeOverrides>({});
+
+  // Step Validation Errors
+  const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
+
+  // Generation & Results State
   const [generating, setGenerating] = useState(false);
-  const [generationError, setGenerationError] = useState<string | null>(null);
-
-  // Active Generated Project
+  const [generationProgressText, setGenerationProgressText] = useState("Planning your pages…");
+  const [generationPercent, setGenerationPercent] = useState(10);
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(null);
 
-  // Check key in localStorage
+  // Toasts Notification State
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = useCallback((toast: Omit<ToastMessage, "id">) => {
+    const id = Date.now().toString() + Math.random().toString(36).substring(2, 5);
+    setToasts((prev) => [...prev, { ...toast, id }]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  // Check Local Storage API Key & Wizard Cache
   const checkKeyStatus = useCallback(() => {
-    const localKey = localStorage.getItem(`altofox_key_${activeProvider}`);
+    const storedProvider = (localStorage.getItem("altofox_active_provider") as ProviderType) || "gemini";
+    const localKey = localStorage.getItem(`altofox_key_${storedProvider}`);
+
     if (localKey && localKey.trim()) {
+      setActiveProvider(storedProvider);
       setHasKey(true);
-      return;
+      const storedModel = localStorage.getItem(`altofox_model_${storedProvider}`);
+      if (storedModel) setActiveModel(storedModel);
+    } else {
+      // Check if any other provider has a saved key
+      const otherProviders: ProviderType[] = ["openai", "gemini", "openrouter"];
+      const fallback = otherProviders.find((p) => {
+        const k = localStorage.getItem(`altofox_key_${p}`);
+        return !!(k && k.trim());
+      });
+
+      if (fallback) {
+        localStorage.setItem("altofox_active_provider", fallback);
+        setActiveProvider(fallback);
+        setHasKey(true);
+        const m = localStorage.getItem(`altofox_model_${fallback}`);
+        if (m) setActiveModel(m);
+      } else {
+        setActiveProvider(storedProvider);
+        setHasKey(false);
+      }
     }
+  }, []);
 
-    // Check server env fallback
-    fetch("/api/keys")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && Array.isArray(d.providers)) {
-          const providerRecord = d.providers.find((p: { provider: string; hasKey: boolean }) => p.provider === activeProvider);
-          setHasKey(!!providerRecord?.hasKey);
-        }
-      })
-      .catch(() => {});
-  }, [activeProvider]);
+  // Apply user preferences (default country, theme)
+  const applyPreferences = useCallback(() => {
+    const prefCountry = localStorage.getItem("altofox_pref_country");
+    if (prefCountry) {
+      setCountry((prev) => (!prev || prev === "USA" ? prefCountry : prev));
+    }
+    const prefTheme = localStorage.getItem("altofox_pref_theme");
+    if (prefTheme) {
+      setSelectedThemeId((prev) => (!prev || prev === "modern-indigo" ? prefTheme : prev));
+    }
+  }, []);
 
+  // Load cached form progress on first mount
   useEffect(() => {
     checkKeyStatus();
-    const storedModel = localStorage.getItem(`altofox_model_${activeProvider}`);
-    if (storedModel) {
-      setActiveModel(storedModel);
+    applyPreferences();
+
+    try {
+      const cached = localStorage.getItem("altofox_builder_state");
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (data.businessName) setBusinessName(data.businessName);
+        if (data.businessType) setBusinessType(data.businessType);
+        if (data.customBusinessType) setCustomBusinessType(data.customBusinessType);
+        if (data.businessDescription) setBusinessDescription(data.businessDescription);
+        if (Array.isArray(data.services)) setServices(data.services);
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.yearsInBusiness) setYearsInBusiness(data.yearsInBusiness);
+        if (data.uniqueSellingPoints) setUniqueSellingPoints(data.uniqueSellingPoints);
+
+        if (data.streetAddress) setStreetAddress(data.streetAddress);
+        if (data.city) setCity(data.city);
+        if (data.stateRegion) setStateRegion(data.stateRegion);
+        if (data.zipPostalCode) setZipPostalCode(data.zipPostalCode);
+        if (data.country) setCountry(data.country);
+        if (Array.isArray(data.serviceAreas)) setServiceAreas(data.serviceAreas);
+        if (data.phone) setPhone(data.phone);
+        if (data.email) setEmail(data.email);
+        if (data.businessHours) setBusinessHours(data.businessHours);
+        if (data.websiteDomain) setWebsiteDomain(data.websiteDomain);
+        if (Array.isArray(data.keywords)) setKeywords(data.keywords);
+        if (data.googleMaps) setGoogleMaps(data.googleMaps);
+        if (data.socialLinks) setSocialLinks(data.socialLinks);
+
+        if (Array.isArray(data.selectedPages)) setSelectedPages(data.selectedPages);
+        if (typeof data.separateServicePages === "boolean") setSeparateServicePages(data.separateServicePages);
+        if (typeof data.separateAreaPages === "boolean") setSeparateAreaPages(data.separateAreaPages);
+        if (data.selectedThemeId) setSelectedThemeId(data.selectedThemeId);
+        if (data.customThemeColors && typeof data.customThemeColors === "object") {
+          setCustomThemeColors(data.customThemeColors);
+        }
+        if (typeof data.maxCompletedStep === "number") setMaxCompletedStep(data.maxCompletedStep);
+      }
+    } catch {
+      // Ignore cache parse errors
+    }
+  }, [checkKeyStatus, applyPreferences]);
+
+  // Auto-save form progress to localStorage
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const state = {
+        businessName,
+        businessType,
+        customBusinessType,
+        businessDescription,
+        services,
+        logoUrl,
+        yearsInBusiness,
+        uniqueSellingPoints,
+        streetAddress,
+        city,
+        stateRegion,
+        zipPostalCode,
+        country,
+        serviceAreas,
+        phone,
+        email,
+        businessHours,
+        websiteDomain,
+        keywords,
+        googleMaps,
+        socialLinks,
+        selectedPages,
+        separateServicePages,
+        separateAreaPages,
+        selectedThemeId,
+        customThemeColors,
+        maxCompletedStep,
+      };
+      localStorage.setItem("altofox_builder_state", JSON.stringify(state));
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [
+    businessName,
+    businessType,
+    customBusinessType,
+    businessDescription,
+    services,
+    logoUrl,
+    yearsInBusiness,
+    uniqueSellingPoints,
+    streetAddress,
+    city,
+    stateRegion,
+    zipPostalCode,
+    country,
+    serviceAreas,
+    phone,
+    email,
+    businessHours,
+    websiteDomain,
+    keywords,
+    googleMaps,
+    socialLinks,
+    selectedPages,
+    separateServicePages,
+    separateAreaPages,
+    selectedThemeId,
+    customThemeColors,
+    maxCompletedStep,
+  ]);
+
+  // Start Over Confirmation
+  const handleStartOver = () => {
+    if (window.confirm("Are you sure you want to start over? All fields will be cleared.")) {
+      localStorage.removeItem("altofox_builder_state");
+      setBusinessName("");
+      setBusinessType("Plumber");
+      setCustomBusinessType("");
+      setBusinessDescription("");
+      setServices(["Emergency Repairs", "Drain Cleaning", "Water Heater Repair"]);
+      setStreetAddress("");
+      setCity("");
+      setStateRegion("");
+      setZipPostalCode("");
+      setCountry("USA");
+      setServiceAreas([]);
+      setPhone("");
+      setEmail("");
+      setBusinessHours("Monday - Sunday: 24/7 Emergency Dispatch");
+      setWebsiteDomain("");
+      setKeywords([]);
+      setGoogleMaps("");
+      setSocialLinks("");
+      setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
+      setSelectedThemeId("modern-pro");
+      setCustomThemeColors({});
+      setCurrentStep(1);
+      setMaxCompletedStep(1);
+      setStepErrors({});
+      addToast({
+        type: "info",
+        title: "Started Over",
+        message: "All fields have been reset to blank.",
+      });
+    }
+  };
+
+  // Quick fill with local business example
+  const handleFillExample = () => {
+    setBusinessName(EXAMPLE_DATA.businessName);
+    setBusinessType(EXAMPLE_DATA.businessType);
+    setBusinessDescription(EXAMPLE_DATA.businessDescription);
+    setServices(EXAMPLE_DATA.services);
+    setStreetAddress(EXAMPLE_DATA.streetAddress);
+    setCity(EXAMPLE_DATA.city);
+    setStateRegion(EXAMPLE_DATA.stateRegion);
+    setZipPostalCode(EXAMPLE_DATA.zipPostalCode);
+    setCountry(EXAMPLE_DATA.country);
+    setServiceAreas(EXAMPLE_DATA.serviceAreas);
+    setPhone(EXAMPLE_DATA.phone);
+    setEmail(EXAMPLE_DATA.email);
+    setBusinessHours(EXAMPLE_DATA.businessHours);
+    setWebsiteDomain(EXAMPLE_DATA.websiteDomain);
+    setKeywords(EXAMPLE_DATA.keywords);
+    setSelectedPages(EXAMPLE_DATA.pages);
+    setSelectedThemeId(EXAMPLE_DATA.selectedThemeId);
+    setCustomThemeColors({});
+    setYearsInBusiness(EXAMPLE_DATA.yearsInBusiness);
+    setUniqueSellingPoints(EXAMPLE_DATA.uniqueSellingPoints);
+    setGoogleMaps(EXAMPLE_DATA.googleMaps);
+    setSocialLinks(EXAMPLE_DATA.socialLinks);
+    setMaxCompletedStep(5);
+    setStepErrors({});
+    addToast({
+      type: "success",
+      title: "Example Loaded",
+      message: "Pre-filled with Dallas plumbing business specifications.",
+    });
+  };
+
+  // Add / Remove Chips for Services
+  const handleAddService = () => {
+    const trimmed = serviceInput.trim();
+    if (trimmed && !services.includes(trimmed)) {
+      setServices([...services, trimmed]);
+      setServiceInput("");
+    }
+  };
+
+  const handleRemoveService = (item: string) => {
+    setServices(services.filter((s) => s !== item));
+  };
+
+  // Add / Remove Chips for Service Areas
+  const handleAddArea = () => {
+    const trimmed = areaInput.trim();
+    if (trimmed && !serviceAreas.includes(trimmed)) {
+      setServiceAreas([...serviceAreas, trimmed]);
+      setAreaInput("");
+    }
+  };
+
+  const handleRemoveArea = (item: string) => {
+    setServiceAreas(serviceAreas.filter((a) => a !== item));
+  };
+
+  // Add / Remove Chips for Keywords
+  const handleAddKeyword = () => {
+    const trimmed = keywordInput.trim();
+    if (trimmed && !keywords.includes(trimmed)) {
+      setKeywords([...keywords, trimmed]);
+      setKeywordInput("");
+    }
+  };
+
+  const handleRemoveKeyword = (item: string) => {
+    setKeywords(keywords.filter((k) => k !== item));
+  };
+
+  // Auto-Suggest SEO Keywords Button
+  const handleSuggestKeywords = () => {
+    const effectiveType = businessType === "Other (Custom)" ? customBusinessType : businessType;
+    const effectiveCity = city.trim() || "Dallas";
+    const serviceWord = services[0] || effectiveType || "service";
+
+    const suggestions = [
+      `${effectiveType.toLowerCase()} in ${effectiveCity} TX`,
+      `best ${effectiveType.toLowerCase()} ${effectiveCity}`,
+      `24/7 ${effectiveType.toLowerCase()} near me`,
+      `${serviceWord.toLowerCase()} ${effectiveCity}`,
+      `affordable ${effectiveType.toLowerCase()} in ${effectiveCity}`,
+    ];
+
+    const merged = Array.from(new Set([...keywords, ...suggestions]));
+    setKeywords(merged);
+    addToast({
+      type: "success",
+      title: "Keywords Suggested",
+      message: `Added ${suggestions.length} high-intent local SEO keywords.`,
+    });
+  };
+
+  // Toggle Page Selection
+  const togglePage = (pageId: string) => {
+    if (pageId === "Home") return; // Home is required
+    if (selectedPages.includes(pageId)) {
+      if (selectedPages.length <= 1) return;
+      setSelectedPages(selectedPages.filter((p) => p !== pageId));
     } else {
-      const defaults = SUGGESTED_MODELS[activeProvider];
-      if (defaults && defaults[0]) setActiveModel(defaults[0]);
-    }
-  }, [activeProvider, checkKeyStatus]);
-
-  // Load Example Template
-  const handleLoadExample = () => {
-    setBusinessName(LOCAL_BUSINESS_EXAMPLE.businessName);
-    setBusinessType(LOCAL_BUSINESS_EXAMPLE.businessType);
-    setBusinessDescription(LOCAL_BUSINESS_EXAMPLE.businessDescription);
-    setServicesOffered(LOCAL_BUSINESS_EXAMPLE.servicesOffered);
-    setStreetAddress(LOCAL_BUSINESS_EXAMPLE.streetAddress);
-    setCity(LOCAL_BUSINESS_EXAMPLE.city);
-    setStateRegion(LOCAL_BUSINESS_EXAMPLE.stateRegion);
-    setZipPostalCode(LOCAL_BUSINESS_EXAMPLE.zipPostalCode);
-    setCountry(LOCAL_BUSINESS_EXAMPLE.country);
-    setServiceAreas(LOCAL_BUSINESS_EXAMPLE.serviceAreas);
-    setPhone(LOCAL_BUSINESS_EXAMPLE.phone);
-    setEmail(LOCAL_BUSINESS_EXAMPLE.email);
-    setBusinessHours(LOCAL_BUSINESS_EXAMPLE.businessHours);
-    setWebsiteDomain(LOCAL_BUSINESS_EXAMPLE.websiteDomain);
-    setTargetKeywords(LOCAL_BUSINESS_EXAMPLE.targetKeywords);
-    setSelectedPages(LOCAL_BUSINESS_EXAMPLE.pagesToCreate);
-    setBrandColors(LOCAL_BUSINESS_EXAMPLE.brandColors);
-    setStyleTone(LOCAL_BUSINESS_EXAMPLE.styleTone);
-    setGoogleMaps(LOCAL_BUSINESS_EXAMPLE.googleMaps);
-    setSocialLinks(LOCAL_BUSINESS_EXAMPLE.socialLinks);
-    setExtraInstructions(LOCAL_BUSINESS_EXAMPLE.extraInstructions);
-    setGenerationError(null);
-  };
-
-  // Toggle Page Checkbox
-  const togglePage = (page: string) => {
-    if (selectedPages.includes(page)) {
-      if (selectedPages.length === 1) return; // Keep at least one page
-      setSelectedPages(selectedPages.filter((p) => p !== page));
-    } else {
-      setSelectedPages([...selectedPages, page]);
+      setSelectedPages([...selectedPages, pageId]);
     }
   };
 
-  const handleAddCustomPage = () => {
-    const trimmed = customPageInput.trim();
-    if (trimmed && !selectedPages.includes(trimmed)) {
-      setSelectedPages([...selectedPages, trimmed]);
-      setCustomPageInput("");
-    }
-  };
+  // Effective Business Type String
+  const effectiveIndustry =
+    businessType === "Other (Custom)" ? customBusinessType.trim() || "Local Business" : businessType;
 
-  // Handle Generate
-  const handleGenerate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (generating) return;
+  // Selected Theme Details & Recommendations
+  const recommendedThemeIds = useMemo(() => {
+    return getRecommendedThemeIds(effectiveIndustry);
+  }, [effectiveIndustry]);
 
-    // Validate Required Fields
+  const activeTheme = useMemo(() => {
+    return getThemeById(selectedThemeId);
+  }, [selectedThemeId]);
+
+  const activeColors = useMemo(() => {
+    return resolveThemeColors(activeTheme, customThemeColors);
+  }, [activeTheme, customThemeColors]);
+
+  const hasCustomColors = useMemo(() => {
+    return (
+      (!!customThemeColors.primary &&
+        customThemeColors.primary.toLowerCase() !== activeTheme.colors.primary.toLowerCase()) ||
+      (!!customThemeColors.accent &&
+        customThemeColors.accent.toLowerCase() !== activeTheme.colors.accent.toLowerCase()) ||
+      (!!customThemeColors.background &&
+        customThemeColors.background.toLowerCase() !== activeTheme.colors.background.toLowerCase())
+    );
+  }, [customThemeColors, activeTheme]);
+
+  // Validate Step 1
+  const validateStep1 = (): boolean => {
+    const errors: Record<string, string> = {};
     if (!businessName.trim()) {
-      setGenerationError("Please enter your Business / Website Name.");
-      return;
+      errors.businessName = "Business name is required.";
     }
-    if (!businessType.trim()) {
-      setGenerationError("Please enter your Business Type / Industry.");
-      return;
+    if (businessType === "Other (Custom)" && !customBusinessType.trim()) {
+      errors.businessType = "Please specify your industry.";
     }
+    if (!businessDescription.trim()) {
+      errors.businessDescription = "A short business description is required.";
+    }
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Validate Step 2
+  const validateStep2 = (): boolean => {
+    const errors: Record<string, string> = {};
     if (!city.trim()) {
-      setGenerationError("Please enter your City (required for local website generation).");
-      return;
+      errors.city = "City is required for localized SEO.";
     }
-    if (!targetKeywords.trim()) {
-      setGenerationError("Please provide at least one target SEO keyword.");
-      return;
+    if (!stateRegion.trim()) {
+      errors.stateRegion = "State or region is required.";
+    }
+    if (!phone.trim()) {
+      errors.phone = "Phone number is required for customer calls.";
+    }
+    if (keywords.length === 0 && !keywordInput.trim()) {
+      errors.keywords = "At least one target keyword is required. Click 'Suggest Keywords' for help.";
+    }
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // Handle Wizard Navigation
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (!validateStep1()) {
+        addToast({
+          type: "error",
+          title: "Incomplete Fields",
+          message: "Please fill in the required business details.",
+        });
+        return;
+      }
+    } else if (currentStep === 2) {
+      if (!validateStep2()) {
+        addToast({
+          type: "error",
+          title: "Incomplete Fields",
+          message: "Please enter your city, phone, and at least one keyword.",
+        });
+        return;
+      }
     }
 
+    const next = Math.min(currentStep + 1, 5);
+    setCurrentStep(next);
+    if (next > maxCompletedStep) setMaxCompletedStep(next);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handlePrevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleJumpToStep = (stepNumber: number) => {
+    if (stepNumber <= maxCompletedStep || stepNumber === currentStep) {
+      setCurrentStep(stepNumber);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  // Execute Website Generation
+  const handleGenerateWebsite = async () => {
     const localKey = localStorage.getItem(`altofox_key_${activeProvider}`);
     if (!hasKey && !localKey) {
-      setKeysModalOpen(true);
+      handleOpenSettings("models", "Connect an AI model to generate your website.");
+      addToast({
+        type: "warning",
+        title: "AI Model Required",
+        message: "Connect an AI model to generate your website.",
+      });
       return;
     }
 
     setGenerating(true);
-    setGenerationError(null);
+    setGenerationPercent(15);
+    setGenerationProgressText("Planning site structure and pages…");
+
+    // Dynamic rotating status text
+    const statusSequence = [
+      { text: "Writing high-converting local copy…", pct: 35, delay: 1800 },
+      { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 55, delay: 4000 },
+      { text: "Designing responsive styles with brand palette…", pct: 75, delay: 7000 },
+      { text: "Connecting relative page navigation and scripts…", pct: 90, delay: 11000 },
+      { text: "Finalizing static website package…", pct: 95, delay: 15000 },
+    ];
+
+    const timers: NodeJS.Timeout[] = statusSequence.map((item) =>
+      setTimeout(() => {
+        setGenerationProgressText(item.text);
+        setGenerationPercent(item.pct);
+      }, item.delay)
+    );
+
+    const savedLanguage =
+      (typeof window !== "undefined" ? localStorage.getItem("altofox_pref_language") : null) || "English";
 
     const formData = {
       businessName: businessName.trim(),
-      businessType: businessType.trim(),
+      businessType: effectiveIndustry,
       businessDescription: businessDescription.trim(),
-      servicesOffered: servicesOffered.trim(),
+      servicesOffered: services.join(", "),
+      services: services,
       streetAddress: streetAddress.trim(),
       city: city.trim(),
       stateRegion: stateRegion.trim(),
       zipPostalCode: zipPostalCode.trim(),
       country: country.trim(),
-      serviceAreas: serviceAreas.trim(),
+      serviceAreas: serviceAreas.join(", "),
+      serviceAreasList: serviceAreas,
       phone: phone.trim(),
       email: email.trim(),
       businessHours: businessHours.trim(),
       websiteDomain: websiteDomain.trim(),
-      targetKeywords: targetKeywords.trim(),
+      targetKeywords: keywords.join(", "),
       pagesToCreate: selectedPages,
-      brandColors: brandColors.trim(),
-      styleTone: styleTone.trim(),
+      separateServicePages: separateServicePages,
+      separateAreaPages: separateAreaPages,
+      yearsInBusiness: yearsInBusiness.trim(),
+      uniqueSellingPoints: uniqueSellingPoints.trim(),
+      brandColors: `Primary: ${activeColors.primary}, Accent: ${activeColors.accent}, Background: ${activeColors.background}`,
+      styleTone: `${activeTheme.name} - ${activeTheme.description}`,
+      theme: {
+        id: activeTheme.id,
+        name: activeTheme.name,
+        description: activeTheme.description,
+        colors: activeColors,
+        fonts: activeTheme.fonts,
+        borderRadius: activeTheme.borderRadius,
+        buttonStyle: activeTheme.buttonStyle,
+        heroStyle: activeTheme.heroStyle,
+        sectionStyle: activeTheme.sectionStyle,
+        designNotes: activeTheme.designNotes,
+      },
       googleMaps: googleMaps.trim(),
       socialLinks: socialLinks.trim(),
       logoUrl: logoUrl.trim(),
-      extraInstructions: extraInstructions.trim(),
+      language: savedLanguage,
+      extraInstructions: [
+        uniqueSellingPoints ? `Unique Selling Points: ${uniqueSellingPoints}` : "",
+        yearsInBusiness ? `Years in business: ${yearsInBusiness}` : "",
+        separateServicePages ? "Create individual service landing pages for each main service." : "",
+        separateAreaPages ? "Create individual city landing pages for key service areas." : "",
+      ]
+        .filter(Boolean)
+        .join(". "),
     };
 
     try {
@@ -257,6 +786,8 @@ export default function HomePage() {
       });
 
       const data = await res.json();
+      timers.forEach(clearTimeout);
+
       if (data.success && Array.isArray(data.files)) {
         setCurrentProject({
           projectId: data.projectId,
@@ -264,518 +795,1275 @@ export default function HomePage() {
           notes: data.notes,
           provider: data.provider,
           model: data.model,
+          themeName: activeTheme.name,
+          websiteDomain: websiteDomain.trim(),
           files: data.files,
         });
+        addToast({
+          type: "success",
+          title: "Website Created!",
+          message: `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
+        });
       } else {
-        setGenerationError(data.error || "Failed to generate website. Please check your API key or model name.");
+        addToast({
+          type: "error",
+          title: "Generation Failed",
+          message: data.error || "The AI model encountered an issue. Please verify your API key or model name.",
+        });
       }
     } catch (err) {
-      setGenerationError(
-        err instanceof Error ? err.message : "Network error generating website."
-      );
+      timers.forEach(clearTimeout);
+      addToast({
+        type: "error",
+        title: "Connection Error",
+        message: err instanceof Error ? err.message : "Network error generating website. Please check your internet connection.",
+      });
     } finally {
       setGenerating(false);
     }
   };
 
+  const stepsList = [
+    { number: 1, label: "Business Info" },
+    { number: 2, label: "Location & SEO" },
+    { number: 3, label: "Pages" },
+    { number: 4, label: "Theme" },
+    { number: 5, label: "Generate" },
+  ];
+
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      {/* Navbar */}
-      <Navbar
-        onOpenKeys={() => setKeysModalOpen(true)}
-        onOpenProjects={() => setRecentModalOpen(true)}
+    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A]">
+      {/* Toast Notification Container */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Top Bar Navigation */}
+      <TopBar
+        onOpenSettings={(tab) => handleOpenSettings(tab || "models")}
         activeProvider={activeProvider}
-        hasKeyForActiveProvider={hasKey}
+        activeModel={activeModel}
+        hasKey={hasKey}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col justify-center py-6">
+      {/* Settings Slide-In Panel */}
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsMessage(null);
+        }}
+        initialTab={settingsTab}
+        initialMessage={settingsMessage}
+        onSettingsUpdated={() => {
+          checkKeyStatus();
+          applyPreferences();
+        }}
+        onClearAllData={() => {
+          setBusinessName("");
+          setBusinessType("Plumber");
+          setCustomBusinessType("");
+          setBusinessDescription("");
+          setServices(["24/7 Emergency Repairs", "Drain Cleaning & Rooter"]);
+          setCity("");
+          setStateRegion("");
+          setZipPostalCode("");
+          setCountry("United States");
+          setPhone("");
+          setEmail("");
+          setKeywords([]);
+          setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
+          setSelectedThemeId("modern-indigo");
+          setCurrentStep(1);
+          setMaxCompletedStep(1);
+          addToast({
+            type: "info",
+            title: "Data Reset",
+            message: "All saved builder form data, API keys, and preferences were cleared.",
+          });
+        }}
+      />
+
+      {/* Main Container */}
+      <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+        {/* VIEW 1: RESULT SCREEN */}
         {currentProject ? (
-          /* Live Preview & Direct Download View */
           <LivePreview
             project={currentProject}
-            onNewWebsite={() => setCurrentProject(null)}
+            onNewWebsite={() => {
+              setCurrentProject(null);
+              setCurrentStep(1);
+            }}
+            onGenerateAgain={handleGenerateWebsite}
+            onTryAnotherTheme={() => {
+              setCurrentProject(null);
+              setCurrentStep(4);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
           />
-        ) : (
-          /* Website Builder Form */
-          <div className="max-w-4xl mx-auto w-full px-4 sm:px-6 lg:px-8 space-y-6">
-            {/* Header */}
-            <div className="text-center space-y-2">
-              <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                Static Website Builder
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto">
-                Connect your AI API key, fill in your business details, and generate a ready-to-run static website with 1-click ZIP download.
-              </p>
-            </div>
-
-            {/* Quick Actions Row: AI Provider Picker + Load Example Button */}
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                    AI Provider:
-                  </span>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {(
-                      [
-                        { id: "gemini", label: "Google Gemini" },
-                        { id: "openai", label: "OpenAI" },
-                        { id: "openrouter", label: "OpenRouter" },
-                        { id: "custom", label: "Custom API" },
-                      ] as const
-                    ).map((p) => {
-                      const isSelected = activeProvider === p.id;
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => {
-                            setActiveProvider(p.id);
-                            const defaults = SUGGESTED_MODELS[p.id];
-                            if (defaults && defaults[0]) setActiveModel(defaults[0]);
-                          }}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
-                            isSelected
-                              ? "bg-sky-500/10 border-sky-500 text-sky-300 ring-1 ring-sky-500/40"
-                              : "bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200"
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => setKeysModalOpen(true)}
-                    className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg transition"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>{hasKey ? "Key Connected ✓" : "Enter API Key"}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleLoadExample}
-                    className="text-xs text-amber-300 hover:text-white flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 px-3 py-1.5 rounded-lg transition font-medium"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Local Business Example</span>
-                  </button>
-                </div>
+        ) : generating ? (
+          /* VIEW 2: GENERATING SCREEN */
+          <div className="max-w-xl mx-auto w-full my-auto py-16 px-4">
+            <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6">
+              <div className="w-16 h-16 rounded-full bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto shadow-sm">
+                <Loader2 className="w-8 h-8 animate-spin" />
               </div>
 
-              {/* Model Name Input (User can type any model) */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2 flex-1">
-                  <span className="text-slate-400 whitespace-nowrap font-medium">Model:</span>
-                  <input
-                    type="text"
-                    value={activeModel}
-                    onChange={(e) => setActiveModel(e.target.value)}
-                    placeholder="Enter any model name (e.g. gemini-1.5-pro, gpt-4o)"
-                    className="flex-1 max-w-sm px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-mono text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
+              <div>
+                <h2 className="text-xl font-bold text-[#0F172A] mb-1.5">
+                  Building Your Static Website
+                </h2>
+                <p className="text-sm font-medium text-[#4F46E5] min-h-[24px] transition-all">
+                  {generationProgressText}
+                </p>
+                <p className="text-xs text-[#64748B] mt-1">
+                  Writing zero-build static HTML, CSS, JavaScript, and Schema.org markup.
+                </p>
+              </div>
+
+              {/* Animated Progress Bar */}
+              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-[#4F46E5] h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${generationPercent}%` }}
+                />
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setGenerating(false)}
+                  className="text-xs font-semibold text-[#64748B] hover:text-[#EF4444] px-3 py-1.5 rounded-lg transition"
+                >
+                  Cancel Generation
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* VIEW 3: STEP-BY-STEP WIZARD */
+          <div className="max-w-[720px] mx-auto w-full space-y-6">
+            {/* Quick Actions Bar (Start over & Fill example) */}
+            <div className="flex items-center justify-between text-xs text-[#64748B] px-1">
+              <div className="flex items-center space-x-2">
+                <span className="font-medium">AltoFox Static Builder</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={handleFillExample}
+                  className="inline-flex items-center space-x-1 text-[#4F46E5] hover:text-[#4338CA] font-semibold hover:underline"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Fill with Dallas Plumbing Example</span>
+                </button>
+                <span>•</span>
+                <button
+                  type="button"
+                  onClick={handleStartOver}
+                  className="text-[#94A3B8] hover:text-[#EF4444] transition"
+                >
+                  Start Over
+                </button>
+              </div>
+            </div>
+
+            {/* Horizontal Step Progress Bar */}
+            <div className="bg-white border border-[#E2E8F0] rounded-[14px] p-3 sm:p-4 shadow-sm">
+              {/* Desktop Progress Stepper */}
+              <div className="hidden sm:flex items-center justify-between">
+                {stepsList.map((step, idx) => {
+                  const isCurrent = currentStep === step.number;
+                  const isCompleted = step.number < currentStep || step.number <= maxCompletedStep;
+                  const isClickable = step.number <= maxCompletedStep;
+
+                  return (
+                    <React.Fragment key={step.number}>
+                      <button
+                        type="button"
+                        onClick={() => handleJumpToStep(step.number)}
+                        disabled={!isClickable}
+                        className={`flex items-center space-x-2.5 transition text-left ${
+                          isClickable ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+                        }`}
+                      >
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition ${
+                            isCurrent
+                              ? "bg-[#4F46E5] text-white ring-4 ring-[#EEF2FF]"
+                              : isCompleted && step.number < currentStep
+                              ? "bg-[#10B981] text-white"
+                              : "bg-slate-100 text-[#64748B] border border-slate-200"
+                          }`}
+                        >
+                          {isCompleted && step.number < currentStep ? (
+                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          ) : (
+                            step.number
+                          )}
+                        </div>
+                        <span
+                          className={`text-xs font-semibold ${
+                            isCurrent
+                              ? "text-[#4F46E5]"
+                              : isCompleted
+                              ? "text-[#0F172A]"
+                              : "text-[#94A3B8]"
+                          }`}
+                        >
+                          {step.label}
+                        </span>
+                      </button>
+
+                      {idx < stepsList.length - 1 && (
+                        <div
+                          className={`flex-1 h-0.5 mx-2 rounded transition-colors ${
+                            step.number < currentStep ? "bg-[#10B981]" : "bg-[#E2E8F0]"
+                          }`}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+
+              {/* Mobile Progress Stepper */}
+              <div className="flex sm:hidden items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5]">
+                    Step {currentStep} of 5
+                  </span>
+                  <h4 className="text-sm font-bold text-[#0F172A]">
+                    {stepsList[currentStep - 1]?.label}
+                  </h4>
                 </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-slate-500 text-[11px]">Suggested:</span>
-                  {(SUGGESTED_MODELS[activeProvider] || []).map((m) => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setActiveModel(m)}
-                      className={`text-[11px] px-2 py-0.5 rounded border font-mono transition ${
-                        activeModel === m
-                          ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
-                          : "bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200"
+                <div className="flex items-center space-x-1">
+                  {stepsList.map((step) => (
+                    <div
+                      key={step.number}
+                      className={`h-1.5 rounded-full transition-all ${
+                        currentStep === step.number
+                          ? "w-6 bg-[#4F46E5]"
+                          : step.number < currentStep
+                          ? "w-2.5 bg-[#10B981]"
+                          : "w-2.5 bg-slate-200"
                       }`}
-                    >
-                      {m}
-                    </button>
+                    />
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Main Form Card */}
-            <form onSubmit={handleGenerate} className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-7 shadow-xl space-y-5">
-              {/* Section 1: Business Identity */}
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5" /> 1. Business Identity
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">
-                      Business / Website Name <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={businessName}
-                      onChange={(e) => setBusinessName(e.target.value)}
-                      placeholder="e.g. Lone Star Plumbing & Rooter"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">
-                      Business Type / Industry <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={businessType}
-                      onChange={(e) => setBusinessType(e.target.value)}
-                      placeholder="e.g. Emergency Plumbing & Drain Cleaning"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Business Description
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={businessDescription}
-                    onChange={(e) => setBusinessDescription(e.target.value)}
-                    placeholder="Short description of what the business does, company history, or mission statement..."
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Services Offered (List / comma-separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={servicesOffered}
-                    onChange={(e) => setServicesOffered(e.target.value)}
-                    placeholder="e.g. 24/7 Emergency Repairs, Drain Cleaning, Water Heater Replacement, Leak Detection"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              {/* Section 2: Location & Address */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5" /> 2. Location & Service Areas
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2 space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Street Address</label>
-                    <input
-                      type="text"
-                      value={streetAddress}
-                      onChange={(e) => setStreetAddress(e.target.value)}
-                      placeholder="e.g. 4512 Main Street"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">
-                      City <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="e.g. Dallas"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">State / Region</label>
-                    <input
-                      type="text"
-                      value={stateRegion}
-                      onChange={(e) => setStateRegion(e.target.value)}
-                      placeholder="e.g. TX"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">ZIP / Postal Code</label>
-                    <input
-                      type="text"
-                      value={zipPostalCode}
-                      onChange={(e) => setZipPostalCode(e.target.value)}
-                      placeholder="e.g. 75201"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Country</label>
-                    <input
-                      type="text"
-                      value={country}
-                      onChange={(e) => setCountry(e.target.value)}
-                      placeholder="e.g. USA"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-300">
-                    Service Areas (Nearby cities or neighborhoods served)
-                  </label>
-                  <input
-                    type="text"
-                    value={serviceAreas}
-                    onChange={(e) => setServiceAreas(e.target.value)}
-                    placeholder="e.g. Dallas, Plano, Frisco, McKinney, Irving, Richardson, Garland"
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
-
-              {/* Section 3: Contact & SEO */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5" /> 3. Contact & Local SEO
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Phone Number</label>
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="e.g. (214) 555-0198"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Email Address</label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="e.g. info@example.com"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Business Hours</label>
-                    <input
-                      type="text"
-                      value={businessHours}
-                      onChange={(e) => setBusinessHours(e.target.value)}
-                      placeholder="e.g. Mon-Sun: 24/7"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Website Domain</label>
-                    <input
-                      type="text"
-                      value={websiteDomain}
-                      onChange={(e) => setWebsiteDomain(e.target.value)}
-                      placeholder="e.g. www.example.com"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">
-                      Target Keywords (Comma-separated) <span className="text-red-400">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={targetKeywords}
-                      onChange={(e) => setTargetKeywords(e.target.value)}
-                      placeholder="e.g. emergency plumber in Dallas, 24/7 drain cleaning Dallas TX"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Section 4: Pages to Create Checkboxes */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
-                  <CheckSquare className="w-3.5 h-3.5" /> 4. Pages to Create
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-                  {DEFAULT_PAGES.map((page) => {
-                    const isChecked = selectedPages.includes(page);
-                    return (
+            {/* Wizard Card Content */}
+            <div className="bg-white border border-[#E2E8F0] rounded-[16px] shadow-sm overflow-hidden p-6 sm:p-8 space-y-6">
+              {/* STEP 1: BUSINESS INFO */}
+              {currentStep === 1 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {/* API Key Missing Reminder Banner */}
+                  {!hasKey && (
+                    <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2 text-[#92400E]">
+                        <Key className="w-4 h-4 shrink-0 text-[#F59E0B]" />
+                        <span>Connect an AI model anytime to start building →</span>
+                      </div>
                       <button
-                        key={page}
                         type="button"
-                        onClick={() => togglePage(page)}
-                        className={`p-2 rounded-lg border text-xs font-medium flex items-center justify-between transition ${
-                          isChecked
-                            ? "bg-purple-500/10 border-purple-500 text-purple-300"
-                            : "bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300"
-                        }`}
+                        onClick={() => setSettingsOpen(true)}
+                        className="font-bold text-[#92400E] underline hover:text-black shrink-0 ml-3"
                       >
-                        <span>{page}</span>
-                        <span>{isChecked ? "✓" : ""}</span>
+                        Connect Key
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+                  )}
 
-                {/* Custom Page Input */}
-                <div className="flex items-center gap-2 pt-1 max-w-sm">
-                  <input
-                    type="text"
-                    value={customPageInput}
-                    onChange={(e) => setCustomPageInput(e.target.value)}
-                    placeholder="+ Add custom page (e.g. Pricing, Gallery)"
-                    className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddCustomPage}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 rounded-lg border border-slate-700"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-[#0F172A]">Tell us about your business</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      We will use these details to generate persuasive, industry-specific content.
+                    </p>
+                  </div>
 
-              {/* Section 5: Brand Styling & Optional Extras */}
-              <div className="space-y-3 pt-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-sky-400 border-b border-slate-800 pb-1 flex items-center gap-1.5">
-                  <Palette className="w-3.5 h-3.5" /> 5. Brand Styling & Extras
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Brand Colors</label>
-                    <input
-                      type="text"
-                      value={brandColors}
-                      onChange={(e) => setBrandColors(e.target.value)}
-                      placeholder="e.g. Deep Navy Blue (#0a2540) and Amber Gold"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Style & Tone</label>
-                    <input
-                      type="text"
-                      value={styleTone}
-                      onChange={(e) => setStyleTone(e.target.value)}
-                      placeholder="e.g. Authoritative, trustworthy, modern"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                    />
-                  </div>
-                </div>
+                  <div className="space-y-4">
+                    {/* Business Name */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Business / Website Name <span className="text-[#EF4444]">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={businessName}
+                        onChange={(e) => {
+                          setBusinessName(e.target.value);
+                          if (stepErrors.businessName) {
+                            setStepErrors((prev) => ({ ...prev, businessName: "" }));
+                          }
+                        }}
+                        placeholder="e.g. Apex Pro Plumbing & Rooter"
+                        className="input-base"
+                      />
+                      {stepErrors.businessName ? (
+                        <p className="text-xs text-[#EF4444] mt-1 font-medium">
+                          {stepErrors.businessName}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-[#64748B] mt-1">
+                          Appears in your site header, footer, and LocalBusiness schema.
+                        </p>
+                      )}
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Logo Image URL (Optional)</label>
-                    <input
-                      type="text"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      placeholder="https://example.com/logo.png"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Google Maps Link/Embed (Optional)</label>
-                    <input
-                      type="text"
-                      value={googleMaps}
-                      onChange={(e) => setGoogleMaps(e.target.value)}
-                      placeholder="Google Maps URL or embed"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-medium text-slate-300">Social Media Links (Optional)</label>
-                    <input
-                      type="text"
-                      value={socialLinks}
-                      onChange={(e) => setSocialLinks(e.target.value)}
-                      placeholder="Facebook, Instagram, Yelp links"
-                      className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500 text-xs"
-                    />
-                  </div>
-                </div>
+                    {/* Industry / Business Type */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Business Type / Industry <span className="text-[#EF4444]">*</span>
+                      </label>
+                      <select
+                        value={businessType}
+                        onChange={(e) => setBusinessType(e.target.value)}
+                        className="input-base cursor-pointer"
+                      >
+                        {POPULAR_INDUSTRIES.map((ind) => (
+                          <option key={ind} value={ind}>
+                            {ind}
+                          </option>
+                        ))}
+                      </select>
 
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-300">Extra Instructions (Free text)</label>
-                  <textarea
-                    rows={2}
-                    value={extraInstructions}
-                    onChange={(e) => setExtraInstructions(e.target.value)}
-                    placeholder="e.g. Include a $50 off coupon banner, 100% satisfaction guarantee badge, and emergency dispatch hours..."
-                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                  />
-                </div>
-              </div>
+                      {businessType === "Other (Custom)" && (
+                        <input
+                          type="text"
+                          value={customBusinessType}
+                          onChange={(e) => setCustomBusinessType(e.target.value)}
+                          placeholder="Specify your business category (e.g. Solar Panel Installer)"
+                          className="input-base mt-2"
+                        />
+                      )}
+                    </div>
 
-              {/* Error Banner */}
-              {generationError && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl text-xs">
-                  {generationError}
+                    {/* Short Description */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Short Business Description <span className="text-[#EF4444]">*</span>
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={businessDescription}
+                        onChange={(e) => {
+                          setBusinessDescription(e.target.value);
+                          if (stepErrors.businessDescription) {
+                            setStepErrors((prev) => ({ ...prev, businessDescription: "" }));
+                          }
+                        }}
+                        placeholder="e.g. Family-owned plumbing company providing 24/7 emergency dispatch, drain cleaning, and water heater repairs."
+                        className="w-full p-3 border border-[#E2E8F0] rounded-[10px] text-sm text-[#0F172A] focus:outline-none focus:border-[#4F46E5] focus:ring-3 focus:ring-[#4F46E5]/15"
+                      />
+                      {stepErrors.businessDescription ? (
+                        <p className="text-xs text-[#EF4444] mt-1 font-medium">
+                          {stepErrors.businessDescription}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-[#64748B] mt-1">
+                          Used to write the homepage hero and about sections.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Services Offered (Chips / Tag input) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Services Offered (Type and press Enter or Add)
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={serviceInput}
+                          onChange={(e) => setServiceInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddService();
+                            }
+                          }}
+                          placeholder="e.g. Slab Leak Detection"
+                          className="input-base flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddService}
+                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      {/* Chip tags list */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {services.map((srv) => (
+                          <span
+                            key={srv}
+                            className="inline-flex items-center space-x-1.5 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-2.5 py-1 rounded-full text-xs font-medium"
+                          >
+                            <span>{srv}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveService(srv)}
+                              className="hover:text-red-600 rounded-full"
+                              aria-label={`Remove ${srv}`}
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Optional Details (Years in business & USP) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Years in Business (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={yearsInBusiness}
+                          onChange={(e) => setYearsInBusiness(e.target.value)}
+                          placeholder="e.g. 20+ Years"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Logo Image URL (Optional)
+                        </label>
+                        <input
+                          type="url"
+                          value={logoUrl}
+                          onChange={(e) => setLogoUrl(e.target.value)}
+                          placeholder="https://example.com/logo.png"
+                          className="input-base"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Unique Selling Points (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={uniqueSellingPoints}
+                        onChange={(e) => setUniqueSellingPoints(e.target.value)}
+                        placeholder="e.g. 45-min arrival, upfront pricing, licensed master plumbers"
+                        className="input-base"
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Submit Button with Loading State */}
-              <button
-                type="submit"
-                disabled={generating}
-                className="w-full py-3.5 px-6 rounded-xl bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-600 hover:from-emerald-400 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-emerald-500/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:transform-none flex items-center justify-center space-x-2"
-              >
-                {generating ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Generating your website…</span>
-                  </>
+              {/* STEP 2: LOCATION & SEO */}
+              {currentStep === 2 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#0F172A]">Location &amp; Local SEO</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Crucial details to help your website rank on Google Maps and localized searches.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Address & City */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Street Address (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={streetAddress}
+                          onChange={(e) => setStreetAddress(e.target.value)}
+                          placeholder="e.g. 4512 Main Street"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          City <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => {
+                            setCity(e.target.value);
+                            if (stepErrors.city) setStepErrors((prev) => ({ ...prev, city: "" }));
+                          }}
+                          placeholder="Dallas"
+                          className="input-base"
+                        />
+                        {stepErrors.city && (
+                          <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.city}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* State, ZIP & Country */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          State / Region <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={stateRegion}
+                          onChange={(e) => {
+                            setStateRegion(e.target.value);
+                            if (stepErrors.stateRegion)
+                              setStepErrors((prev) => ({ ...prev, stateRegion: "" }));
+                          }}
+                          placeholder="TX"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          ZIP / Postal Code
+                        </label>
+                        <input
+                          type="text"
+                          value={zipPostalCode}
+                          onChange={(e) => setZipPostalCode(e.target.value)}
+                          placeholder="75201"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          value={country}
+                          onChange={(e) => setCountry(e.target.value)}
+                          placeholder="USA"
+                          className="input-base"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Service Areas (Chips) */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Service Areas (Nearby cities &amp; suburbs)
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={areaInput}
+                          onChange={(e) => setAreaInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddArea();
+                            }
+                          }}
+                          placeholder="e.g. Plano, Frisco, McKinney"
+                          className="input-base flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddArea}
+                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {serviceAreas.map((area) => (
+                          <span
+                            key={area}
+                            className="inline-flex items-center space-x-1.5 bg-slate-100 text-[#0F172A] border border-slate-200 px-2.5 py-1 rounded-full text-xs font-medium"
+                          >
+                            <span>{area}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveArea(area)}
+                              className="hover:text-red-600 rounded-full"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phone & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Phone Number <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => {
+                            setPhone(e.target.value);
+                            if (stepErrors.phone) setStepErrors((prev) => ({ ...prev, phone: "" }));
+                          }}
+                          placeholder="(214) 555-0198"
+                          className="input-base"
+                        />
+                        {stepErrors.phone && (
+                          <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.phone}</p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="dispatch@example.com"
+                          className="input-base"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Business Hours & Website Domain */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Business Hours
+                        </label>
+                        <input
+                          type="text"
+                          value={businessHours}
+                          onChange={(e) => setBusinessHours(e.target.value)}
+                          placeholder="e.g. Mon-Sun: 24/7 Emergency Service"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Website Domain
+                        </label>
+                        <input
+                          type="text"
+                          value={websiteDomain}
+                          onChange={(e) => setWebsiteDomain(e.target.value)}
+                          placeholder="www.lonestarplumbingdfw.com"
+                          className="input-base"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Target Keywords (with Suggest button) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-semibold text-[#0F172A]">
+                          Target Keywords for Local SEO <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleSuggestKeywords}
+                          className="inline-flex items-center space-x-1 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Suggest Keywords</span>
+                        </button>
+                      </div>
+
+                      <div className="flex gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={keywordInput}
+                          onChange={(e) => setKeywordInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddKeyword();
+                            }
+                          }}
+                          placeholder="e.g. emergency plumber Dallas TX"
+                          className="input-base flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddKeyword}
+                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
+                        >
+                          + Add
+                        </button>
+                      </div>
+
+                      {/* Keywords list */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {keywords.map((kw) => (
+                          <span
+                            key={kw}
+                            className="inline-flex items-center space-x-1.5 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-2.5 py-1 rounded-full text-xs font-medium"
+                          >
+                            <span>{kw}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveKeyword(kw)}
+                              className="hover:text-red-600 rounded-full"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      {stepErrors.keywords && (
+                        <p className="text-xs text-[#EF4444] mt-1 font-medium">
+                          {stepErrors.keywords}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Collapsible Maps & Social Links */}
+                    <div className="border border-[#E2E8F0] rounded-[10px] overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setShowCollapsibleSeo(!showCollapsibleSeo)}
+                        className="w-full p-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-[#0F172A] hover:bg-slate-100 transition"
+                      >
+                        <span>Google Maps &amp; Social Links (Optional)</span>
+                        {showCollapsibleSeo ? (
+                          <ChevronUp className="w-4 h-4 text-[#64748B]" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-[#64748B]" />
+                        )}
+                      </button>
+                      {showCollapsibleSeo && (
+                        <div className="p-4 space-y-3 bg-white">
+                          <div>
+                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                              Google Maps Link or Embed URL
+                            </label>
+                            <input
+                              type="text"
+                              value={googleMaps}
+                              onChange={(e) => setGoogleMaps(e.target.value)}
+                              placeholder="https://maps.google.com/?q=Dallas+TX"
+                              className="input-base"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                              Social Media Profiles (Facebook, Yelp, Instagram)
+                            </label>
+                            <input
+                              type="text"
+                              value={socialLinks}
+                              onChange={(e) => setSocialLinks(e.target.value)}
+                              placeholder="Facebook: fb.com/mybiz, Yelp: yelp.com/biz/mybiz"
+                              className="input-base"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: PAGES SELECTION */}
+              {currentStep === 3 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#0F172A]">Choose your website pages</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Select which pages you want included. Every page shares consistent navigation and relative links.
+                    </p>
+                  </div>
+
+                  {/* Live Count Badge */}
+                  <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-[#EEF2FF] border border-[#C7D2FE] text-xs font-semibold text-[#4F46E5]">
+                    <Layers className="w-4 h-4" />
+                    <span>Your website will have {selectedPages.length} pages</span>
+                  </div>
+
+                  {/* Visual Page Cards Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {AVAILABLE_PAGES.map((page) => {
+                      const isSelected = selectedPages.includes(page.id);
+                      return (
+                        <div
+                          key={page.id}
+                          onClick={() => togglePage(page.id)}
+                          className={`p-3.5 rounded-[12px] border text-left transition cursor-pointer flex items-start space-x-3 ${
+                            isSelected
+                              ? "border-[#4F46E5] bg-[#EEF2FF]/40 ring-1 ring-[#4F46E5]"
+                              : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
+                          }`}
+                        >
+                          <div className="mt-0.5 p-1.5 rounded-[8px] bg-white border border-[#E2E8F0] shadow-xs">
+                            {page.icon}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-bold text-[#0F172A]">{page.name}</span>
+                              <div
+                                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                  isSelected
+                                    ? "bg-[#4F46E5] border-[#4F46E5] text-white"
+                                    : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                            <p className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
+                              {page.description}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* SEO Multi-Page Toggles */}
+                  <div className="pt-2 border-t border-[#E2E8F0] space-y-3">
+                    <label className="flex items-start space-x-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={separateServicePages}
+                        onChange={(e) => setSeparateServicePages(e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-[#0F172A]">
+                          Create a separate landing page for each main service
+                        </span>
+                        <p className="text-[11px] text-[#64748B]">
+                          Tip: Dedicated service pages make it significantly easier to rank for specific terms like &quot;Water Heater Repair Dallas&quot;.
+                        </p>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={separateAreaPages}
+                        onChange={(e) => setSeparateAreaPages(e.target.checked)}
+                        className="mt-1 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-[#0F172A]">
+                          Create a dedicated page for each service area
+                        </span>
+                        <p className="text-[11px] text-[#64748B]">
+                          Tip: Ranks individual neighboring cities and suburbs on Google Local Pack.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 4: THEME SELECTION */}
+              {currentStep === 4 && (
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h2 className="text-lg font-bold text-[#0F172A]">Choose your website theme</h2>
+                      <p className="text-xs text-[#64748B] mt-0.5">
+                        Select a visual style calibrated for your business and industry.
+                      </p>
+                    </div>
+                    {hasCustomColors && (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0] self-start sm:self-auto">
+                        <span>● Custom colors active</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Theme Gallery Cards: 3 columns desktop, 2 tablet, 1 mobile */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {THEMES.map((theme) => {
+                      const isSelected = selectedThemeId === theme.id;
+                      const isRecommended = recommendedThemeIds.includes(theme.id);
+                      const previewColors = isSelected ? activeColors : theme.colors;
+
+                      return (
+                        <div
+                          key={theme.id}
+                          onClick={() => setSelectedThemeId(theme.id)}
+                          className={`rounded-[14px] border p-3.5 text-left cursor-pointer transition-all flex flex-col justify-between relative group ${
+                            isSelected
+                              ? "border-[#4F46E5] bg-white ring-2 ring-[#4F46E5] shadow-md transform -translate-y-0.5"
+                              : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1] hover:shadow-xs"
+                          }`}
+                        >
+                          {/* Badges Bar (Recommended & Selected) */}
+                          <div className="flex items-center justify-between gap-1 mb-2.5 min-h-[22px]">
+                            {isRecommended ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE]">
+                                <Sparkles className="w-2.5 h-2.5" />
+                                <span>Recommended for you</span>
+                              </span>
+                            ) : (
+                              <span />
+                            )}
+
+                            <div
+                              className={`w-5 h-5 rounded-full border flex items-center justify-center transition shrink-0 ${
+                                isSelected
+                                  ? "bg-[#4F46E5] border-[#4F46E5] text-white"
+                                  : "border-slate-300 bg-white group-hover:border-slate-400"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                          </div>
+
+                          {/* Mini HTML/CSS Visual Mock Preview */}
+                          <div className="mb-3">
+                            <ThemeMiniPreview theme={theme} colors={previewColors} />
+                          </div>
+
+                          {/* Theme Name & Description */}
+                          <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                            <div>
+                              <div className="flex items-center justify-between gap-1">
+                                <h3 className="text-sm font-bold text-[#0F172A]">{theme.name}</h3>
+                                {isSelected && hasCustomColors && (
+                                  <span className="text-[10px] font-semibold text-[#10B981] bg-[#ECFDF5] px-1.5 py-0.5 rounded border border-[#A7F3D0]">
+                                    Customized
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-[#64748B] leading-relaxed mt-0.5">
+                                {theme.description}
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+                              {/* Typography Pair */}
+                              <div className="text-[10px] font-mono text-[#64748B] truncate">
+                                <span className="font-semibold text-[#0F172A]">{theme.fonts.heading}</span> + {theme.fonts.body}
+                              </div>
+
+                              {/* Best For Tags */}
+                              <div className="flex flex-wrap items-center gap-1">
+                                <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-wider">
+                                  Best for:
+                                </span>
+                                {theme.bestFor.slice(0, 3).map((tag) => (
+                                  <span
+                                    key={tag}
+                                    className="text-[10px] px-1.5 py-0.5 rounded-[5px] bg-slate-100 text-[#475569] font-medium border border-slate-200"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Below the Grid: Optional Customize Colors Section */}
+                  <div className="p-4 sm:p-5 rounded-[14px] border border-[#E2E8F0] bg-white shadow-xs space-y-3.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-bold text-[#0F172A] flex items-center gap-1.5">
+                          <Palette className="w-4 h-4 text-[#4F46E5]" />
+                          <span>Customize colors for {activeTheme.name}</span>
+                        </h3>
+                        <p className="text-xs text-[#64748B] mt-0.5">
+                          Override the theme defaults with your exact brand hex values.
+                        </p>
+                      </div>
+
+                      {hasCustomColors && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomThemeColors({})}
+                          className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Reset to theme colors</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                      {/* Primary Color Picker */}
+                      <div className="p-3 rounded-[10px] border border-[#E2E8F0] bg-slate-50/60 space-y-1.5">
+                        <label className="block text-xs font-bold text-[#0F172A]">
+                          Primary Color
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="color"
+                            value={activeColors.primary}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, primary: e.target.value }))
+                            }
+                            className="w-9 h-9 rounded-[8px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            title="Choose Primary Color"
+                          />
+                          <input
+                            type="text"
+                            value={activeColors.primary}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, primary: e.target.value }))
+                            }
+                            className="input-base text-xs font-mono h-9 uppercase"
+                            placeholder="#1D4ED8"
+                          />
+                        </div>
+                        <span className="text-[10px] text-[#64748B] block">Buttons, hero &amp; key brand elements</span>
+                      </div>
+
+                      {/* Accent Color Picker */}
+                      <div className="p-3 rounded-[10px] border border-[#E2E8F0] bg-slate-50/60 space-y-1.5">
+                        <label className="block text-xs font-bold text-[#0F172A]">
+                          Accent Color
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="color"
+                            value={activeColors.accent}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, accent: e.target.value }))
+                            }
+                            className="w-9 h-9 rounded-[8px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            title="Choose Accent Color"
+                          />
+                          <input
+                            type="text"
+                            value={activeColors.accent}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, accent: e.target.value }))
+                            }
+                            className="input-base text-xs font-mono h-9 uppercase"
+                            placeholder="#0EA5E9"
+                          />
+                        </div>
+                        <span className="text-[10px] text-[#64748B] block">Badges, stars &amp; highlights</span>
+                      </div>
+
+                      {/* Background Color Picker */}
+                      <div className="p-3 rounded-[10px] border border-[#E2E8F0] bg-slate-50/60 space-y-1.5">
+                        <label className="block text-xs font-bold text-[#0F172A]">
+                          Background Color
+                        </label>
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="color"
+                            value={activeColors.background}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, background: e.target.value }))
+                            }
+                            className="w-9 h-9 rounded-[8px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            title="Choose Background Color"
+                          />
+                          <input
+                            type="text"
+                            value={activeColors.background}
+                            onChange={(e) =>
+                              setCustomThemeColors((prev) => ({ ...prev, background: e.target.value }))
+                            }
+                            className="input-base text-xs font-mono h-9 uppercase"
+                            placeholder="#F8FAFC"
+                          />
+                        </div>
+                        <span className="text-[10px] text-[#64748B] block">Page canvas &amp; section backgrounds</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5: REVIEW & GENERATE */}
+              {currentStep === 5 && (
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  <div>
+                    <h2 className="text-lg font-bold text-[#0F172A]">Review your website plan</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Verify everything looks great before triggering AI static site generation.
+                    </p>
+                  </div>
+
+                  {/* Review Summary Card */}
+                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[14px] p-5 space-y-4">
+                    {/* Business Info Item */}
+                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                          Business Info
+                        </span>
+                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
+                          {businessName || "Unnamed Business"}
+                        </h4>
+                        <p className="text-xs text-[#64748B] mt-0.5">
+                          {effectiveIndustry} • {services.length} services specified
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(1)}
+                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
+
+                    {/* Location & SEO Item */}
+                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                          Location &amp; SEO
+                        </span>
+                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
+                          {city}, {stateRegion}
+                        </h4>
+                        <p className="text-xs text-[#64748B] mt-0.5">
+                          Phone: {phone || "None"} • {keywords.length} target keywords
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(2)}
+                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
+
+                    {/* Pages Item */}
+                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                          Pages to Generate ({selectedPages.length})
+                        </span>
+                        <p className="text-xs text-[#0F172A] font-medium mt-0.5">
+                          {selectedPages.join(", ")}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(3)}
+                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
+
+                    {/* Theme Item */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                          Theme &amp; Style
+                        </span>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <span
+                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
+                            style={{ backgroundColor: activeColors.primary }}
+                            title="Primary Color"
+                          />
+                          <span
+                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
+                            style={{ backgroundColor: activeColors.accent }}
+                            title="Accent Color"
+                          />
+                          <span
+                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
+                            style={{ backgroundColor: activeColors.background }}
+                            title="Background Color"
+                          />
+                          <span className="text-xs font-bold text-[#0F172A]">{activeTheme.name}</span>
+                          {hasCustomColors && (
+                            <span className="text-[10px] font-medium text-[#10B981] bg-[#ECFDF5] px-1.5 py-0.5 rounded border border-[#A7F3D0]">
+                              Custom Colors
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#64748B] mt-0.5 font-mono">
+                          Heading: {activeTheme.fonts.heading} • Body: {activeTheme.fonts.body}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(4)}
+                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Connected AI Model Notification */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-[#4F46E5]" />
+                      <span className="text-[#64748B]">
+                        Model:{" "}
+                        {hasKey ? (
+                          <>
+                            <strong className="text-[#0F172A]">{activeModel}</strong> ({activeProvider})
+                          </>
+                        ) : (
+                          <span className="text-amber-600 font-semibold">No AI model connected</span>
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSettings("models")}
+                      className="font-bold text-[#4F46E5] hover:underline"
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  {/* Big Primary Generation Button */}
+                  <button
+                    type="button"
+                    onClick={handleGenerateWebsite}
+                    className="w-full inline-flex items-center justify-center space-x-2 py-4 px-6 rounded-[12px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-base font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    <span>✨ Generate My Website</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Wizard Bottom Navigation Buttons */}
+              <div className="flex items-center justify-between pt-4 border-t border-[#E2E8F0]">
+                {currentStep > 1 ? (
+                  <button
+                    type="button"
+                    onClick={handlePrevStep}
+                    className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back</span>
+                  </button>
                 ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Generate Website</span>
-                  </>
+                  <div />
                 )}
-              </button>
-            </form>
+
+                {currentStep < 5 && (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-sm transition"
+                  >
+                    <span>Continue</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </main>
-
-      {/* Modals */}
-      <ApiKeyModal
-        isOpen={keysModalOpen}
-        onClose={() => setKeysModalOpen(false)}
-        onKeysUpdated={checkKeyStatus}
-      />
-      <RecentProjectsModal
-        isOpen={recentModalOpen}
-        onClose={() => setRecentModalOpen(false)}
-        onSelectProject={(id) => {
-          fetch(`/api/projects/${id}`)
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.success && d.project) {
-                setCurrentProject(d.project);
-              }
-            })
-            .catch(() => {});
-        }}
-      />
     </div>
   );
 }

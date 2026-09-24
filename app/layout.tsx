@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AltoFox - Local Home Service Website Builder",
-  description: "Generate SEO-optimized static websites for local home services and contractors with ChatGPT, Gemini, or any Custom API model.",
+  title: "AltoFox — Premium AI Static Website Builder",
+  description: "Create complete, beautiful, SEO-optimized static websites in seconds with Google Gemini, OpenAI, or OpenRouter.",
 };
 
 export default function RootLayout({
@@ -12,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-sky-500/30 selection:text-sky-200">
+    <html lang="en">
+      <body className="bg-[#F8FAFC] text-[#0F172A] min-h-screen antialiased selection:bg-indigo-500/20 selection:text-indigo-900">
         {children}
       </body>
     </html>

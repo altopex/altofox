@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { generateWebsite } from "@/lib/ai/generate-website";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
-import { SYSTEM_PROMPT, buildUserPrompt, WebsiteFormData } from "@/lib/generator/prompt";
-import { extractAndParseJSON, validateGeneratedWebsite } from "@/lib/generator/validator";
+import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
+import { generateMultiPageWebsite } from "@/lib/generator/multi-page";
+import { generateThemeTestSite } from "@/lib/generator/template-engine";
 
-export const maxDuration = 120; // 2 minutes timeout for full website generation
+export const maxDuration = 300; // 5 minutes timeout for multi-page website generation
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       apiKey,
       baseUrl,
       formData,
+      demo = false,
       // Fallback individual fields if passed flatly
       name,
       businessName,
@@ -30,18 +31,22 @@ export async function POST(req: NextRequest) {
       prompt,
     } = body;
 
-    // Consolidate form data
+    // Consolidate form data with all fields clearly captured
     const websiteData: WebsiteFormData = {
       businessName: (formData?.businessName || businessName || name || "").trim(),
       businessType: (formData?.businessType || serviceCategory || businessType || "").trim(),
       businessDescription: (formData?.businessDescription || "").trim(),
+      yearsInBusiness: (formData?.yearsInBusiness || "").trim(),
+      uniqueSellingPoints: (formData?.uniqueSellingPoints || "").trim(),
       servicesOffered: (formData?.servicesOffered || "").trim(),
+      services: Array.isArray(formData?.services) ? formData.services : undefined,
       streetAddress: (formData?.streetAddress || "").trim(),
       city: (formData?.city || targetLocation || city || "").trim(),
       stateRegion: (formData?.stateRegion || "").trim(),
       zipPostalCode: (formData?.zipPostalCode || "").trim(),
       country: (formData?.country || "USA").trim(),
       serviceAreas: (formData?.serviceAreas || "").trim(),
+      serviceAreasList: Array.isArray(formData?.serviceAreasList) ? formData.serviceAreasList : undefined,
       phone: (formData?.phone || "").trim(),
       email: (formData?.email || "").trim(),
       businessHours: (formData?.businessHours || "").trim(),
@@ -50,11 +55,15 @@ export async function POST(req: NextRequest) {
       pagesToCreate: Array.isArray(formData?.pagesToCreate) && formData.pagesToCreate.length > 0
         ? formData.pagesToCreate
         : ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"],
+      separateServicePages: Boolean(formData?.separateServicePages),
+      separateAreaPages: Boolean(formData?.separateAreaPages),
       brandColors: (formData?.brandColors || "").trim(),
       styleTone: (formData?.styleTone || "").trim(),
       googleMaps: (formData?.googleMaps || "").trim(),
       socialLinks: (formData?.socialLinks || "").trim(),
       logoUrl: (formData?.logoUrl || "").trim(),
+      language: (formData?.language || "English").trim(),
+      theme: formData?.theme || undefined,
       extraInstructions: (formData?.extraInstructions || prompt || "").trim(),
     };
 
@@ -84,6 +93,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Compute all target pages (including individual service pages and area pages if toggled on)
+    const targetPages = computeTargetPages(websiteData);
+    console.log(
+      `[Generate] Building ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}". Separate services: ${websiteData.separateServicePages}, Separate areas: ${websiteData.separateAreaPages}.`
+    );
+
+    // If explicit demo requested, generate complete theme test site directly
+    if (demo === true) {
+      const generatedFiles = generateThemeTestSite(websiteData, targetPages);
+      const projectName = websiteData.businessName || "Static Website";
+      return NextResponse.json({
+        success: true,
+        projectId: "demo-" + Date.now(),
+        name: projectName,
+        notes: `Complete static website generated in demo mode for ${websiteData.theme?.name || "Modern Pro"}.`,
+        provider: "demo",
+        model: "template-engine",
+        createdAt: new Date().toISOString(),
+        files: generatedFiles.map((f) => ({
+          path: f.path,
+          content: f.content,
+          mimeType: f.path.endsWith(".html")
+            ? "text/html"
+            : f.path.endsWith(".css")
+            ? "text/css"
+            : f.path.endsWith(".js")
+            ? "application/javascript"
+            : "text/plain",
+        })),
+      });
+    }
+
     const providerType = provider as ProviderType;
 
     // 1. Get credentials for the provider (from request, browser localStorage pass-through, or env)
@@ -97,7 +138,7 @@ export async function POST(req: NextRequest) {
           error:
             err instanceof Error
               ? err.message
-              : `No API key found for ${PROVIDER_PRESETS[providerType]?.name || provider}. Please connect your API key.`,
+              : `No API key found for ${PROVIDER_PRESETS[providerType]?.name || provider}. Please connect your API key in Settings.`,
         },
         { status: 401 }
       );
@@ -107,24 +148,19 @@ export async function POST(req: NextRequest) {
     const targetModel =
       model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-1.5-pro";
 
-    // 3. Build user prompt with all fields clearly labeled
-    const userPrompt = buildUserPrompt(websiteData);
-
-    console.log(`[Generate] Calling ${providerType} (${targetModel}) for: ${websiteData.businessName} in ${websiteData.city}...`);
-
-    // 4. Call unified AI generator
-    let rawText: string;
+    // 3. Multi-page Generation
+    // If targetPages.length <= 4: single prompt generation
+    // If targetPages.length > 4: generates foundation and then page-by-page with consistent styles.css, header, footer
+    let validated;
     try {
-      rawText = await generateWebsite({
+      validated = await generateMultiPageWebsite(websiteData, targetPages, {
         provider: providerType,
         apiKey: creds.apiKey,
         model: targetModel,
-        prompt: userPrompt,
-        systemPrompt: SYSTEM_PROMPT,
-        maxTokens: 16000,
         baseUrl: creds.baseUrl,
       });
     } catch (apiErr) {
+      console.error("[Generate] Multi-page generation error:", apiErr);
       return NextResponse.json(
         {
           success: false,
@@ -134,54 +170,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 5. Parse and validate generated website JSON with 1-time automatic repair retry
-    let validated;
-    try {
-      const parsed = extractAndParseJSON(rawText);
-      validated = validateGeneratedWebsite(parsed);
-    } catch (parseError) {
-      console.warn("Initial JSON parse failed. Retrying with a JSON repair prompt...", parseError);
-      try {
-        const repairPrompt = `Your previous output could not be parsed as clean JSON. Please re-output the EXACT same static website files strictly as a single valid raw JSON object matching {"files": [{"path": "...", "content": "..."}], "notes": "..."}. Do not include markdown code fences or backticks:\n\n${rawText.slice(0, 4000)}`;
-
-        const retryText = await generateWebsite({
-          provider: providerType,
-          apiKey: creds.apiKey,
-          model: targetModel,
-          prompt: repairPrompt,
-          systemPrompt: SYSTEM_PROMPT,
-          maxTokens: 16000,
-          baseUrl: creds.baseUrl,
-        });
-
-        const retryParsed = extractAndParseJSON(retryText);
-        validated = validateGeneratedWebsite(retryParsed);
-      } catch (retryError) {
-        console.error("AI output parsing error after retry:", retryError);
-        return NextResponse.json(
-          {
-            success: false,
-            error: `AI returned an invalid website structure: ${parseError instanceof Error ? parseError.message : "Parse failed"}. Please try clicking Generate again.`,
-            rawText: rawText.slice(0, 1000),
-          },
-          { status: 502 }
-        );
-      }
-    }
-
     const projectName = websiteData.businessName || "Static Website";
 
-    // 6. Optional non-blocking database record
+    // 4. Optional non-blocking database record
     let projectId = "site-" + Date.now();
     try {
       const project = await db.project.create({
         data: {
           name: projectName,
-          prompt: userPrompt.slice(0, 500),
+          prompt: `Theme: ${websiteData.theme?.name || "Default"} | Pages: ${targetPages.length} | Biz: ${websiteData.businessName}`,
           provider: providerType,
           model: targetModel,
           status: "ready",
-          notes: validated.notes || "Complete static website generated with HTML, CSS, and JS.",
+          notes: validated.notes || "Complete multi-page static website generated with HTML, CSS, and JS.",
           files: {
             create: validated.files.map((f) => ({
               path: f.path,

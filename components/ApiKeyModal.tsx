@@ -10,7 +10,6 @@ import {
   ExternalLink,
   ShieldCheck,
   Trash2,
-  Server,
   Sparkles,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
@@ -31,7 +30,7 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   gemini: {
     id: "gemini",
     name: "Google Gemini",
-    description: "Gemini 1.5 Pro, 1.5 Flash, 2.0 Flash with generous free tier",
+    description: "Gemini 1.5 Pro, 1.5 Flash & 2.0 with fast generation and generous limits",
     defaultModel: "gemini-1.5-pro",
     popularModels: [
       { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (Recommended)" },
@@ -44,7 +43,7 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   openai: {
     id: "openai",
     name: "OpenAI (ChatGPT)",
-    description: "GPT-4o, GPT-4o Mini, and ChatGPT flagship models",
+    description: "GPT-4o and GPT-4o Mini flagship reasoning models",
     defaultModel: "gpt-4o",
     popularModels: [
       { id: "gpt-4o", label: "GPT-4o (Recommended)" },
@@ -57,7 +56,7 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   openrouter: {
     id: "openrouter",
     name: "OpenRouter",
-    description: "Access 100+ AI models (Claude, Llama 3.3, Mistral, Qwen, DeepSeek)",
+    description: "Access 100+ AI models including Claude 3.5 Sonnet, Llama 3.3, and DeepSeek",
     defaultModel: "anthropic/claude-3.5-sonnet",
     popularModels: [
       { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
@@ -70,8 +69,8 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   },
   custom: {
     id: "custom",
-    name: "Custom API (Ollama / Local)",
-    description: "Connect Ollama, LM Studio, vLLM, or any OpenAI-compatible Base URL",
+    name: "Custom (Local / Ollama)",
+    description: "Connect Ollama, LM Studio, vLLM, or any OpenAI-compatible API endpoint",
     defaultBaseUrl: "http://localhost:11434/v1",
     defaultModel: "llama3",
     popularModels: [
@@ -80,7 +79,7 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
       { id: "mistral", label: "Mistral" },
     ],
     requiresBaseUrl: true,
-    placeholderKey: "ollama (or your key)",
+    placeholderKey: "ollama (or API key)",
     docsUrl: "https://github.com/ollama/ollama",
   },
 };
@@ -107,7 +106,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     text: string;
   } | null>(null);
 
-  // Load keys from localStorage on open
+  // Load keys from localStorage on open or provider change
   useEffect(() => {
     if (isOpen) {
       const keys: Record<string, string> = {};
@@ -138,7 +137,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   const currentPreset = PROVIDER_PRESETS_MAP[selectedProvider] || PROVIDER_PRESETS_MAP.gemini;
   const currentSavedKey = savedKeys[selectedProvider] || "";
 
-  // Test Connection Probe
+  // Test Connection
   const handleTestKey = async () => {
     const keyToTest = keyInput.trim() || currentSavedKey;
     if (!keyToTest) {
@@ -179,7 +178,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     }
   };
 
-  // Save Key to localStorage & Server
+  // Save Key to localStorage
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanKey = keyInput.trim();
@@ -197,9 +196,13 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
       localStorage.setItem(`altofox_base_url_${selectedProvider}`, baseUrlInput.trim());
     }
 
+    // Set as active provider and model
+    localStorage.setItem("altofox_active_provider", selectedProvider);
+    localStorage.setItem("altofox_active_model", modelInput.trim() || currentPreset.defaultModel);
+
     setSavedKeys((prev) => ({ ...prev, [selectedProvider]: keyToPersist }));
 
-    // Optional server-side sync (non-blocking)
+    // Non-blocking server sync
     fetch("/api/keys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -213,7 +216,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
 
     setStatusMessage({
       type: "success",
-      text: `${currentPreset.name} API key saved in browser localStorage!`,
+      text: `${currentPreset.name} settings saved successfully!`,
     });
     onKeysUpdated?.();
   };
@@ -232,7 +235,6 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     setKeyInput("");
     setTestResult(null);
 
-    // Optional server delete
     fetch(`/api/keys?provider=${selectedProvider}`, { method: "DELETE" }).catch(() => {});
 
     setStatusMessage({
@@ -243,249 +245,231 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/60">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400">
-              <Key className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white border border-[#E2E8F0] rounded-[16px] max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="px-6 py-4 border-b border-[#E2E8F0] flex items-center justify-between bg-slate-50/60">
+          <div className="flex items-center space-x-2.5">
+            <div className="w-8 h-8 rounded-[8px] bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center">
+              <Key className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-white">Connect AI Provider Key</h2>
-              <p className="text-xs text-slate-400">Stored safely in your browser (localStorage)</p>
+              <h2 className="text-base font-bold text-[#0F172A]">AI Model &amp; Settings</h2>
+              <p className="text-xs text-[#64748B]">Choose your AI provider and paste your API key</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="w-8 h-8 rounded-lg text-[#64748B] hover:text-[#0F172A] hover:bg-slate-100 flex items-center justify-center transition"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
+        {/* Modal Content */}
         <div className="p-6 overflow-y-auto space-y-5">
-          {/* Provider Select Tabs */}
+          {/* Provider Tabs */}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-              Select AI Engine
+            <label className="block text-xs font-semibold text-[#0F172A] uppercase tracking-wider mb-2">
+              Select AI Provider
             </label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {(
-                [
-                  { id: "gemini", label: "Google Gemini", badge: "Recommended" },
-                  { id: "openai", label: "OpenAI (ChatGPT)", badge: "GPT-4o" },
-                  { id: "openrouter", label: "OpenRouter", badge: "100+ Models" },
-                  { id: "custom", label: "Custom / Local", badge: "Ollama / Base URL" },
-                ] as const
-              ).map((tab) => {
-                const hasKey = !!savedKeys[tab.id];
-                const isSelected = selectedProvider === tab.id;
+              {Object.values(PROVIDER_PRESETS_MAP).map((preset) => {
+                const isSelected = selectedProvider === preset.id;
+                const isConfigured = !!savedKeys[preset.id];
                 return (
                   <button
-                    key={tab.id}
+                    key={preset.id}
                     type="button"
                     onClick={() => {
-                      setSelectedProvider(tab.id);
+                      setSelectedProvider(preset.id);
                       setTestResult(null);
                       setStatusMessage(null);
                     }}
-                    className={`p-2.5 rounded-xl border text-left flex flex-col justify-between transition ${
+                    className={`relative p-3 rounded-[10px] border text-left transition flex flex-col justify-between ${
                       isSelected
-                        ? "border-sky-500 bg-sky-500/10 text-white ring-1 ring-sky-500/40"
-                        : "border-slate-800 bg-slate-950/80 text-slate-300 hover:border-slate-700"
+                        ? "border-[#4F46E5] bg-[#EEF2FF]/60 text-[#4F46E5] ring-2 ring-[#4F46E5]/10"
+                        : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1] text-[#0F172A]"
                     }`}
                   >
-                    <div className="flex items-center justify-between w-full mb-1">
-                      <span className="text-xs font-semibold truncate">{tab.label}</span>
-                      {hasKey && (
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" title="Key Saved" />
-                      )}
+                    <div className="font-semibold text-xs leading-tight mb-1">{preset.name}</div>
+                    <div className="flex items-center space-x-1">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isConfigured ? "bg-[#10B981]" : "bg-[#CBD5E1]"
+                        }`}
+                      />
+                      <span className="text-[10px] text-[#64748B]">
+                        {isConfigured ? "Connected" : "No key"}
+                      </span>
                     </div>
-                    <span className="text-[10px] text-slate-400">{tab.badge}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Current Provider Details */}
-          <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <h3 className="font-semibold text-white text-sm">{currentPreset.name}</h3>
-                  {currentSavedKey ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
-                      <CheckCircle2 className="w-3 h-3" /> Saved in localStorage
-                    </span>
-                  ) : (
-                    <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                      Not Saved
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">{currentPreset.description}</p>
-              </div>
+          {/* Provider description banner */}
+          <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[10px] p-3 flex items-start justify-between text-xs">
+            <div>
+              <span className="font-semibold text-[#0F172A]">{currentPreset.name}</span>
+              <p className="text-[#64748B] mt-0.5">{currentPreset.description}</p>
+            </div>
+            <a
+              href={currentPreset.docsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-1 text-[#4F46E5] font-semibold hover:underline shrink-0 ml-3"
+            >
+              <span>Get Key</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
 
-              {currentPreset.docsUrl && (
-                <a
-                  href={currentPreset.docsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-sky-400 hover:underline shrink-0"
-                >
-                  Get Key <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
+          <form onSubmit={handleSaveKey} className="space-y-4">
+            {/* API Key Input */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-[#0F172A]">
+                  API Key <span className="text-[#EF4444]">*</span>
+                </label>
+                {currentSavedKey && (
+                  <button
+                    type="button"
+                    onClick={handleClearKey}
+                    className="text-[11px] text-[#EF4444] hover:underline flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Clear saved key</span>
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder={currentPreset.placeholderKey}
+                className="input-base"
+              />
+              <p className="text-[11px] text-[#64748B] mt-1.5 flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
+                <span>Saved securely in your browser&apos;s local storage. Never shared.</span>
+              </p>
             </div>
 
-            {/* Saved Key Status & Clear Button */}
-            {currentSavedKey && (
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-                <div className="flex items-center gap-2 truncate">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span className="text-slate-400">Key:</span>
-                  <span className="font-mono text-slate-200">
-                    {currentSavedKey.slice(0, 4)}••••••••{currentSavedKey.slice(-4)}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleClearKey}
-                  className="text-red-400 hover:text-red-300 flex items-center gap-1 text-xs hover:underline shrink-0 ml-2"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Clear key
-                </button>
+            {/* Base URL (if custom) */}
+            {currentPreset.requiresBaseUrl && (
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                  Base URL (OpenAI-compatible)
+                </label>
+                <input
+                  type="text"
+                  value={baseUrlInput}
+                  onChange={(e) => setBaseUrlInput(e.target.value)}
+                  placeholder="http://localhost:11434/v1"
+                  className="input-base"
+                />
               </div>
             )}
 
-            <form onSubmit={handleSaveKey} className="space-y-3">
-              {/* API Key Input */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  placeholder={currentPreset.placeholderKey}
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-xs"
-                />
+            {/* Model Name Input & Suggestions */}
+            <div>
+              <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                Model Name
+              </label>
+              <input
+                type="text"
+                value={modelInput}
+                onChange={(e) => setModelInput(e.target.value)}
+                placeholder={currentPreset.defaultModel}
+                className="input-base mb-2 font-mono text-xs"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {currentPreset.popularModels.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setModelInput(m.id)}
+                    className={`text-[11px] px-2.5 py-1 rounded-[6px] border transition ${
+                      modelInput === m.id
+                        ? "bg-[#EEF2FF] border-[#4F46E5] text-[#4F46E5] font-semibold"
+                        : "bg-white border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] hover:border-[#CBD5E1]"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              {/* Model Name Input (user can type any model) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-300">
-                    Model Name (Type any model or click a default)
-                  </label>
-                </div>
-                <input
-                  type="text"
-                  value={modelInput}
-                  onChange={(e) => setModelInput(e.target.value)}
-                  placeholder={currentPreset.defaultModel}
-                  className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-xs"
-                />
-                {/* Popular model suggestion chips */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {currentPreset.popularModels.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setModelInput(m.id)}
-                      className={`text-[11px] px-2 py-0.5 rounded-md border font-mono transition ${
-                        modelInput === m.id
-                          ? "bg-sky-500/20 text-sky-300 border-sky-500/50"
-                          : "bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200"
-                      }`}
-                    >
-                      {m.id}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Base URL (for Custom or OpenRouter proxy) */}
-              {(selectedProvider === "custom" || currentPreset.requiresBaseUrl) && (
-                <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-                    <Server className="w-3.5 h-3.5 text-sky-400" />
-                    OpenAI-Compatible Base URL
-                  </label>
-                  <input
-                    type="text"
-                    value={baseUrlInput}
-                    onChange={(e) => setBaseUrlInput(e.target.value)}
-                    placeholder="http://localhost:11434/v1"
-                    className="w-full px-3.5 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500 font-mono text-xs"
-                  />
-                </div>
-              )}
-
-              {/* Action Buttons: Test Connection & Save */}
-              <div className="flex items-center space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleTestKey}
-                  disabled={testing}
-                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {testing ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Testing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Test Connection</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-bold transition shadow-lg shadow-sky-500/20"
-                >
-                  Save Key
-                </button>
-              </div>
-            </form>
-
-            {/* Test Connection Result Feedback */}
+            {/* Test Connection Result Box */}
             {testResult && (
               <div
-                className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                className={`p-3 rounded-[10px] border text-xs flex items-start space-x-2 ${
                   testResult.success
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                    : "bg-red-500/10 border-red-500/30 text-red-300"
+                    ? "bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]"
+                    : "bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]"
                 }`}
               >
                 {testResult.success ? (
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-[#10B981] mt-0.5" />
                 ) : (
-                  <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+                  <AlertCircle className="w-4 h-4 shrink-0 text-[#EF4444] mt-0.5" />
                 )}
                 <span>{testResult.message}</span>
               </div>
             )}
 
+            {/* Status Message */}
             {statusMessage && (
               <div
-                className={`p-3 rounded-lg border text-xs ${
+                className={`p-3 rounded-[10px] border text-xs flex items-start space-x-2 ${
                   statusMessage.type === "success"
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                    : "bg-red-500/10 border-red-500/30 text-red-300"
+                    ? "bg-[#ECFDF5] border-[#A7F3D0] text-[#065F46]"
+                    : "bg-[#FEF2F2] border-[#FECACA] text-[#991B1B]"
                 }`}
               >
-                {statusMessage.text}
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[#10B981] mt-0.5" />
+                <span>{statusMessage.text}</span>
               </div>
             )}
-          </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                type="button"
+                onClick={handleTestKey}
+                disabled={testing}
+                className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-[#0F172A] text-xs font-semibold shadow-sm transition disabled:opacity-50"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Testing…</span>
+                  </>
+                ) : (
+                  <span>Test Connection</span>
+                )}
+              </button>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3.5 py-2 rounded-[10px] border border-[#E2E8F0] hover:bg-slate-50 text-xs font-semibold text-[#64748B] transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-sm transition"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
     </div>
