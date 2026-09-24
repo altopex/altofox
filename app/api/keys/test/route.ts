@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAIProvider } from "@/lib/ai/factory";
+import { testConnection } from "@/lib/ai/generate-website";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType } from "@/lib/ai/types";
 
@@ -17,35 +17,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use direct key if provided in request, otherwise check stored key
-    let credentials: { apiKey: string; baseUrl?: string; defaultModel?: string };
-    try {
-      credentials = await getProviderCredentials(
-        provider as ProviderType,
-        apiKey,
-        baseUrl,
-        model
-      );
-    } catch (credErr) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            credErr instanceof Error
-              ? credErr.message
-              : "No API key found to test.",
-        },
-        { status: 400 }
-      );
+    // Resolve key from request body, localStorage pass-through, or stored/env
+    let keyToTest = (apiKey || "").trim();
+    let urlToTest = (baseUrl || "").trim();
+    let modelToTest = (model || "").trim();
+
+    if (!keyToTest) {
+      try {
+        const credentials = await getProviderCredentials(
+          provider as ProviderType,
+          undefined,
+          baseUrl,
+          model
+        );
+        keyToTest = credentials.apiKey;
+        urlToTest = credentials.baseUrl || urlToTest;
+        modelToTest = credentials.defaultModel || modelToTest;
+      } catch (credErr) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: credErr instanceof Error ? credErr.message : "No API key found to test.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
-    const ai = createAIProvider(provider as ProviderType, {
-      apiKey: credentials.apiKey,
-      baseUrl: credentials.baseUrl,
-      defaultModel: model || credentials.defaultModel,
+    const result = await testConnection({
+      provider,
+      apiKey: keyToTest,
+      baseUrl: urlToTest,
+      model: modelToTest,
     });
-
-    const result = await ai.testConnection(model || credentials.defaultModel);
 
     return NextResponse.json(result);
   } catch (error) {
@@ -53,7 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        message: error instanceof Error ? error.message : "Connection test failed",
+        message: error instanceof Error ? error.message : "Connection test failed.",
       },
       { status: 500 }
     );

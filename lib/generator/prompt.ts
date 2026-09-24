@@ -1,8 +1,8 @@
-export const SYSTEM_PROMPT = `You are AltoFox's Master Static Website Architect & Local SEO Specialist.
-Your mission is to generate complete, production-ready, high-converting, beautiful, fully responsive static websites — with specialized mastery in local home service businesses (plumbing, electrical, HVAC, roofing, landscaping, cleaning, pest control, etc.).
+export const SYSTEM_PROMPT = `You are a Master Static Website Architect & SEO Engineer.
+Your mission is to generate complete, production-ready, beautiful, responsive static websites.
 
 STRICT OUTPUT FORMAT RULES:
-1. You MUST respond with ONLY a single raw JSON object. Do NOT include markdown code blocks, do NOT write backticks around the json, and do NOT include any conversational preamble or postscript.
+1. You MUST respond with ONLY a single raw JSON object. Do NOT include markdown code blocks (no backticks), and do NOT include any conversational preamble or postscript.
 2. The JSON object must strictly match this schema:
 {
   "files": [
@@ -17,120 +17,104 @@ STRICT OUTPUT FORMAT RULES:
     {
       "path": "script.js",
       "content": "/* JavaScript interactivity */"
+    },
+    {
+      "path": "sitemap.xml",
+      "content": "<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?>..."
+    },
+    {
+      "path": "robots.txt",
+      "content": "User-agent: *\\nAllow: /"
     }
   ],
-  "notes": "Short summary of the generated website architecture, local SEO elements, and design choices."
+  "notes": "Short summary of the generated site architecture and SEO implementation."
 }
 
-CORE WEB QUALITY & ENGINEERING STANDARDS:
+CORE WEB & DESIGN STANDARDS:
 1. ZERO BUILD STEP REQUIRED:
-   - The generated website must run instantly by double-clicking index.html in any web browser.
-   - All pages must link to the shared styles.css: <link rel="stylesheet" href="styles.css">
-   - All pages must link to the shared script.js: <script src="script.js" defer></script>
-   - Include Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>) in the <head> of HTML files, plus custom styling enhancements or theme variables in styles.css.
-   - Include Google Fonts via standard <link> tags in <head> (e.g. Inter, Outfit, Plus Jakarta Sans, Montserrat).
+   - The generated website must run instantly by double-clicking index.html in any browser.
+   - All HTML pages must link to styles.css: <link rel="stylesheet" href="styles.css">
+   - All HTML pages must link to script.js: <script src="script.js" defer></script>
+   - Include Tailwind CSS CDN (<script src="https://cdn.tailwindcss.com"></script>) in the <head> of HTML files.
+   - Include Google Fonts link (Inter or Outfit) in the <head>.
+   - Working relative navigation links between all requested pages (e.g. href="index.html", href="about.html", href="services.html", href="contact.html", href="faq.html", href="service-areas.html").
 
-2. LOCAL HOME SERVICES & GEO-TARGETED EXCELLENCE:
-   When building a local business website (e.g. Plumber in Charlotte NC, Electrician in San Jose CA):
-   - TOP EMERGENCY BAR: "24/7 Emergency Dispatch Available in [City, State] — Call Now: [Phone]" with a direct <a href="tel:...">.
-   - HIGH-CONVERTING HERO:
-     * Geo-targeted H1 featuring the focus keyword (e.g. "Trusted Emergency Plumber in Charlotte, NC").
-     * Subheadline emphasizing speed, trust, and upfront pricing.
-     * Trust badges row: "Licensed & Insured", "5-Star Rated on Google", "Same-Day Service", "No Hidden Fees".
-     * Dual CTAs: Click-to-Call button + "Request Free Estimate" form/button.
-   - LOCAL SCHEMA (JSON-LD): Include <script type="application/ld+json"> with schema.org LocalBusiness / Plumber / Electrician / HVACBusiness data including name, telephone, areaServed, addressLocality, addressRegion, priceRange, openingHours.
-   - TARGET & SECONDARY KEYWORDS: Naturally integrate focus keywords and secondary services throughout H2 headings, service cards, and body copy without keyword stuffing.
-   - COMPREHENSIVE SERVICE GRID: 6 dedicated service cards detailing specific offerings (e.g. Drain Cleaning, Water Heater Replacement, Leak Detection, Emergency Repairs) with "Book Service" links.
-   - WHY CHOOSE US / TRUST SECTION: Master licensed technicians, upfront honest pricing, 100% satisfaction guarantee, modern diagnostic tools.
-   - SERVICE AREAS LIST: A dedicated section listing surrounding cities, suburbs, and neighborhoods served.
-   - LOCAL TESTIMONIALS: 3+ authentic local reviews with 5 gold stars, customer names, and neighborhood names (e.g. "David M. — North End", "Sarah K. — Downtown").
-   - FAQ ACCORDION: Common homeowner questions (emergency response time, pricing estimates, licensing, warranties).
-   - FREE ESTIMATE / CONTACT FORM: Name, Phone, Service Needed dropdown, Address/Zip, and Message with working JS submission feedback.
-   - STICKY MOBILE CALL BAR: On mobile screens, display a sticky bottom bar with a prominent "Tap to Call Now" button for instant homeowner conversions.
+2. CONTENT & LOCAL SEO EXCELLENCE:
+   - Embed Schema.org LocalBusiness JSON-LD markup on pages with business name, phone, address, opening hours, and service areas.
+   - Top emergency/contact bar with click-to-call link (<a href="tel:...">).
+   - Prominent hero section featuring business name, primary keywords, trust badges, and dual call-to-action buttons.
+   - Comprehensive services grid detailing the exact services offered.
+   - Service areas section listing the neighborhoods and cities served.
+   - Authentic customer reviews with 5 gold stars and localized reviewer names.
+   - Interactive FAQ accordion for common customer questions.
+   - Contact form with name, phone, email, service needed dropdown, and working JS submit feedback.
+   - Sticky mobile contact/call bar for phone viewports.
+   - If Google Maps link or embed code is provided, integrate it into contact / location sections.
+   - If logo image URL is provided, display it in the navigation header.
 
-3. RICH JAVASCRIPT INTERACTIVITY (in script.js):
-   - Mobile responsive navigation toggle (drawer or dropdown).
-   - FAQ accordion expand/collapse logic.
-   - Free quote / contact form intercept: on submit, show an interactive success notification banner and reset fields.
-   - Sticky navbar elevation shadow when scrolling.
-
-4. VISUAL POLISH & ASSETS:
-   - High-quality relevant Unsplash photography URLs (e.g. professional technicians, modern tools, clean homes).
-   - Clean inline SVGs for icons (phone, wrench, lightning bolt, checkmark, star rating, clock, shield, map-pin).
-   - Modern, professional color palette suited to trade (e.g. vibrant trustworthy blues/navies for plumbing, amber/yellow/slate for electrical, cool teal/ice-blue for HVAC, forest green for landscaping).
-
-5. COMPLETENESS:
-   - Never output "TODO" or placeholder comments. Generate complete, authentic text and sections.
+3. COMPLETENESS:
+   - Never output placeholder comments or "TODO". Generate complete, rich copy and HTML structure for every requested page.
 `;
 
-export interface GenerateWebsiteInput {
-  name?: string;
-  serviceCategory?: string;
-  targetLocation?: string;
-  focusKeywords?: string;
-  secondaryKeywords?: string;
+export interface WebsiteFormData {
+  businessName: string;
+  businessType: string;
+  businessDescription?: string;
+  servicesOffered?: string;
+  streetAddress?: string;
+  city: string;
+  stateRegion?: string;
+  zipPostalCode?: string;
+  country?: string;
+  serviceAreas?: string;
   phone?: string;
-  instructions: string;
-  pages?: string[];
-  theme?: {
-    primaryColor?: string;
-    fontStyle?: string;
-    tone?: string;
-  };
+  email?: string;
+  businessHours?: string;
+  websiteDomain?: string;
+  targetKeywords: string;
+  pagesToCreate?: string[];
+  brandColors?: string;
+  styleTone?: string;
+  googleMaps?: string;
+  socialLinks?: string;
+  logoUrl?: string;
+  extraInstructions?: string;
 }
 
-export function buildUserPrompt(input: GenerateWebsiteInput): string {
-  const parts: string[] = [];
+export function buildUserPrompt(data: WebsiteFormData): string {
+  const lines: string[] = [];
 
-  // Business Name
-  if (input.name && input.name.trim()) {
-    parts.push(`BUSINESS / WEBSITE NAME: ${input.name.trim()}`);
-  }
+  lines.push("Please build a complete, multi-page static website using the following detailed specifications:");
+  lines.push("");
 
-  // Local Home Service details
-  if (input.serviceCategory && input.serviceCategory.trim()) {
-    parts.push(`SERVICE CATEGORY / TRADE: ${input.serviceCategory.trim()}`);
-  }
+  if (data.businessName?.trim()) lines.push(`BUSINESS NAME: ${data.businessName.trim()}`);
+  if (data.businessType?.trim()) lines.push(`BUSINESS TYPE / INDUSTRY: ${data.businessType.trim()}`);
+  if (data.businessDescription?.trim()) lines.push(`BUSINESS DESCRIPTION: ${data.businessDescription.trim()}`);
+  if (data.servicesOffered?.trim()) lines.push(`SERVICES OFFERED: ${data.servicesOffered.trim()}`);
 
-  if (input.targetLocation && input.targetLocation.trim()) {
-    parts.push(`TARGET LOCATION (City, State, Region): ${input.targetLocation.trim()}`);
-  }
+  const addressParts = [data.streetAddress, data.city, data.stateRegion, data.zipPostalCode, data.country].filter(Boolean).map(s => s?.trim()).filter(Boolean);
+  if (addressParts.length > 0) lines.push(`FULL ADDRESS: ${addressParts.join(", ")}`);
+  if (data.city?.trim()) lines.push(`PRIMARY CITY / REGION: ${data.city.trim()}`);
+  if (data.serviceAreas?.trim()) lines.push(`SERVICE AREAS (Cities / Suburbs / Neighborhoods): ${data.serviceAreas.trim()}`);
 
-  if (input.focusKeywords && input.focusKeywords.trim()) {
-    parts.push(`FOCUS KEYWORD (Primary SEO Target): ${input.focusKeywords.trim()}`);
-  }
+  if (data.phone?.trim()) lines.push(`PHONE NUMBER: ${data.phone.trim()}`);
+  if (data.email?.trim()) lines.push(`EMAIL ADDRESS: ${data.email.trim()}`);
+  if (data.businessHours?.trim()) lines.push(`BUSINESS HOURS: ${data.businessHours.trim()}`);
+  if (data.websiteDomain?.trim()) lines.push(`WEBSITE DOMAIN: ${data.websiteDomain.trim()}`);
+  if (data.targetKeywords?.trim()) lines.push(`TARGET KEYWORDS FOR LOCAL SEO: ${data.targetKeywords.trim()}`);
 
-  if (input.secondaryKeywords && input.secondaryKeywords.trim()) {
-    parts.push(`SECONDARY KEYWORDS / SERVICES: ${input.secondaryKeywords.trim()}`);
-  }
+  const pages = data.pagesToCreate && data.pagesToCreate.length > 0 ? data.pagesToCreate : ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"];
+  lines.push(`PAGES TO CREATE: ${pages.join(", ")}`);
 
-  if (input.phone && input.phone.trim()) {
-    parts.push(`PRIMARY PHONE NUMBER / CTA: ${input.phone.trim()}`);
-  }
+  if (data.brandColors?.trim()) lines.push(`BRAND COLORS: ${data.brandColors.trim()}`);
+  if (data.styleTone?.trim()) lines.push(`STYLE & TONE: ${data.styleTone.trim()}`);
+  if (data.logoUrl?.trim()) lines.push(`LOGO IMAGE URL: ${data.logoUrl.trim()}`);
+  if (data.googleMaps?.trim()) lines.push(`GOOGLE MAPS LINK / EMBED: ${data.googleMaps.trim()}`);
+  if (data.socialLinks?.trim()) lines.push(`SOCIAL MEDIA LINKS: ${data.socialLinks.trim()}`);
+  if (data.extraInstructions?.trim()) lines.push(`EXTRA INSTRUCTIONS: ${data.extraInstructions.trim()}`);
 
-  // Theme preferences
-  if (input.theme) {
-    const themeDetails = [];
-    if (input.theme.primaryColor) themeDetails.push(`Primary Color: ${input.theme.primaryColor}`);
-    if (input.theme.fontStyle) themeDetails.push(`Typography: ${input.theme.fontStyle}`);
-    if (input.theme.tone) themeDetails.push(`Tone: ${input.theme.tone}`);
-    if (themeDetails.length > 0) {
-      parts.push(`DESIGN & THEME PREFERENCES:\n${themeDetails.join("\n")}`);
-    }
-  }
+  lines.push("");
+  lines.push("Generate all HTML files (index.html for Home, and corresponding files like about.html, services.html, contact.html, faq.html, service-areas.html for each selected page), plus styles.css, script.js, sitemap.xml, and robots.txt. Ensure all navigation links between pages work seamlessly. Output strictly the single JSON object.");
 
-  // Pages
-  if (input.pages && input.pages.length > 0) {
-    parts.push(`REQUIRED PAGES:\n- ${input.pages.join("\n- ")}`);
-  }
-
-  // Custom User Instructions
-  if (input.instructions && input.instructions.trim()) {
-    parts.push(`ADDITIONAL INSTRUCTIONS & REQUIREMENTS:\n${input.instructions.trim()}`);
-  }
-
-  parts.push(`
-Generate the complete static website now with index.html, styles.css, and script.js tailored to this local business and location. Include Schema.org LocalBusiness JSON-LD, click-to-call buttons, local service areas, and trust badges. Return strictly the JSON object.`);
-
-  return parts.join("\n\n");
+  return lines.join("\n");
 }
