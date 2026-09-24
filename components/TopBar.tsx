@@ -5,7 +5,7 @@ import { Settings, Sparkles, CheckCircle2, AlertTriangle, ChevronRight } from "l
 import { ProviderType } from "@/lib/ai/types";
 
 interface TopBarProps {
-  onOpenSettings: (tab?: "models" | "preferences") => void;
+  onOpenSettings: (tab?: "models" | "images" | "preferences") => void;
   activeProvider: ProviderType;
   activeModel: string;
   hasKey: boolean;

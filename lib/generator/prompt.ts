@@ -1,3 +1,5 @@
+import { findNicheByIndustry } from "../../niches";
+
 export const SYSTEM_PROMPT = `You are a world-class web designer, conversion copywriter, and local SEO expert. Build a modern, beautiful, high-converting static website for a LOCAL business that is designed to rank in local search and turn visitors into phone calls and leads.
 
 OUTPUT FORMAT — respond with ONLY valid JSON. No markdown, no code fences, no commentary:
@@ -68,6 +70,8 @@ export interface TargetPage {
 export interface WebsiteFormData {
   businessName: string;
   businessType: string;
+  nicheId?: string;
+  schemaType?: string;
   businessDescription?: string;
   yearsInBusiness?: string;
   uniqueSellingPoints?: string;
@@ -323,6 +327,17 @@ export function buildUserPrompt(data: WebsiteFormData, targetPages?: TargetPage[
   if (data.email?.trim()) lines.push(`- Email Address: ${data.email.trim()}`);
   if (data.businessHours?.trim()) lines.push(`- Business Hours: ${data.businessHours.trim()}`);
   if (data.websiteDomain?.trim()) lines.push(`- Website Domain: ${data.websiteDomain.trim()}`);
+
+  const niche = findNicheByIndustry(data.businessType || "");
+  lines.push(`\n=== INDUSTRY / NICHE PACK INTELLIGENCE (${niche.name.toUpperCase()}) ===`);
+  lines.push(`- Recommended Schema Type: ${niche.schemaType}`);
+  lines.push(`- Emergency Trade: ${niche.emergencyService ? "YES (Include emergency banner and 24/7 priority messaging)" : "NO"}`);
+  lines.push(`- Customer Pain Points to Address: ${niche.customerPainPoints.join("; ")}`);
+  lines.push(`- Essential Trust Signals to Highlight: ${niche.trustSignals.join("; ")}`);
+  lines.push(`- Standard Job Process: ${niche.processSteps.map(p => `Step ${p.step}: ${p.title} (${p.description})`).join(" -> ")}`);
+  lines.push(`- FAQs to Answer: ${niche.faqTopics.slice(0, 5).map(f => f.question).join(" | ")}`);
+  lines.push(`- Recommended Photo Queries: ${[...niche.imageQueries.hero.slice(0, 2), ...niche.imageQueries.services.slice(0, 2)].join(", ")}`);
+  lines.push(`- Copywriting Tone: ${niche.toneNotes}`);
 
   // === 2. LOCATION & GEOGRAPHY ===
   lines.push("\n=== 2. LOCATION & GEOGRAPHY ===");

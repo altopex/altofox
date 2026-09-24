@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
+import { generateWebsite } from "@/lib/ai/generate-website";
 import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
-import { generateMultiPageWebsite } from "@/lib/generator/multi-page";
-import { generateThemeTestSite } from "@/lib/generator/template-engine";
+import {
+  AI_CONTENT_SYSTEM_PROMPT,
+  QUALITY_REVIEW_SYSTEM_PROMPT,
+  buildAIContentPrompt,
+  buildQualityReviewPrompt,
+  buildDefaultTradeContentJSON,
+} from "@/lib/generator/ai-content-prompt";
+import { validateContentJSON, SiteContentJSON } from "@/lib/generator/content-schema";
+import { extractAndParseJSON } from "@/lib/generator/validator";
+import { assembleWebsite } from "@/templates/assembler";
+import { THEMES, Theme } from "@/lib/themes";
 
-export const maxDuration = 300; // 5 minutes timeout for multi-page website generation
+export const maxDuration = 180;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
@@ -19,6 +29,9 @@ export async function POST(req: NextRequest) {
       baseUrl,
       formData,
       demo = false,
+      pexelsKey,
+      pixabayKey,
+      preferredSource = "pexels",
       // Fallback individual fields if passed flatly
       name,
       businessName,
@@ -93,107 +106,184 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Compute all target pages (including individual service pages and area pages if toggled on)
+    // Determine target theme
+    const activeThemeId = websiteData.theme?.id || "modern-pro";
+    const baseTheme = THEMES.find((t) => t.id === activeThemeId) || THEMES[0];
+    const activeTheme: Theme = {
+      ...baseTheme,
+      colors: {
+        ...baseTheme.colors,
+        ...(websiteData.theme?.colors || {}),
+      },
+      fonts: websiteData.theme?.fonts || baseTheme.fonts,
+      borderRadius: websiteData.theme?.borderRadius || baseTheme.borderRadius,
+      buttonStyle: websiteData.theme?.buttonStyle || baseTheme.buttonStyle,
+      heroStyle: websiteData.theme?.heroStyle || baseTheme.heroStyle,
+      sectionStyle: websiteData.theme?.sectionStyle || baseTheme.sectionStyle,
+      designNotes: websiteData.theme?.designNotes || baseTheme.designNotes,
+    };
+
+    // Compute all target pages
     const targetPages = computeTargetPages(websiteData);
     console.log(
-      `[Generate] Building ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}". Separate services: ${websiteData.separateServicePages}, Separate areas: ${websiteData.separateAreaPages}.`
+      `[Generate] Assembling ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}" using theme "${activeTheme.name}".`
     );
 
-    // If explicit demo requested, generate complete theme test site directly
+    const effectivePexelsKey = (pexelsKey || formData?.pexelsKey || process.env.PEXELS_API_KEY || "").trim();
+    const effectivePixabayKey = (pixabayKey || formData?.pixabayKey || process.env.PIXABAY_API_KEY || "").trim();
+    const effectivePrefSource = (preferredSource || formData?.preferredSource || "pexels") as "pexels" | "pixabay";
+
+    const assembleOptions = {
+      domain: websiteData.websiteDomain,
+      mapEmbed: websiteData.googleMaps,
+      pexelsKey: effectivePexelsKey || undefined,
+      pixabayKey: effectivePixabayKey || undefined,
+      preferredSource: effectivePrefSource,
+    };
+
+    // If explicit demo requested, immediately assemble using trade template defaults
     if (demo === true) {
-      const generatedFiles = generateThemeTestSite(websiteData, targetPages);
+      const defaultContent = buildDefaultTradeContentJSON(websiteData, targetPages);
+      const assembled = await assembleWebsite(defaultContent, activeTheme, assembleOptions);
+
       const projectName = websiteData.businessName || "Static Website";
       return NextResponse.json({
         success: true,
         projectId: "demo-" + Date.now(),
         name: projectName,
-        notes: `Complete static website generated in demo mode for ${websiteData.theme?.name || "Modern Pro"}.`,
+        notes: `Complete static website assembled from section templates + real photos for ${activeTheme.name}.`,
         provider: "demo",
-        model: "template-engine",
+        model: "section-templates",
         createdAt: new Date().toISOString(),
-        files: generatedFiles.map((f) => ({
-          path: f.path,
-          content: f.content,
-          mimeType: f.path.endsWith(".html")
-            ? "text/html"
-            : f.path.endsWith(".css")
-            ? "text/css"
-            : f.path.endsWith(".js")
-            ? "application/javascript"
-            : "text/plain",
-        })),
+        files: assembled.files,
+        photos: assembled.photos || [],
+        downloadUrl: `/api/projects/demo-${Date.now()}/download`,
       });
     }
 
     const providerType = provider as ProviderType;
 
-    // 1. Get credentials for the provider (from request, browser localStorage pass-through, or env)
+    // 1. Get credentials for the provider
     let creds;
     try {
       creds = await getProviderCredentials(providerType, apiKey, baseUrl, model);
     } catch (err) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            err instanceof Error
-              ? err.message
-              : `No API key found for ${PROVIDER_PRESETS[providerType]?.name || provider}. Please connect your API key in Settings.`,
-        },
-        { status: 401 }
-      );
+      // If no API key configured, use default trade content JSON and assemble seamlessly
+      console.warn("No API key configured. Generating with section template engine:", err);
+      const defaultContent = buildDefaultTradeContentJSON(websiteData, targetPages);
+      const assembled = await assembleWebsite(defaultContent, activeTheme, assembleOptions);
+
+      const projectName = websiteData.businessName || "Static Website";
+      return NextResponse.json({
+        success: true,
+        projectId: "assembled-" + Date.now(),
+        name: projectName,
+        notes: `Assembled from section templates + real trade photos. Add an API key in Settings to customize AI copy.`,
+        provider: "template-engine",
+        model: "curated-trade-engine",
+        createdAt: new Date().toISOString(),
+        files: assembled.files,
+        photos: assembled.photos || [],
+        downloadUrl: `/api/projects/assembled-${Date.now()}/download`,
+      });
     }
 
     // 2. Select target model
     const targetModel =
       model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-1.5-pro";
 
-    // 3. Multi-page Generation
-    // If targetPages.length <= 4: single prompt generation
-    // If targetPages.length > 4: generates foundation and then page-by-page with consistent styles.css, header, footer
-    let validated;
+    // 3. Ask AI for content JSON ONLY (no HTML / CSS)
+    const contentPrompt = buildAIContentPrompt(websiteData, targetPages);
+    console.log(`[Generate] Requesting structured content JSON from ${providerType} (${targetModel})...`);
+
+    let contentJSON: SiteContentJSON;
     try {
-      validated = await generateMultiPageWebsite(websiteData, targetPages, {
+      const rawText = await generateWebsite({
         provider: providerType,
         apiKey: creds.apiKey,
         model: targetModel,
+        prompt: contentPrompt,
+        systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
+        maxTokens: 12000,
         baseUrl: creds.baseUrl,
       });
-    } catch (apiErr) {
-      console.error("[Generate] Multi-page generation error:", apiErr);
-      return NextResponse.json(
-        {
-          success: false,
-          error: apiErr instanceof Error ? apiErr.message : "AI generation request failed.",
-        },
-        { status: 502 }
-      );
+
+      try {
+        const parsed = extractAndParseJSON(rawText);
+        contentJSON = validateContentJSON(parsed);
+      } catch (parseErr) {
+        console.warn("[Generate] Initial content JSON parse failed. Retrying once with repair prompt...", parseErr);
+        const repairPrompt = `Your previous output was not clean JSON. Please return ONLY a single valid JSON object matching the requested schema. No markdown backticks, no commentary:\n\n${rawText.slice(0, 3000)}`;
+
+        const retryRaw = await generateWebsite({
+          provider: providerType,
+          apiKey: creds.apiKey,
+          model: targetModel,
+          prompt: repairPrompt,
+          systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
+          maxTokens: 12000,
+          baseUrl: creds.baseUrl,
+        });
+
+        const retryParsed = extractAndParseJSON(retryRaw);
+        contentJSON = validateContentJSON(retryParsed);
+      }
+    } catch (aiErr) {
+      console.warn("[Generate] AI content call failed. Using rich trade template content fallback:", aiErr);
+      contentJSON = buildDefaultTradeContentJSON(websiteData, targetPages);
     }
+
+    // 3b. Optional Second AI Pass: "Quality Review"
+    const enableQualityReview = body.qualityReview !== false && formData?.qualityReview !== false;
+    let qualityReviewApplied = false;
+
+    if (enableQualityReview && creds?.apiKey) {
+      console.log(`[Generate] Running optional Pass 2: Quality Review (auditing uniqueness, SEO & facts)...`);
+      try {
+        const reviewPrompt = buildQualityReviewPrompt(contentJSON, websiteData);
+        const reviewRaw = await generateWebsite({
+          provider: providerType,
+          apiKey: creds.apiKey,
+          model: targetModel,
+          prompt: reviewPrompt,
+          systemPrompt: QUALITY_REVIEW_SYSTEM_PROMPT,
+          maxTokens: 12000,
+          baseUrl: creds.baseUrl,
+        });
+
+        const parsedReview = extractAndParseJSON(reviewRaw);
+        contentJSON = validateContentJSON(parsedReview);
+        qualityReviewApplied = true;
+        console.log(`[Generate] Quality Review pass completed successfully.`);
+      } catch (reviewErr) {
+        console.warn("[Generate] Quality Review pass encountered an issue; falling back cleanly to initial pass content:", reviewErr);
+      }
+    }
+
+    // 4. Assemble final website from pre-built section templates + design tokens + real photos
+    console.log(`[Generate] Assembling website pages from section template library...`);
+    const assembled = await assembleWebsite(contentJSON, activeTheme, assembleOptions);
 
     const projectName = websiteData.businessName || "Static Website";
 
-    // 4. Optional non-blocking database record
+    // 5. Optional non-blocking database record
     let projectId = "site-" + Date.now();
     try {
       const project = await db.project.create({
         data: {
           name: projectName,
-          prompt: `Theme: ${websiteData.theme?.name || "Default"} | Pages: ${targetPages.length} | Biz: ${websiteData.businessName}`,
+          prompt: `Theme: ${activeTheme.name} | Pages: ${assembled.files.filter((f) => f.path.endsWith(".html")).length} | Biz: ${websiteData.businessName}`,
           provider: providerType,
           model: targetModel,
           status: "ready",
-          notes: validated.notes || "Complete multi-page static website generated with HTML, CSS, and JS.",
+          notes: qualityReviewApplied
+            ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
+            : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
           files: {
-            create: validated.files.map((f) => ({
+            create: assembled.files.map((f) => ({
               path: f.path,
               content: f.content,
-              mimeType: f.path.endsWith(".html")
-                ? "text/html"
-                : f.path.endsWith(".css")
-                ? "text/css"
-                : f.path.endsWith(".js")
-                ? "application/javascript"
-                : "text/plain",
+              mimeType: f.mimeType || "text/plain",
             })),
           },
         },
@@ -207,21 +297,16 @@ export async function POST(req: NextRequest) {
       success: true,
       projectId,
       name: projectName,
-      notes: validated.notes || "Complete static website generated successfully.",
+      notes: qualityReviewApplied
+        ? `Complete static website assembled successfully with two-pass Quality Review audit and real photos.`
+        : `Complete static website assembled successfully with professional section templates and real photos.`,
+      qualityReviewApplied,
       provider: providerType,
       model: targetModel,
       createdAt: new Date().toISOString(),
-      files: validated.files.map((f) => ({
-        path: f.path,
-        content: f.content,
-        mimeType: f.path.endsWith(".html")
-          ? "text/html"
-          : f.path.endsWith(".css")
-          ? "text/css"
-          : f.path.endsWith(".js")
-          ? "application/javascript"
-          : "text/plain",
-      })),
+      files: assembled.files,
+      photos: assembled.photos || [],
+      qualityReport: assembled.qualityReport,
       downloadUrl: `/api/projects/${projectId}/download`,
     });
   } catch (error) {

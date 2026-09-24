@@ -16,6 +16,11 @@ import {
 } from "@/lib/themes";
 import { ThemeMiniPreview } from "@/components/ThemeMiniPreview";
 import {
+  findNicheByIndustry,
+  generateKeywordsForNiche,
+  NichePack,
+} from "@/niches";
+import {
   Sparkles,
   Key,
   Loader2,
@@ -46,25 +51,33 @@ import {
   BookOpen,
 } from "lucide-react";
 
-// Popular Local Business Types for the Searchable Dropdown
+// Popular Local Business Types (Featuring 20 Trade Niche Packs)
 const POPULAR_INDUSTRIES = [
   "Plumber",
   "Electrician",
-  "HVAC & Air Conditioning",
-  "Roofing Contractor",
+  "HVAC",
+  "Roofing",
+  "Tree Service",
+  "Landscaping & Lawn Care",
+  "House Cleaning",
+  "Pest Control",
+  "Pressure Washing",
+  "Painting",
+  "Handyman",
+  "General Contractor",
+  "Locksmith",
+  "Garage Door Repair",
+  "Moving Company",
+  "Auto Repair",
+  "Towing",
+  "Pool Service",
+  "Junk Removal",
+  "Carpet Cleaning",
   "Dentist & Orthodontics",
   "Restaurant & Cafe",
   "Hair Salon & Barbershop",
   "Law Firm & Attorney",
   "Real Estate Agency",
-  "Cleaning Service",
-  "Auto Repair & Mechanic",
-  "Landscaping & Lawn Care",
-  "Gym & Fitness Center",
-  "Home Healthcare",
-  "General Contractor",
-  "Pest Control",
-  "Painter & Decorator",
   "Other (Custom)",
 ];
 
@@ -199,11 +212,11 @@ export default function BuilderPage() {
 
   // Settings Panel State
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"models" | "preferences">("models");
+  const [settingsTab, setSettingsTab] = useState<"models" | "images" | "preferences">("models");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
   const handleOpenSettings = (
-    tab: "models" | "preferences" = "models",
+    tab: "models" | "images" | "preferences" = "models",
     message: string | null = null
   ) => {
     setSettingsTab(tab);
@@ -274,6 +287,14 @@ export default function BuilderPage() {
   const [generationPercent, setGenerationPercent] = useState(10);
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(null);
 
+  // Image Key States
+  const [hasImageKey, setHasImageKey] = useState(false);
+  const [imageKeySource, setImageKeySource] = useState<string>("");
+  const [dismissImageNotice, setDismissImageNotice] = useState(false);
+
+  // Quality Review State
+  const [qualityReviewEnabled, setQualityReviewEnabled] = useState(true);
+
   // Toasts Notification State
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
@@ -315,9 +336,19 @@ export default function BuilderPage() {
         setHasKey(false);
       }
     }
+
+    // Check Image API Keys
+    const pexels = localStorage.getItem("altofox_pexels_key");
+    const pixabay = localStorage.getItem("altofox_pixabay_key");
+    const hasImg = !!((pexels && pexels.trim()) || (pixabay && pixabay.trim()));
+    setHasImageKey(hasImg);
+    if (pexels && pixabay) setImageKeySource("Pexels & Pixabay");
+    else if (pexels) setImageKeySource("Pexels");
+    else if (pixabay) setImageKeySource("Pixabay");
+    else setImageKeySource("");
   }, []);
 
-  // Apply user preferences (default country, theme)
+  // Apply user preferences (default country, theme, quality review)
   const applyPreferences = useCallback(() => {
     const prefCountry = localStorage.getItem("altofox_pref_country");
     if (prefCountry) {
@@ -326,6 +357,12 @@ export default function BuilderPage() {
     const prefTheme = localStorage.getItem("altofox_pref_theme");
     if (prefTheme) {
       setSelectedThemeId((prev) => (!prev || prev === "modern-indigo" ? prefTheme : prev));
+    }
+    const prefReview = localStorage.getItem("altofox_pref_quality_review");
+    if (prefReview !== null) {
+      setQualityReviewEnabled(prefReview !== "false");
+    } else {
+      setQualityReviewEnabled(true);
     }
   }, []);
 
@@ -549,26 +586,62 @@ export default function BuilderPage() {
     setKeywords(keywords.filter((k) => k !== item));
   };
 
-  // Auto-Suggest SEO Keywords Button
+  // Effective Business Type String
+  const effectiveIndustry =
+    businessType === "Other (Custom)" ? customBusinessType.trim() || "Local Business" : businessType;
+
+  // Active Niche Pack
+  const currentNichePack: NichePack = useMemo(() => {
+    return findNicheByIndustry(effectiveIndustry);
+  }, [effectiveIndustry]);
+
+  // Suggested services from active Niche Pack that are not yet added
+  const suggestedServices = useMemo(() => {
+    return currentNichePack.commonServices.filter(
+      (s) => !services.some((existing) => existing.toLowerCase() === s.toLowerCase())
+    );
+  }, [currentNichePack, services]);
+
+  // Handle selecting or changing business type
+  const handleSelectBusinessType = (newType: string) => {
+    setBusinessType(newType);
+    if (stepErrors.businessType) {
+      setStepErrors((prev) => ({ ...prev, businessType: "" }));
+    }
+
+    const pack = findNicheByIndustry(newType === "Other (Custom)" ? customBusinessType : newType);
+
+    // Pre-select recommended theme from the niche pack
+    if (pack.recommendedThemes && pack.recommendedThemes.length > 0) {
+      setSelectedThemeId(pack.recommendedThemes[0]);
+    }
+
+    // Auto-update hours if emergency trade
+    if (pack.emergencyService) {
+      setBusinessHours("Monday - Sunday: 24/7 Emergency Dispatch");
+    }
+
+    addToast({
+      type: "info",
+      title: `${pack.name} Pack Active`,
+      message: `Loaded trade pack: recommended "${pack.recommendedThemes[0]}" theme & ${pack.commonServices.length} service suggestions.`,
+    });
+  };
+
+  // Auto-Suggest SEO Keywords using active Niche Pack patterns and user location
   const handleSuggestKeywords = () => {
-    const effectiveType = businessType === "Other (Custom)" ? customBusinessType : businessType;
-    const effectiveCity = city.trim() || "Dallas";
-    const serviceWord = services[0] || effectiveType || "service";
-
-    const suggestions = [
-      `${effectiveType.toLowerCase()} in ${effectiveCity} TX`,
-      `best ${effectiveType.toLowerCase()} ${effectiveCity}`,
-      `24/7 ${effectiveType.toLowerCase()} near me`,
-      `${serviceWord.toLowerCase()} ${effectiveCity}`,
-      `affordable ${effectiveType.toLowerCase()} in ${effectiveCity}`,
-    ];
-
-    const merged = Array.from(new Set([...keywords, ...suggestions]));
+    const generated = generateKeywordsForNiche(
+      currentNichePack,
+      city.trim() || "Dallas",
+      stateRegion.trim() || "TX",
+      serviceAreas
+    );
+    const merged = Array.from(new Set([...keywords, ...generated]));
     setKeywords(merged);
     addToast({
       type: "success",
-      title: "Keywords Suggested",
-      message: `Added ${suggestions.length} high-intent local SEO keywords.`,
+      title: `${currentNichePack.name} SEO Keywords Generated`,
+      message: `Added ${generated.length} high-intent local SEO keywords using ${currentNichePack.name} patterns.`,
     });
   };
 
@@ -583,14 +656,13 @@ export default function BuilderPage() {
     }
   };
 
-  // Effective Business Type String
-  const effectiveIndustry =
-    businessType === "Other (Custom)" ? customBusinessType.trim() || "Local Business" : businessType;
-
   // Selected Theme Details & Recommendations
   const recommendedThemeIds = useMemo(() => {
+    if (currentNichePack.recommendedThemes && currentNichePack.recommendedThemes.length > 0) {
+      return currentNichePack.recommendedThemes;
+    }
     return getRecommendedThemeIds(effectiveIndustry);
-  }, [effectiveIndustry]);
+  }, [currentNichePack, effectiveIndustry]);
 
   const activeTheme = useMemo(() => {
     return getThemeById(selectedThemeId);
@@ -699,18 +771,42 @@ export default function BuilderPage() {
       return;
     }
 
+    const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
+    const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
+    const preferredSource = (localStorage.getItem("altofox_image_preferred_source") as "pexels" | "pixabay") || "pexels";
+
     setGenerating(true);
     setGenerationPercent(15);
     setGenerationProgressText("Planning site structure and pages…");
 
-    // Dynamic rotating status text
-    const statusSequence = [
-      { text: "Writing high-converting local copy…", pct: 35, delay: 1800 },
-      { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 55, delay: 4000 },
-      { text: "Designing responsive styles with brand palette…", pct: 75, delay: 7000 },
-      { text: "Connecting relative page navigation and scripts…", pct: 90, delay: 11000 },
-      { text: "Finalizing static website package…", pct: 95, delay: 15000 },
-    ];
+    const prefReview =
+      (typeof window !== "undefined"
+        ? localStorage.getItem("altofox_pref_quality_review")
+        : null) !== "false";
+
+    // Dynamic rotating status text including photo resolution and Quality Review
+    const statusSequence = prefReview
+      ? [
+          { text: "Writing high-converting local copy (Pass 1)…", pct: 22, delay: 1800 },
+          { text: "Finding the perfect photos… (3 of 12 photos)", pct: 38, delay: 3800 },
+          { text: "Finding the perfect photos… (8 of 12 photos)", pct: 48, delay: 5500 },
+          { text: "Finding the perfect photos… (12 of 12 photos)", pct: 58, delay: 7200 },
+          { text: "Quality Review (Pass 2): auditing uniqueness, SEO & eliminating clichés…", pct: 72, delay: 9000 },
+          { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 85, delay: 11500 },
+          { text: "Designing responsive styles with brand palette…", pct: 92, delay: 13500 },
+          { text: "Connecting relative page navigation and scripts…", pct: 96, delay: 15500 },
+          { text: "Finalizing static website package…", pct: 98, delay: 17500 },
+        ]
+      : [
+          { text: "Writing high-converting local copy…", pct: 28, delay: 1800 },
+          { text: "Finding the perfect photos… (3 of 12 photos)", pct: 45, delay: 3800 },
+          { text: "Finding the perfect photos… (8 of 12 photos)", pct: 58, delay: 6000 },
+          { text: "Finding the perfect photos… (12 of 12 photos)", pct: 70, delay: 8200 },
+          { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 82, delay: 10500 },
+          { text: "Designing responsive styles with brand palette…", pct: 90, delay: 13000 },
+          { text: "Connecting relative page navigation and scripts…", pct: 95, delay: 15500 },
+          { text: "Finalizing static website package…", pct: 98, delay: 18000 },
+        ];
 
     const timers: NodeJS.Timeout[] = statusSequence.map((item) =>
       setTimeout(() => {
@@ -725,6 +821,8 @@ export default function BuilderPage() {
     const formData = {
       businessName: businessName.trim(),
       businessType: effectiveIndustry,
+      nicheId: currentNichePack.id,
+      schemaType: currentNichePack.schemaType,
       businessDescription: businessDescription.trim(),
       servicesOffered: services.join(", "),
       services: services,
@@ -763,6 +861,7 @@ export default function BuilderPage() {
       socialLinks: socialLinks.trim(),
       logoUrl: logoUrl.trim(),
       language: savedLanguage,
+      qualityReview: prefReview,
       extraInstructions: [
         uniqueSellingPoints ? `Unique Selling Points: ${uniqueSellingPoints}` : "",
         yearsInBusiness ? `Years in business: ${yearsInBusiness}` : "",
@@ -781,6 +880,10 @@ export default function BuilderPage() {
           provider: activeProvider,
           model: activeModel,
           apiKey: localKey || undefined,
+          pexelsKey,
+          pixabayKey,
+          preferredSource,
+          qualityReview: prefReview,
           formData,
         }),
       });
@@ -798,11 +901,19 @@ export default function BuilderPage() {
           themeName: activeTheme.name,
           websiteDomain: websiteDomain.trim(),
           files: data.files,
+          photos: data.photos,
+          qualityReport: data.qualityReport,
         });
         addToast({
           type: "success",
-          title: "Website Created!",
-          message: `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
+          title: data.qualityReport?.overallScore
+            ? `Website Ready (Quality Score: ${data.qualityReport.overallScore}/100)`
+            : data.qualityReviewApplied
+            ? "Website Created & Quality Reviewed!"
+            : "Website Created!",
+          message: data.qualityReviewApplied
+            ? `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages audited for 100% unique copy and SEO.`
+            : `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
         });
       } else {
         addToast({
@@ -872,6 +983,7 @@ export default function BuilderPage() {
           setKeywords([]);
           setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
           setSelectedThemeId("modern-indigo");
+          setDismissImageNotice(false);
           setCurrentStep(1);
           setMaxCompletedStep(1);
           addToast({
@@ -1117,7 +1229,7 @@ export default function BuilderPage() {
                       </label>
                       <select
                         value={businessType}
-                        onChange={(e) => setBusinessType(e.target.value)}
+                        onChange={(e) => handleSelectBusinessType(e.target.value)}
                         className="input-base cursor-pointer"
                       >
                         {POPULAR_INDUSTRIES.map((ind) => (
@@ -1136,6 +1248,23 @@ export default function BuilderPage() {
                           className="input-base mt-2"
                         />
                       )}
+
+                      {/* Active Niche Pack Indicator Badge */}
+                      <div className="mt-2 flex items-center justify-between text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-3 py-1.5">
+                        <span className="text-[#64748B] flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
+                          <span>Niche Pack: <strong className="text-[#0F172A]">{currentNichePack.name}</strong> ({currentNichePack.schemaType})</span>
+                        </span>
+                        {currentNichePack.emergencyService ? (
+                          <span className="text-[10px] font-bold text-[#DC2626] bg-[#FEF2F2] px-2 py-0.5 rounded border border-[#FECACA]">
+                            ⚡ 24/7 Emergency Trade
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded border border-[#C7D2FE]">
+                            {currentNichePack.commonServices.length} Trade Services
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Short Description */}
@@ -1213,6 +1342,49 @@ export default function BuilderPage() {
                           </span>
                         ))}
                       </div>
+
+                      {/* Suggested Services from Niche Pack */}
+                      {suggestedServices.length > 0 && (
+                        <div className="mt-3 p-3 rounded-[12px] bg-slate-50 border border-slate-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-bold text-[#475569] flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
+                              Suggested for {currentNichePack.name} (click to add)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const toAdd = suggestedServices.slice(0, 5);
+                                setServices((prev) => [...prev, ...toAdd]);
+                                addToast({
+                                  type: "success",
+                                  title: "Services Added",
+                                  message: `Added ${toAdd.length} services from ${currentNichePack.name} pack.`,
+                                });
+                              }}
+                              className="text-[11px] font-semibold text-[#4F46E5] hover:text-[#4338CA] hover:underline"
+                            >
+                              + Add Top 5
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {suggestedServices.map((srv) => (
+                              <button
+                                key={srv}
+                                type="button"
+                                onClick={() => {
+                                  setServices((prev) => [...prev, srv]);
+                                }}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-xs font-medium bg-white hover:bg-[#EEF2FF] hover:text-[#4F46E5] border border-slate-200 hover:border-[#C7D2FE] text-[#334155] transition shadow-2xs group cursor-pointer"
+                                title={`Add "${srv}" to your services`}
+                              >
+                                <Plus className="w-3 h-3 text-[#94A3B8] group-hover:text-[#4F46E5]" />
+                                <span>{srv}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Optional Details (Years in business & USP) */}
@@ -1432,9 +1604,16 @@ export default function BuilderPage() {
                     {/* Business Hours & Website Domain */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Business Hours
-                        </label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-[#0F172A]">
+                            Business Hours
+                          </label>
+                          {currentNichePack.emergencyService && (
+                            <span className="text-[10px] font-semibold text-[#DC2626]">
+                              ⚡ 24/7 Trade
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={businessHours}
@@ -1457,19 +1636,24 @@ export default function BuilderPage() {
                       </div>
                     </div>
 
-                    {/* Target Keywords (with Suggest button) */}
+                    {/* Target Keywords (with Niche Pack Suggest button) */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <label className="text-xs font-semibold text-[#0F172A]">
-                          Target Keywords for Local SEO <span className="text-[#EF4444]">*</span>
-                        </label>
+                        <div className="flex items-center space-x-2">
+                          <label className="text-xs font-semibold text-[#0F172A]">
+                            Target Keywords for Local SEO <span className="text-[#EF4444]">*</span>
+                          </label>
+                          <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#C7D2FE]">
+                            {currentNichePack.name} Patterns
+                          </span>
+                        </div>
                         <button
                           type="button"
                           onClick={handleSuggestKeywords}
-                          className="inline-flex items-center space-x-1 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline"
+                          className="inline-flex items-center space-x-1 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Suggest Keywords</span>
+                          <span>Suggest {currentNichePack.name} Keywords</span>
                         </button>
                       </div>
 
@@ -1701,7 +1885,7 @@ export default function BuilderPage() {
                             {isRecommended ? (
                               <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE]">
                                 <Sparkles className="w-2.5 h-2.5" />
-                                <span>Recommended for you</span>
+                                <span>Recommended for {currentNichePack.name}</span>
                               </span>
                             ) : (
                               <span />
@@ -1902,7 +2086,7 @@ export default function BuilderPage() {
                           {businessName || "Unnamed Business"}
                         </h4>
                         <p className="text-xs text-[#64748B] mt-0.5">
-                          {effectiveIndustry} • {services.length} services specified
+                          {effectiveIndustry} • Niche Pack: <strong className="text-[#0F172A]">{currentNichePack.name}</strong> ({currentNichePack.schemaType}) • {services.length} services
                         </p>
                       </div>
                       <button
@@ -2021,6 +2205,84 @@ export default function BuilderPage() {
                       Change
                     </button>
                   </div>
+
+                  {/* Quality Review Setting Row */}
+                  <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-4 h-4 text-[#4F46E5]" />
+                      <span className="text-[#64748B]">
+                        Quality Review:{" "}
+                        {qualityReviewEnabled ? (
+                          <strong className="text-[#10B981]">On (Two-pass uniqueness &amp; SEO audit)</strong>
+                        ) : (
+                          <span className="text-[#64748B] font-medium">Off (Single generation pass)</span>
+                        )}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenSettings("preferences")}
+                      className="font-bold text-[#4F46E5] hover:underline"
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  {/* Stock Photo Source Status / Notice */}
+                  {!hasImageKey && !dismissImageNotice ? (
+                    <div className="bg-amber-50/80 border border-amber-200 rounded-[12px] p-3.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                      <div className="flex items-start sm:items-center space-x-2.5">
+                        <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                          <ImageIcon className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-amber-900">
+                            Add a free Pexels or Pixabay key in Settings to include real photos
+                          </p>
+                          <p className="text-amber-700 text-[11px] mt-0.5">
+                            Without an API key, we will automatically use our curated trade photography library.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => setDismissImageNotice(true)}
+                          className="px-2.5 py-1.5 rounded-[8px] border border-amber-300 bg-white/90 hover:bg-white text-amber-800 font-medium text-[11px] transition shadow-2xs"
+                        >
+                          Continue with curated photos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSettings("images")}
+                          className="px-2.5 py-1.5 rounded-[8px] bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] transition shadow-2xs"
+                        >
+                          Configure in Settings
+                        </button>
+                      </div>
+                    </div>
+                  ) : hasImageKey ? (
+                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <span className="text-emerald-950 font-medium">
+                          Real stock photos enabled{" "}
+                          <span className="text-emerald-700 font-normal">
+                            ({imageKeySource || "Pexels/Pixabay"})
+                          </span>
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenSettings("images")}
+                        className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : null}
 
                   {/* Big Primary Generation Button */}
                   <button

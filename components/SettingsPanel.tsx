@@ -21,13 +21,14 @@ import {
   Lock,
   Palette,
   Languages,
+  Image as ImageIcon,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
 
 export interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "models" | "preferences";
+  initialTab?: "models" | "images" | "preferences";
   initialMessage?: string | null;
   onSettingsUpdated: () => void;
   onClearAllData?: () => void;
@@ -158,7 +159,7 @@ export function SettingsPanel({
   onSettingsUpdated,
   onClearAllData,
 }: SettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<"models" | "preferences">(initialTab);
+  const [activeTab, setActiveTab] = useState<"models" | "images" | "preferences">(initialTab);
 
   // Default AI Provider & Model
   const [defaultProvider, setDefaultProvider] = useState<ProviderType>("gemini");
@@ -179,10 +180,30 @@ export function SettingsPanel({
     Record<string, { success: boolean; message: string }>
   >({});
 
+  // Image Sources states
+  const [savedPexelsKey, setSavedPexelsKey] = useState("");
+  const [pexelsKeyInput, setPexelsKeyInput] = useState("");
+  const [showPexelsKey, setShowPexelsKey] = useState(false);
+  const [isEditingPexelsKey, setIsEditingPexelsKey] = useState(false);
+  const [pexelsStatus, setPexelsStatus] = useState<"connected" | "not_connected" | "error">("not_connected");
+
+  const [savedPixabayKey, setSavedPixabayKey] = useState("");
+  const [pixabayKeyInput, setPixabayKeyInput] = useState("");
+  const [showPixabayKey, setShowPixabayKey] = useState(false);
+  const [isEditingPixabayKey, setIsEditingPixabayKey] = useState(false);
+  const [pixabayStatus, setPixabayStatus] = useState<"connected" | "not_connected" | "error">("not_connected");
+
+  const [preferredImageSource, setPreferredImageSource] = useState<"pexels" | "pixabay">("pexels");
+  const [testingImageSource, setTestingImageSource] = useState<"pexels" | "pixabay" | null>(null);
+  const [imageTestResults, setImageTestResults] = useState<
+    Record<"pexels" | "pixabay", { success: boolean; message: string } | null>
+  >({ pexels: null, pixabay: null });
+
   // Preferences states
   const [prefCountry, setPrefCountry] = useState("United States");
   const [prefTheme, setPrefTheme] = useState("modern-indigo");
   const [prefLanguage, setPrefLanguage] = useState("English");
+  const [prefQualityReview, setPrefQualityReview] = useState(true);
   const [prefSavedMessage, setPrefSavedMessage] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
@@ -231,10 +252,26 @@ export function SettingsPanel({
     setDefaultProvider(storedActiveProvider);
     setDefaultModel(storedActiveModel);
 
+    // Load image keys & settings
+    const pexelsKey = localStorage.getItem("altofox_pexels_key") || "";
+    setSavedPexelsKey(pexelsKey);
+    setPexelsKeyInput(pexelsKey);
+    setPexelsStatus(pexelsKey ? "connected" : "not_connected");
+
+    const pixabayKey = localStorage.getItem("altofox_pixabay_key") || "";
+    setSavedPixabayKey(pixabayKey);
+    setPixabayKeyInput(pixabayKey);
+    setPixabayStatus(pixabayKey ? "connected" : "not_connected");
+
+    const prefSource =
+      (localStorage.getItem("altofox_image_preferred_source") as "pexels" | "pixabay") || "pexels";
+    setPreferredImageSource(prefSource);
+
     // Load preferences
     setPrefCountry(localStorage.getItem("altofox_pref_country") || "United States");
     setPrefTheme(localStorage.getItem("altofox_pref_theme") || "modern-indigo");
     setPrefLanguage(localStorage.getItem("altofox_pref_language") || "English");
+    setPrefQualityReview(localStorage.getItem("altofox_pref_quality_review") !== "false");
   }, []);
 
   // Sync initial tab when panel opens
@@ -439,11 +476,136 @@ export function SettingsPanel({
     onSettingsUpdated();
   };
 
+  // Test Image Source API Key
+  const handleTestImageKey = async (source: "pexels" | "pixabay") => {
+    const rawKey =
+      source === "pexels"
+        ? pexelsKeyInput.trim() || savedPexelsKey
+        : pixabayKeyInput.trim() || savedPixabayKey;
+    if (!rawKey) {
+      setImageTestResults((prev) => ({
+        ...prev,
+        [source]: { success: false, message: "Please enter an API key first." },
+      }));
+      if (source === "pexels") setPexelsStatus("error");
+      else setPixabayStatus("error");
+      return;
+    }
+
+    setTestingImageSource(source);
+    setImageTestResults((prev) => ({ ...prev, [source]: null }));
+
+    try {
+      const res = await fetch("/api/images/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, apiKey: rawKey }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setImageTestResults((prev) => ({
+          ...prev,
+          [source]: { success: true, message: data.message || "Key validated successfully!" },
+        }));
+        if (source === "pexels") setPexelsStatus("connected");
+        else setPixabayStatus("connected");
+      } else {
+        setImageTestResults((prev) => ({
+          ...prev,
+          [source]: {
+            success: false,
+            message: data.message || "Connection failed. Please check your key.",
+          },
+        }));
+        if (source === "pexels") setPexelsStatus("error");
+        else setPixabayStatus("error");
+      }
+    } catch (err) {
+      setImageTestResults((prev) => ({
+        ...prev,
+        [source]: {
+          success: false,
+          message: err instanceof Error ? err.message : "Network error testing key.",
+        },
+      }));
+      if (source === "pexels") setPexelsStatus("error");
+      else setPixabayStatus("error");
+    } finally {
+      setTestingImageSource(null);
+    }
+  };
+
+  // Save Image Key
+  const handleSaveImageKey = (source: "pexels" | "pixabay") => {
+    const key =
+      source === "pexels"
+        ? pexelsKeyInput.trim() || savedPexelsKey
+        : pixabayKeyInput.trim() || savedPixabayKey;
+    if (!key) {
+      setImageTestResults((prev) => ({
+        ...prev,
+        [source]: { success: false, message: "Please enter an API key before saving." },
+      }));
+      return;
+    }
+
+    if (source === "pexels") {
+      localStorage.setItem("altofox_pexels_key", key);
+      setSavedPexelsKey(key);
+      setPexelsStatus("connected");
+      setIsEditingPexelsKey(false);
+    } else {
+      localStorage.setItem("altofox_pixabay_key", key);
+      setSavedPixabayKey(key);
+      setPixabayStatus("connected");
+      setIsEditingPixabayKey(false);
+    }
+
+    setImageTestResults((prev) => ({
+      ...prev,
+      [source]: { success: true, message: "API key saved in localStorage." },
+    }));
+
+    onSettingsUpdated();
+  };
+
+  // Remove Image Key
+  const handleRemoveImageKey = (source: "pexels" | "pixabay") => {
+    if (source === "pexels") {
+      localStorage.removeItem("altofox_pexels_key");
+      setSavedPexelsKey("");
+      setPexelsKeyInput("");
+      setPexelsStatus("not_connected");
+      setIsEditingPexelsKey(false);
+    } else {
+      localStorage.removeItem("altofox_pixabay_key");
+      setSavedPixabayKey("");
+      setPixabayKeyInput("");
+      setPixabayStatus("not_connected");
+      setIsEditingPixabayKey(false);
+    }
+
+    setImageTestResults((prev) => ({
+      ...prev,
+      [source]: { success: true, message: "API key removed from localStorage." },
+    }));
+
+    onSettingsUpdated();
+  };
+
+  // Preferred Source Change
+  const handlePreferredImageSourceChange = (pref: "pexels" | "pixabay") => {
+    setPreferredImageSource(pref);
+    localStorage.setItem("altofox_image_preferred_source", pref);
+    onSettingsUpdated();
+  };
+
   // Save Preferences
   const handleSavePreferences = () => {
     localStorage.setItem("altofox_pref_country", prefCountry);
     localStorage.setItem("altofox_pref_theme", prefTheme);
     localStorage.setItem("altofox_pref_language", prefLanguage);
+    localStorage.setItem("altofox_pref_quality_review", String(prefQualityReview));
 
     setPrefSavedMessage(true);
     setTimeout(() => setPrefSavedMessage(false), 2500);
@@ -461,6 +623,7 @@ export function SettingsPanel({
       "altofox_pref_country",
       "altofox_pref_theme",
       "altofox_pref_language",
+      "altofox_pref_quality_review",
       "altofox_key_gemini",
       "altofox_key_openai",
       "altofox_key_openrouter",
@@ -469,6 +632,9 @@ export function SettingsPanel({
       "altofox_model_openai",
       "altofox_model_openrouter",
       "altofox_model_custom",
+      "altofox_pexels_key",
+      "altofox_pixabay_key",
+      "altofox_image_preferred_source",
     ];
 
     keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -529,7 +695,7 @@ export function SettingsPanel({
               <button
                 type="button"
                 onClick={() => setActiveTab("models")}
-                className={`flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-2 border-b-2 transition ${
+                className={`flex-1 py-2.5 px-2.5 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-1.5 border-b-2 transition ${
                   activeTab === "models"
                     ? "border-[#4F46E5] text-[#4F46E5] bg-[#EEF2FF]/40"
                     : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-slate-50"
@@ -544,8 +710,24 @@ export function SettingsPanel({
 
               <button
                 type="button"
+                onClick={() => setActiveTab("images")}
+                className={`flex-1 py-2.5 px-2.5 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-1.5 border-b-2 transition ${
+                  activeTab === "images"
+                    ? "border-[#4F46E5] text-[#4F46E5] bg-[#EEF2FF]/40"
+                    : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-slate-50"
+                }`}
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>Image Sources</span>
+                {(pexelsStatus === "connected" || pixabayStatus === "connected") && (
+                  <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+                )}
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab("preferences")}
-                className={`flex-1 py-2.5 px-3 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-2 border-b-2 transition ${
+                className={`flex-1 py-2.5 px-2.5 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-1.5 border-b-2 transition ${
                   activeTab === "preferences"
                     ? "border-[#4F46E5] text-[#4F46E5] bg-[#EEF2FF]/40"
                     : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-slate-50"
@@ -845,7 +1027,408 @@ export function SettingsPanel({
               </div>
             )}
 
-            {/* ================= TAB 2: PREFERENCES ================= */}
+            {/* ================= TAB 2: IMAGE SOURCES ================= */}
+            {activeTab === "images" && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                {/* Intro Card */}
+                <div className="bg-[#EEF2FF]/60 border border-[#C7D2FE] rounded-[12px] p-3.5 space-y-1.5">
+                  <div className="flex items-center space-x-2 text-xs font-bold text-[#0F172A]">
+                    <ImageIcon className="w-4 h-4 text-[#4F46E5]" />
+                    <span>Free Royalty-Free Stock Photos</span>
+                  </div>
+                  <p className="text-[11px] text-[#64748B] leading-relaxed">
+                    Connect free API keys from <strong>Pexels</strong> and <strong>Pixabay</strong> to automatically search and embed real, license-free commercial photography for hero banners, service cards, about sections, and project galleries.
+                  </p>
+                </div>
+
+                {/* Local Storage Privacy Note */}
+                <div className="flex items-center space-x-2 text-[11px] text-[#64748B] bg-slate-50 p-2.5 rounded-[10px] border border-[#E2E8F0]">
+                  <Lock className="w-3.5 h-3.5 text-[#10B981] shrink-0" />
+                  <span>
+                    Your image API keys are stored only in this browser (localStorage). They are never sent to external servers other than the official image providers.
+                  </span>
+                </div>
+
+                {/* Preferred Source Selector Card */}
+                <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3.5 sm:p-4 space-y-2.5">
+                  <label className="block text-xs font-bold text-[#0F172A]">
+                    Preferred Image Source
+                  </label>
+                  <p className="text-[11px] text-[#64748B]">
+                    AltoFox queries your preferred provider first. If no matching photos are returned, it automatically searches the second source.
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handlePreferredImageSourceChange("pexels")}
+                      className={`p-3 rounded-[10px] border text-left transition flex flex-col justify-between ${
+                        preferredImageSource === "pexels"
+                          ? "bg-[#EEF2FF] border-[#4F46E5] ring-2 ring-[#4F46E5]/20"
+                          : "bg-white border-[#E2E8F0] hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs font-bold text-[#0F172A]">Pexels first</span>
+                        {preferredImageSource === "pexels" && (
+                          <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#64748B]">
+                        High aesthetic quality, modern residential & interior photography (Recommended).
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePreferredImageSourceChange("pixabay")}
+                      className={`p-3 rounded-[10px] border text-left transition flex flex-col justify-between ${
+                        preferredImageSource === "pixabay"
+                          ? "bg-[#EEF2FF] border-[#4F46E5] ring-2 ring-[#4F46E5]/20"
+                          : "bg-white border-[#E2E8F0] hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs font-bold text-[#0F172A]">Pixabay first</span>
+                        {preferredImageSource === "pixabay" && (
+                          <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#64748B]">
+                        Huge variety of tools, contractor gear, outdoor landscapes, and equipment.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1. PEXELS CARD */}
+                <div
+                  className={`rounded-[12px] border transition overflow-hidden ${
+                    savedPexelsKey
+                      ? "bg-white border-[#CBD5E1] shadow-xs"
+                      : "bg-white border-[#E2E8F0]"
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-[8px] bg-[#05A081] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        PX
+                      </div>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                          Pexels
+                        </h3>
+                        <a
+                          href="https://www.pexels.com/api/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                        >
+                          <span>Get free API key (pexels.com/api)</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div>
+                      {pexelsStatus === "connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                          <span>Connected</span>
+                        </span>
+                      )}
+                      {pexelsStatus === "not_connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          <span>Not connected</span>
+                        </span>
+                      )}
+                      {pexelsStatus === "error" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          <span>Error</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                        Pexels API Key
+                      </label>
+
+                      {savedPexelsKey && !isEditingPexelsKey ? (
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
+                          <span className="font-mono text-xs text-[#0F172A]">
+                            {maskApiKey(savedPexelsKey)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingPexelsKey(true);
+                              setPexelsKeyInput(savedPexelsKey);
+                            }}
+                            className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Change</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type={showPexelsKey ? "text" : "password"}
+                            value={pexelsKeyInput}
+                            onChange={(e) => setPexelsKeyInput(e.target.value)}
+                            placeholder="Enter your Pexels API key..."
+                            className="input-base pr-10 font-mono text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPexelsKey((prev) => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
+                            aria-label="Toggle password visibility"
+                          >
+                            {showPexelsKey ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Test result message */}
+                    {imageTestResults.pexels && (
+                      <div
+                        className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                          imageTestResults.pexels.success
+                            ? "bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        }`}
+                      >
+                        {imageTestResults.pexels.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        )}
+                        <span>{imageTestResults.pexels.message}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={testingImageSource === "pexels"}
+                        onClick={() => handleTestImageKey("pexels")}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
+                      >
+                        {testingImageSource === "pexels" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing…</span>
+                          </>
+                        ) : (
+                          <span>Test connection</span>
+                        )}
+                      </button>
+
+                      {(!savedPexelsKey || isEditingPexelsKey) && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveImageKey("pexels")}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-xs font-semibold text-white shadow-xs transition"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Key</span>
+                        </button>
+                      )}
+
+                      {savedPexelsKey && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageKey("pexels")}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. PIXABAY CARD */}
+                <div
+                  className={`rounded-[12px] border transition overflow-hidden ${
+                    savedPixabayKey
+                      ? "bg-white border-[#CBD5E1] shadow-xs"
+                      : "bg-white border-[#E2E8F0]"
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-[8px] bg-[#0288D1] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        PB
+                      </div>
+                      <div>
+                        <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                          Pixabay
+                        </h3>
+                        <a
+                          href="https://pixabay.com/api/docs/"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                        >
+                          <span>Get free API key (pixabay.com/api/docs)</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div>
+                      {pixabayStatus === "connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                          <span>Connected</span>
+                        </span>
+                      )}
+                      {pixabayStatus === "not_connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          <span>Not connected</span>
+                        </span>
+                      )}
+                      {pixabayStatus === "error" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          <span>Error</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                        Pixabay API Key
+                      </label>
+
+                      {savedPixabayKey && !isEditingPixabayKey ? (
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
+                          <span className="font-mono text-xs text-[#0F172A]">
+                            {maskApiKey(savedPixabayKey)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingPixabayKey(true);
+                              setPixabayKeyInput(savedPixabayKey);
+                            }}
+                            className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Change</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type={showPixabayKey ? "text" : "password"}
+                            value={pixabayKeyInput}
+                            onChange={(e) => setPixabayKeyInput(e.target.value)}
+                            placeholder="Enter your Pixabay API key..."
+                            className="input-base pr-10 font-mono text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPixabayKey((prev) => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
+                            aria-label="Toggle password visibility"
+                          >
+                            {showPixabayKey ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Test result message */}
+                    {imageTestResults.pixabay && (
+                      <div
+                        className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                          imageTestResults.pixabay.success
+                            ? "bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        }`}
+                      >
+                        {imageTestResults.pixabay.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        )}
+                        <span>{imageTestResults.pixabay.message}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={testingImageSource === "pixabay"}
+                        onClick={() => handleTestImageKey("pixabay")}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
+                      >
+                        {testingImageSource === "pixabay" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing…</span>
+                          </>
+                        ) : (
+                          <span>Test connection</span>
+                        )}
+                      </button>
+
+                      {(!savedPixabayKey || isEditingPixabayKey) && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveImageKey("pixabay")}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-xs font-semibold text-white shadow-xs transition"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Key</span>
+                        </button>
+                      )}
+
+                      {savedPixabayKey && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageKey("pixabay")}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 3: PREFERENCES ================= */}
             {activeTab === "preferences" && (
               <div className="space-y-6 animate-in fade-in duration-150">
                 {/* Default Country */}
@@ -921,6 +1504,36 @@ export function SettingsPanel({
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Quality Review (Second AI Pass) Toggle */}
+                <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-4 space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5 cursor-pointer">
+                        <Sparkles className="w-4 h-4 text-[#4F46E5]" />
+                        <span>Quality Review (Second AI Pass)</span>
+                      </label>
+                      <p className="text-[11px] text-[#64748B] mt-0.5 leading-relaxed">
+                        Sends generated copy back to the AI model for a second pass to remove duplicate sentences across pages, eliminate generic filler, verify target keywords, and audit for any invented facts.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                      <input
+                        type="checkbox"
+                        checked={prefQualityReview}
+                        onChange={(e) => setPrefQualityReview(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4F46E5]" />
+                    </label>
+                  </div>
+                  <div className="text-[10px] text-[#475569] bg-slate-50 border border-slate-200/80 rounded-[8px] px-2.5 py-1.5 flex items-center justify-between">
+                    <span>Audits for 100% unique copy, no clichés, no invented claims</span>
+                    <span className={`font-bold ${prefQualityReview ? "text-[#10B981]" : "text-[#94A3B8]"}`}>
+                      {prefQualityReview ? "● Enabled (Default)" : "Disabled"}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Save Preferences Button */}

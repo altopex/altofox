@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import JSZip from "jszip";
 import {
   Download,
@@ -19,12 +19,34 @@ import {
   Layers,
   ExternalLink,
   Palette,
+  Loader2,
+  Columns,
+  ShieldCheck,
 } from "lucide-react";
+import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
+import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
+import { QualityScorecard } from "./QualityScorecard";
 
 export interface ProjectFileItem {
   path: string;
   content: string;
   mimeType?: string | null;
+}
+
+export interface ProjectPhotoItem {
+  id?: string;
+  url: string;
+  downloadUrl?: string;
+  alt?: string;
+  localPath: string;
+  localWebpPath?: string;
+  width?: number;
+  height?: number;
+  slot?: string;
+  photographer?: string;
+  photographerUrl?: string;
+  sourceUrl?: string;
+  source?: string;
 }
 
 export interface ProjectData {
@@ -37,6 +59,8 @@ export interface ProjectData {
   downloadUrl?: string;
   websiteDomain?: string;
   files: ProjectFileItem[];
+  photos?: ProjectPhotoItem[];
+  qualityReport?: QualityReport;
 }
 
 interface LivePreviewProps {
@@ -52,11 +76,15 @@ export function LivePreview({
   onGenerateAgain,
   onTryAnotherTheme,
 }: LivePreviewProps) {
-  const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  // Show mobile preview by default next to desktop preview ("split" mode)
+  const [viewMode, setViewMode] = useState<"split" | "desktop" | "mobile" | "tablet">("split");
   const [activePage, setActivePage] = useState<string>("index.html");
   const [refreshKey, setRefreshKey] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
+  const [zippingStatus, setZippingStatus] = useState("");
+  const [mobileAudit, setMobileAudit] = useState<PageMobileAuditResult | null>(null);
+  const [isMobileAuditing, setIsMobileAuditing] = useState(false);
 
   // List of all HTML pages generated
   const htmlFiles = project.files.filter((f) => f.path.toLowerCase().endsWith(".html"));
@@ -69,8 +97,12 @@ export function LivePreview({
       project.files.find((f) => f.path.toLowerCase().endsWith(".html"))?.content ||
       "<!DOCTYPE html><html><body><h1>No HTML content found</h1></body></html>";
 
-    const css = project.files.find((f) => f.path.toLowerCase() === "styles.css")?.content || "";
-    const js = project.files.find((f) => f.path.toLowerCase() === "script.js")?.content || "";
+    const css =
+      project.files.find((f) => f.path.toLowerCase() === "css/style.css" || f.path.toLowerCase() === "styles.css")?.content ||
+      project.files.find((f) => f.path.toLowerCase().endsWith(".css"))?.content || "";
+    const js =
+      project.files.find((f) => f.path.toLowerCase() === "js/main.js" || f.path.toLowerCase() === "script.js")?.content ||
+      project.files.find((f) => f.path.toLowerCase().endsWith(".js"))?.content || "";
 
     if (css) {
       const styleTag = `<style>\n/* Inlined styles.css */\n${css}\n</style>`;
@@ -86,16 +118,131 @@ export function LivePreview({
         : `${html}\n${scriptTag}`;
     }
 
+    // Replace local image paths with their high-res remote CDN URLs for live preview
+    html = html.replace(
+      /<img([^>]*?)src=["']images\/[^"']+["']([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)>/gi,
+      '<img$1src="$3"$2data-remote-src="$3"$4>'
+    );
+    html = html.replace(
+      /<img([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)src=["']images\/[^"']+["']([^>]*?)>/gi,
+      '<img$1data-remote-src="$2"$3src="$2"$4>'
+    );
+    html = html.replace(
+      /style=["']background-image:\s*url\(['"]images\/[^'"]+['"]\);["']([^>]*?)data-bg-remote=["']([^"']+)["']/gi,
+      'style="background-image: url(\'$2\');"$1data-bg-remote="$2"'
+    );
+    // Strip <source srcset="images/..." type="image/webp"> in preview so preview loads remote <img> src
+    html = html.replace(/<source[^>]*?srcset=["']images\/[^"']+["'][^>]*?>/gi, "");
+
     return html;
   }, [project.files, activePage]);
+
+  // Comprehensive Quality Report (use server report or compute client-side)
+  const qualityReport: QualityReport = useMemo(() => {
+    if (project.qualityReport) return project.qualityReport;
+    const res = runQualityChecksAndAutoFix(project.files, {
+      businessName: project.name,
+      domain: project.websiteDomain,
+    });
+    return res.report;
+  }, [project]);
+
+  // Run automated hidden iframe mobile audit at 360px, 390px, 768px, 1280px
+  useEffect(() => {
+    let isMounted = true;
+    setIsMobileAuditing(true);
+
+    runClientMobileCheck(inlinedPreviewHtml, activePage, [360, 390, 768, 1280])
+      .then((auditResult) => {
+        if (isMounted) {
+          setMobileAudit(auditResult);
+          setIsMobileAuditing(false);
+          if (auditResult.hasAnyOverflow) {
+            const overflow = auditResult.breakpoints.find((b) => b.hasOverflow);
+            console.warn(`[Mobile Audit] Overflow on ${activePage} at ${overflow?.width}px:`, overflow?.overflowElement);
+          } else {
+            console.log(`[Mobile Audit] Zero horizontal scrolling on ${activePage} across 360, 390, 768, 1280px.`);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("[Mobile Audit] Audit error:", err);
+        if (isMounted) setIsMobileAuditing(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [inlinedPreviewHtml, activePage]);
+
+  // Canvas helper to resize and compress photos into JPEG + WebP (~80% quality)
+  const processImageWithCanvas = async (
+    blob: Blob,
+    maxWidth: number
+  ): Promise<{ jpgBlob: Blob; webpBlob: Blob }> => {
+    return new Promise((resolve) => {
+      if (typeof window === "undefined") {
+        resolve({ jpgBlob: blob, webpBlob: blob });
+        return;
+      }
+
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(blob);
+      img.crossOrigin = "anonymous";
+
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let width = img.naturalWidth || 800;
+        let height = img.naturalHeight || 600;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        canvas.toBlob(
+          (webpBlob) => {
+            canvas.toBlob(
+              (jpgBlob) => {
+                resolve({
+                  webpBlob: webpBlob || blob,
+                  jpgBlob: jpgBlob || blob,
+                });
+              },
+              "image/jpeg",
+              0.82
+            );
+          },
+          "image/webp",
+          0.82
+        );
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        resolve({ jpgBlob: blob, webpBlob: blob });
+      };
+
+      img.src = objectUrl;
+    });
+  };
 
   // Download all files as a clean ZIP package named after the business
   const handleDownloadZip = async () => {
     try {
       setIsZipping(true);
+      setZippingStatus("Gathering website files…");
       const zip = new JSZip();
 
-      // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt
+      // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt, CREDITS.txt
       for (const file of project.files) {
         zip.file(file.path, file.content);
       }
@@ -103,9 +250,92 @@ export function LivePreview({
       // Add clean README
       zip.file(
         "README.md",
-        `# ${project.name}\n\nGenerated with AltoFox Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links and styles are self-contained with zero build step required.\n`
+        `# ${project.name}\n\nGenerated with AltoFox Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links, styles, and stock photos in /images are self-contained with zero build step required.\n`
       );
 
+      // Collect photos to bundle into /images
+      const photosToFetch: Array<{
+        remoteUrl: string;
+        localPath: string;
+        localWebpPath: string;
+        slot: string;
+      }> = [];
+
+      const seenPaths = new Set<string>();
+
+      if (project.photos && project.photos.length > 0) {
+        for (const p of project.photos) {
+          if (!seenPaths.has(p.localPath)) {
+            seenPaths.add(p.localPath);
+            photosToFetch.push({
+              remoteUrl: p.downloadUrl || p.url,
+              localPath: p.localPath,
+              localWebpPath: p.localWebpPath || p.localPath.replace(/\.jpg$/, ".webp"),
+              slot: p.slot || "service",
+            });
+          }
+        }
+      } else {
+        // Parse from HTML files if project.photos not present
+        for (const file of project.files) {
+          if (!file.path.endsWith(".html")) continue;
+          const imgRegex = /<img[^>]*?src=["'](images\/[^"']+)["'][^>]*?data-remote-src=["']([^"']+)["'][^>]*?>/gi;
+          let match;
+          while ((match = imgRegex.exec(file.content)) !== null) {
+            const localPath = match[1];
+            const remoteUrl = match[2];
+            if (!seenPaths.has(localPath)) {
+              seenPaths.add(localPath);
+              photosToFetch.push({
+                remoteUrl,
+                localPath,
+                localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
+                slot: localPath.includes("hero") ? "hero" : "service",
+              });
+            }
+          }
+          const bgRegex = /style=["']background-image:\s*url\(['"](images\/[^'"]+)['"]\);["'][^>]*?data-bg-remote=["']([^"']+)["']/gi;
+          let bgMatch;
+          while ((bgMatch = bgRegex.exec(file.content)) !== null) {
+            const localPath = bgMatch[1];
+            const remoteUrl = bgMatch[2];
+            if (!seenPaths.has(localPath)) {
+              seenPaths.add(localPath);
+              photosToFetch.push({
+                remoteUrl,
+                localPath,
+                localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
+                slot: "hero",
+              });
+            }
+          }
+        }
+      }
+
+      // Download and optimize photos via local server proxy (avoids CORS)
+      let photoCount = 0;
+      for (const item of photosToFetch) {
+        photoCount++;
+        setZippingStatus(`Optimizing photo ${photoCount} of ${photosToFetch.length}…`);
+        try {
+          const proxyUrl = `/api/images/proxy?url=${encodeURIComponent(item.remoteUrl)}`;
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            const isHero = item.slot === "hero" || item.localPath.includes("hero");
+            const isAvatar = item.slot === "avatar";
+            const maxWidth = isHero ? 1920 : isAvatar ? 200 : 800;
+
+            const processed = await processImageWithCanvas(blob, maxWidth);
+            zip.file(item.localPath, processed.jpgBlob);
+            zip.file(item.localWebpPath, processed.webpBlob);
+          }
+        } catch (imgErr) {
+          console.warn(`Could not bundle image ${item.localPath}:`, imgErr);
+        }
+      }
+
+      setZippingStatus("Compressing ZIP package…");
       const zipBlob = await zip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
@@ -140,6 +370,7 @@ export function LivePreview({
       alert("Failed to create ZIP download. Please try again.");
     } finally {
       setIsZipping(false);
+      setZippingStatus("");
     }
   };
 
@@ -193,10 +424,19 @@ export function LivePreview({
             type="button"
             onClick={handleDownloadZip}
             disabled={isZipping}
-            className="inline-flex items-center space-x-2 px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-sm transition"
+            className="inline-flex items-center space-x-2 px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-sm transition disabled:opacity-75"
           >
-            <Download className="w-4 h-4" />
-            <span>{downloadSuccess ? "Downloaded!" : "Download ZIP"}</span>
+            {isZipping ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>{zippingStatus || "Bundling ZIP…"}</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span>{downloadSuccess ? "Downloaded!" : "Download ZIP"}</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -236,10 +476,23 @@ export function LivePreview({
               <div className="bg-slate-100 p-0.5 rounded-[8px] flex items-center space-x-0.5 border border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setDevice("desktop")}
-                  title="Desktop View"
+                  onClick={() => setViewMode("split")}
+                  title="Dual Preview (Desktop + Mobile side-by-side)"
+                  className={`px-2.5 py-1 rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition ${
+                    viewMode === "split"
+                      ? "bg-white text-[#4F46E5] shadow-xs"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  <Columns className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Desktop + Mobile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("desktop")}
+                  title="Desktop View (1280px)"
                   className={`p-1.5 rounded-[6px] transition ${
-                    device === "desktop"
+                    viewMode === "desktop"
                       ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
@@ -248,10 +501,10 @@ export function LivePreview({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDevice("tablet")}
+                  onClick={() => setViewMode("tablet")}
                   title="Tablet View (768px)"
                   className={`p-1.5 rounded-[6px] transition ${
-                    device === "tablet"
+                    viewMode === "tablet"
                       ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
@@ -260,10 +513,10 @@ export function LivePreview({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDevice("mobile")}
+                  onClick={() => setViewMode("mobile")}
                   title="Mobile View (375px)"
                   className={`p-1.5 rounded-[6px] transition ${
-                    device === "mobile"
+                    viewMode === "mobile"
                       ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
@@ -311,7 +564,7 @@ export function LivePreview({
                 </button>
               </div>
 
-              <div className="w-16 shrink-0 flex items-center justify-end space-x-1.5">
+              <div className="w-24 shrink-0 flex items-center justify-end space-x-1.5">
                 <button
                   type="button"
                   onClick={handleOpenInNewTab}
@@ -322,36 +575,100 @@ export function LivePreview({
                   <span>Tab</span>
                 </button>
                 <span className="text-[10px] font-mono text-[#94A3B8] uppercase">
-                  {device}
+                  {viewMode}
                 </span>
               </div>
             </div>
 
             {/* Viewport Iframe Container */}
-            <div className="bg-slate-100 min-h-[560px] h-[calc(100vh-22rem)] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
-              <div
-                className={`h-full transition-all duration-300 rounded-[10px] overflow-hidden border border-[#E2E8F0] shadow-md bg-white ${
-                  device === "desktop"
-                    ? "w-full"
-                    : device === "tablet"
-                    ? "w-[768px] max-w-full"
-                    : "w-[375px] max-w-full"
-                }`}
-              >
-                <iframe
-                  key={refreshKey}
-                  srcDoc={inlinedPreviewHtml}
-                  title="Generated Static Website Live Preview"
-                  className="w-full h-full border-0 bg-white"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
-                />
+            {viewMode === "split" ? (
+              <div className="bg-slate-100 min-h-[580px] h-[calc(100vh-21rem)] p-3 sm:p-4 overflow-hidden flex flex-col xl:flex-row gap-4 items-stretch justify-center">
+                {/* Desktop Viewport */}
+                <div className="flex-1 min-w-0 h-full flex flex-col rounded-[10px] overflow-hidden border border-[#E2E8F0] shadow-md bg-white">
+                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-1.5 flex items-center justify-between text-[11px] text-[#64748B]">
+                    <div className="flex items-center gap-1.5 font-semibold text-[#0F172A]">
+                      <Monitor className="w-3.5 h-3.5 text-[#4F46E5]" />
+                      <span>Desktop Preview (1280px)</span>
+                    </div>
+                    <span className="font-mono text-[10px] text-slate-400">Fluid Responsive</span>
+                  </div>
+                  <iframe
+                    key={`desk-${refreshKey}`}
+                    srcDoc={inlinedPreviewHtml}
+                    title="Desktop Preview"
+                    className="w-full flex-1 border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                  />
+                </div>
+
+                {/* Mobile Viewport (Default side-by-side) */}
+                <div className="w-full xl:w-[375px] shrink-0 h-full flex flex-col rounded-[24px] overflow-hidden border-4 border-slate-800 shadow-xl bg-white relative">
+                  {/* Phone Notch Header */}
+                  <div className="bg-slate-800 text-white px-4 py-1.5 flex items-center justify-between text-[11px] select-none">
+                    <span className="font-semibold text-[10px]">9:41</span>
+                    <div className="w-16 h-3.5 bg-slate-900 rounded-full flex items-center justify-center">
+                      <div className="w-2 h-2 rounded-full bg-slate-700" />
+                    </div>
+                    <span className="text-[10px] font-semibold text-emerald-400">5G 100%</span>
+                  </div>
+                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-1 flex items-center justify-between text-[10px] text-[#64748B]">
+                    <div className="flex items-center gap-1">
+                      <Smartphone className="w-3 h-3 text-[#4F46E5]" />
+                      <span className="font-bold text-[#0F172A]">Mobile (375px)</span>
+                    </div>
+                    <span className="text-emerald-600 font-semibold">Primary Traffic</span>
+                  </div>
+                  <iframe
+                    key={`mob-${refreshKey}`}
+                    srcDoc={inlinedPreviewHtml}
+                    title="Mobile Preview"
+                    className="w-full flex-1 border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-slate-100 min-h-[580px] h-[calc(100vh-21rem)] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 rounded-[10px] overflow-hidden border border-[#E2E8F0] shadow-md bg-white ${
+                    viewMode === "desktop"
+                      ? "w-full"
+                      : viewMode === "tablet"
+                      ? "w-[768px] max-w-full"
+                      : "w-[375px] max-w-full rounded-[24px] border-4 border-slate-800 flex flex-col"
+                  }`}
+                >
+                  {viewMode === "mobile" && (
+                    <div className="bg-slate-800 text-white px-4 py-1.5 flex items-center justify-between text-[11px] select-none">
+                      <span className="font-semibold text-[10px]">9:41</span>
+                      <div className="w-16 h-3.5 bg-slate-900 rounded-full flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-slate-700" />
+                      </div>
+                      <span className="text-[10px] font-semibold text-emerald-400">5G 100%</span>
+                    </div>
+                  )}
+                  <iframe
+                    key={refreshKey}
+                    srcDoc={inlinedPreviewHtml}
+                    title="Generated Static Website Live Preview"
+                    className="w-full h-full border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right Column: Actions & Package Checklist (4 of 12 cols) */}
+        {/* Right Column: Actions & Quality Scorecard (4 of 12 cols) */}
         <div className="lg:col-span-4 flex flex-col space-y-4">
+          {/* Automated Website Quality Scorecard */}
+          <QualityScorecard
+            report={qualityReport}
+            mobileAudit={mobileAudit}
+            activePage={activePage}
+            isMobileAuditing={isMobileAuditing}
+          />
           {/* Download & Action Card */}
           <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-5 shadow-sm space-y-4">
             <div>
@@ -370,10 +687,19 @@ export function LivePreview({
                 type="button"
                 onClick={handleDownloadZip}
                 disabled={isZipping}
-                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-4 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0"
+                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-4 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-75"
               >
-                <Download className="w-4 h-4" />
-                <span>{downloadSuccess ? "Downloaded!" : "Download ZIP Package"}</span>
+                {isZipping ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>{zippingStatus || "Bundling ZIP Package…"}</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>{downloadSuccess ? "Downloaded!" : "Download ZIP Package"}</span>
+                  </>
+                )}
               </button>
 
               {/* Generate Again Button */}
