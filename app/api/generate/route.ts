@@ -114,14 +114,14 @@ export async function POST(req: NextRequest) {
     // Determine readable project name
     const projectName =
       (name && name.trim()) ||
-      prompt.trim().split(" ").slice(0, 4).join(" ").replace(/[^a-zA-Z0-9 ]/g, "") ||
-      "Static Website";
+      (instructionsText && instructionsText.split(" ").slice(0, 4).join(" ").replace(/[^a-zA-Z0-9 ]/g, "")) ||
+      (targetLocation && serviceCategory ? `${targetLocation} ${serviceCategory}` : "Static Website");
 
     // 7. Store Project and Files in Database
     const project = await db.project.create({
       data: {
         name: projectName,
-        prompt: prompt.trim(),
+        prompt: instructionsText || `${targetLocation || ""} ${serviceCategory || ""}`.trim() || projectName,
         provider: providerType,
         model: targetModel,
         status: "ready",

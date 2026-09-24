@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Navbar } from "@/components/Navbar";
 import { ApiKeyModal } from "@/components/ApiKeyModal";
 import { RecentProjectsModal } from "@/components/RecentProjectsModal";
@@ -74,7 +74,7 @@ export default function HomePage() {
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(null);
 
   // Check which providers have keys configured
-  const refreshKeysStatus = async () => {
+  const refreshKeysStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/keys");
       const data = await res.json();
@@ -85,24 +85,27 @@ export default function HomePage() {
         setConfiguredProviders(configured);
 
         // Auto select first configured provider if active doesn't have a key
-        if (!configured.includes(activeProvider) && configured.length > 0) {
-          const firstConfigured = configured[0] as ProviderType;
-          setActiveProvider(firstConfigured);
-          if (firstConfigured === "gemini") setActiveModel("gemini-1.5-pro");
-          if (firstConfigured === "openai") setActiveModel("gpt-4o");
-          if (firstConfigured === "custom") {
-            const customRecord = data.providers.find((p: { provider: string }) => p.provider === "custom");
-            if (customRecord?.defaultModel) setActiveModel(customRecord.defaultModel);
+        setActiveProvider((prev) => {
+          if (!configured.includes(prev) && configured.length > 0) {
+            const firstConfigured = configured[0] as ProviderType;
+            if (firstConfigured === "gemini") setActiveModel("gemini-1.5-pro");
+            else if (firstConfigured === "openai") setActiveModel("gpt-4o");
+            else if (firstConfigured === "custom") {
+              const customRecord = data.providers.find((p: { provider: string }) => p.provider === "custom");
+              if (customRecord?.defaultModel) setActiveModel(customRecord.defaultModel);
+            }
+            return firstConfigured;
           }
-        }
+          return prev;
+        });
       }
     } catch (err) {
       console.error("Failed to load key statuses:", err);
     }
-  };
+  }, []);
 
   // Load starter templates
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       const res = await fetch("/api/templates");
       const data = await res.json();
@@ -112,12 +115,12 @@ export default function HomePage() {
     } catch (err) {
       console.error("Failed to load templates:", err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshKeysStatus();
     loadTemplates();
-  }, []);
+  }, [refreshKeysStatus, loadTemplates]);
 
   const hasKeyForActiveProvider = configuredProviders.includes(activeProvider);
 
@@ -621,22 +624,15 @@ export default function HomePage() {
         isOpen={recentModalOpen}
         onClose={() => setRecentModalOpen(false)}
         onSelectProject={(id) => {
-          // fetch and open project
-          fetch(`/api/projects`)
+          // fetch and open full project with all static files
+          fetch(`/api/projects/${id}`)
             .then((r) => r.json())
             .then((d) => {
-              const proj = d.projects?.find((p: { id: string }) => p.id === id);
-              if (proj) {
-                setCurrentProject({
-                  projectId: proj.id,
-                  name: proj.name,
-                  provider: proj.provider,
-                  model: proj.model,
-                  files: [{ path: "index.html", content: "/* Loaded */" }],
-                  downloadUrl: proj.downloadUrl,
-                });
+              if (d.success && d.project) {
+                setCurrentProject(d.project);
               }
-            });
+            })
+            .catch((err) => console.error("Failed to load project:", err));
         }}
       />
     </div>
