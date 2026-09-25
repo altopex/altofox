@@ -234,6 +234,8 @@ export default function BuilderPage() {
   const { user, profile, isOwner, loading: authLoading } = useAuth();
   const [navTab, setNavTab] = useState<NavTab>("dashboard");
   const [isImportLocalModalOpen, setIsImportLocalModalOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [loginModalReason, setLoginModalReason] = useState<string | null>(null);
 
   // Navigation & View Mode State ("builder" | "dashboard" | "manager")
   const [viewMode, setViewMode] = useState<"builder" | "dashboard" | "manager">("builder");
@@ -1112,207 +1114,274 @@ export default function BuilderPage() {
     { number: 6, label: "Generate" },
   ];
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
-          <Sparkles className="w-6 h-6 text-white" />
-        </div>
-        <p className="text-sm font-medium text-slate-400">Loading AltoFox workspace…</p>
-      </div>
-    );
-  }
 
-  if (!user) {
-    return <LoginCard />;
-  }
+  const handleClearAllData = useCallback(() => {
+    setBusinessName("");
+    setBusinessType("Plumber");
+    setCustomBusinessType("");
+    setBusinessDescription("");
+    setServices(["24/7 Emergency Repairs", "Drain Cleaning & Rooter"]);
+    setCity("");
+    setStateRegion("");
+    setZipPostalCode("");
+    setCountry("United States");
+    setPhone("");
+    setEmail("");
+    setKeywords([]);
+    setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
+    setSelectedThemeId("modern-indigo");
+    setDismissImageNotice(false);
+    setCurrentStep(1);
+    setMaxCompletedStep(1);
+    addToast({
+      type: "info",
+      title: "Data Reset",
+      message: "All saved builder form data, API keys, and preferences were cleared.",
+    });
+  }, [addToast]);
 
-  return (
-    <AppShell
-      currentTab={navTab}
-      onNavigate={(tab) => {
-        if (tab === "settings") {
-          handleOpenSettings("models");
-        } else {
-          setNavTab(tab);
-        }
-      }}
-      activeProjectId={activeSavedProject?.id}
-      onSelectProject={(projId) => {
-        const found = savedProjectsList.find((p) => p.id === projId);
-        if (found) {
-          setActiveSavedProject(found);
-          setViewMode("manager");
-          setNavTab("projects");
-        }
-      }}
-    >
-      {/* Toast Notification Container */}
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Settings Slide-In Panel */}
-      <SettingsPanel
-        isOpen={settingsOpen}
-        onClose={() => {
-          setSettingsOpen(false);
-          setSettingsMessage(null);
-        }}
-        initialTab={settingsTab}
-        initialMessage={settingsMessage}
-        onSettingsUpdated={() => {
-          checkKeyStatus();
-          applyPreferences();
-        }}
-        onClearAllData={() => {
-          setBusinessName("");
-          setBusinessType("Plumber");
-          setCustomBusinessType("");
-          setBusinessDescription("");
-          setServices(["24/7 Emergency Repairs", "Drain Cleaning & Rooter"]);
-          setCity("");
-          setStateRegion("");
-          setZipPostalCode("");
-          setCountry("United States");
-          setPhone("");
-          setEmail("");
-          setKeywords([]);
-          setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
-          setSelectedThemeId("modern-indigo");
-          setDismissImageNotice(false);
-          setCurrentStep(1);
-          setMaxCompletedStep(1);
-          addToast({
-            type: "info",
-            title: "Data Reset",
-            message: "All saved builder form data, API keys, and preferences were cleared.",
-          });
-        }}
-      />
-
-      {/* Import Legacy Local Data Modal */}
-      <ImportLocalDataModal
-        isOpen={isImportLocalModalOpen}
-        onClose={() => setIsImportLocalModalOpen(false)}
-        onImportComplete={loadAllSavedProjects}
-      />
-
-      {/* TAB 1: TEAM DASHBOARD */}
-      {navTab === "dashboard" && (
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <TeamDashboard
-            onNewProject={() => {
-              setNavTab("projects");
-              setViewMode("builder");
-              setCurrentProject(null);
-              setCurrentStep(1);
-            }}
-            onOpenProject={async (projId) => {
-              let found: SavedProject | null | undefined = savedProjectsList.find((p) => p.id === projId);
-              if (!found) {
-                found = await getProjectByIdFromDB(projId);
-              }
-              if (found) {
-                setActiveSavedProject(found);
-                setViewMode("manager");
-                setNavTab("projects");
-              }
-            }}
-            onOpenImportLocal={() => setIsImportLocalModalOpen(true)}
-            onNavigateToProjects={() => {
-              setNavTab("projects");
-              setViewMode("dashboard");
-            }}
-          />
-        </div>
+  const renderModals = () => (
+    <>
+{/* Keyword Map & Optimization Modal */}
+      {currentProject && (
+        <KeywordMapModal
+          isOpen={keywordMapOpen}
+          onClose={() => setKeywordMapOpen(false)}
+          files={currentProject.files}
+          businessType={businessType}
+          city={city}
+          state={stateRegion}
+          services={services}
+          keywordMap={
+            activeSavedProject?.keywordMap ||
+            currentProject.files
+              .filter((f) => f.path.endsWith(".html"))
+              .map((f) => {
+                const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
+                const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
+                return {
+                  pagePath: f.path,
+                  primaryKeyword: sug.primary,
+                  secondaryKeywords: sug.secondaries,
+                  seoScore: audit.totalScore,
+                };
+              })
+          }
+          onUpdateKeywordMap={(updated) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                keywordMap: updated,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          onApplyOptimizedHtml={(pagePath, newHtml) => {
+            const updatedFiles = currentProject.files.map((f) =>
+              f.path.toLowerCase() === pagePath.toLowerCase() ? { ...f, content: newHtml } : f
+            );
+            setCurrentProject({ ...currentProject, files: updatedFiles });
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                files: updatedFiles.map((f) => ({
+                  path: f.path,
+                  content: f.content,
+                  mimeType: f.mimeType || undefined,
+                })),
+                changeLog: [
+                  ...activeSavedProject.changeLog,
+                  {
+                    id: `log-${Date.now()}`,
+                    timestamp: Date.now(),
+                    dateStr: new Date().toLocaleDateString(),
+                    summary: `Optimized on-page SEO for ${pagePath}`,
+                    affectedPages: [pagePath],
+                  },
+                ],
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+            addToast({
+              type: "success",
+              title: "Page Optimized",
+              message: `Saved optimized HTML for ${pagePath}.`,
+            });
+          }}
+        />
       )}
 
-      {/* TAB 2: TEAM MANAGEMENT */}
-      {navTab === "team" && (
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <TeamManagement />
-        </div>
+      {/* Find & Replace & Business Details Modal */}
+      {currentProject && (
+        <FindReplaceModal
+          isOpen={findReplaceOpen}
+          onClose={() => setFindReplaceOpen(false)}
+          files={currentProject.files}
+          onUpdateFiles={(newFiles, logSummary) => {
+            setCurrentProject({ ...currentProject, files: newFiles });
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                files: newFiles.map((f) => ({
+                  path: f.path,
+                  content: f.content,
+                  mimeType: (f as any).mimeType || undefined,
+                })),
+                changeLog: [
+                  ...activeSavedProject.changeLog,
+                  {
+                    id: `log-${Date.now()}`,
+                    timestamp: Date.now(),
+                    dateStr: new Date().toLocaleDateString(),
+                    summary: logSummary,
+                    affectedPages: newFiles.map((f) => f.path),
+                  },
+                ],
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+            addToast({
+              type: "success",
+              title: "Site Updated",
+              message: logSummary,
+            });
+          }}
+          businessDetails={
+            activeSavedProject?.businessDetails || {
+              businessName,
+              phone,
+              email,
+              streetAddress,
+              city,
+              stateRegion,
+              zipPostalCode,
+              businessHours,
+              websiteDomain,
+            }
+          }
+          onUpdateBusinessDetails={(details) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                businessDetails: details,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          customBlocks={activeSavedProject?.customBlocks || []}
+          onUpdateCustomBlocks={(blocks) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                customBlocks: blocks,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          mustIncludeText=""
+          onUpdateMustIncludeText={() => {}}
+          canUndo={false}
+          onUndo={() => {}}
+        />
       )}
 
-      {/* TAB 3: ACTIVITY FEED */}
-      {navTab === "activity" && (
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-            <ActivityFeed maxItems={100} />
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: PROJECTS / BUILDER WORKSPACE */}
-      {navTab === "projects" && (
-        <div className="flex-1 flex flex-col w-full min-h-0">
-          {viewMode === "dashboard" ? (
-            <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-              <ProjectsDashboard
-                projects={savedProjectsList}
-                onOpenProject={(proj) => {
-                  setActiveSavedProject(proj);
-                  setViewMode("manager");
-                }}
-                onNewWebsite={() => {
-                  setViewMode("builder");
-                  setCurrentProject(null);
-                  setCurrentStep(1);
-                }}
-                onDuplicateProject={async (id) => {
-                  try {
-                    await duplicateProjectInDB(id);
-                    await loadAllSavedProjects();
-                    addToast({
-                      type: "success",
-                      title: "Project Duplicated",
-                      message: "A copy of your project has been created.",
-                    });
-                  } catch (err) {
-                    addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
-                  }
-                }}
-                onDeleteProject={async (id) => {
-                  try {
-                    await deleteProjectFromDB(id);
-                    await loadAllSavedProjects();
-                    addToast({
-                      type: "info",
-                      title: "Project Deleted",
-                      message: "Project was removed from storage.",
-                    });
-                  } catch (err) {
-                    addToast({ type: "error", title: "Delete Failed", message: String(err) });
-                  }
-                }}
-                onProjectImported={async (importedProj) => {
-                  await saveProjectToDB(importedProj);
-                  await loadAllSavedProjects();
-                  setActiveSavedProject(importedProj);
-                  setViewMode("manager");
-                  addToast({
-                    type: "success",
-                    title: "Project Imported",
-                    message: `Imported "${importedProj.name}" successfully.`,
-                  });
-                }}
-              />
-            </div>
-          ) : viewMode === "manager" && activeSavedProject ? (
-            <WebsiteManager
-              project={activeSavedProject}
-              onBackToDashboard={() => {
-                loadAllSavedProjects();
-                setViewMode("dashboard");
+      {/* Blog Manager Modal */}
+      {blogManagerOpen && currentProject && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[20px] max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative">
+            <button
+              type="button"
+              onClick={() => setBlogManagerOpen(false)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <BlogManager
+              businessType={businessType}
+              city={city}
+              state={stateRegion}
+              services={services}
+              businessInfo={{
+                businessName,
+                address: { city, state: stateRegion, street: streetAddress, zip: zipPostalCode },
+                phone,
+                email,
+              } as any}
+              theme={activeTheme}
+              domain={websiteDomain || "example.com"}
+              existingPosts={[]}
+              onAddBlogPost={(newFile) => {
+                const updatedFiles = [...currentProject.files, newFile];
+                setCurrentProject({ ...currentProject, files: updatedFiles });
+                if (activeSavedProject) {
+                  const updatedProject: SavedProject = {
+                    ...activeSavedProject,
+                    files: updatedFiles.map((f) => ({
+                      path: f.path,
+                      content: f.content,
+                      mimeType: (f as any).mimeType || undefined,
+                    })),
+                  };
+                  saveProjectToDB(updatedProject);
+                  setActiveSavedProject(updatedProject);
+                }
+                addToast({
+                  type: "success",
+                  title: "Blog Post Created",
+                  message: `Added ${newFile.path} to your website!`,
+                });
               }}
-              onProjectUpdated={async (updated) => {
-                setActiveSavedProject(updated);
-                await saveProjectToDB(updated);
-                if (currentProject && currentProject.projectId === updated.id) {
-                  setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
+              onUpdateBlogIndex={(indexFile) => {
+                const updatedFiles = currentProject.files.map((f) =>
+                  f.path === indexFile.path ? indexFile : f
+                );
+                if (!updatedFiles.some((f) => f.path === indexFile.path)) {
+                  updatedFiles.push(indexFile);
+                }
+                setCurrentProject({ ...currentProject, files: updatedFiles });
+                if (activeSavedProject) {
+                  const updatedProject: SavedProject = {
+                    ...activeSavedProject,
+                    files: updatedFiles.map((f) => ({
+                      path: f.path,
+                      content: f.content,
+                      mimeType: (f as any).mimeType || undefined,
+                    })),
+                  };
+                  saveProjectToDB(updatedProject);
+                  setActiveSavedProject(updatedProject);
                 }
               }}
             />
-          ) : currentProject ? (
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderBuilderWorkspace = () => (
+    <div className="flex-1 flex flex-col w-full min-h-0">
+      {user && viewMode === "builder" && !currentProject && (
+        <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4 pb-0 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              loadAllSavedProjects();
+              setViewMode("dashboard");
+            }}
+            className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition flex items-center space-x-1"
+          >
+            <span>← Back to Projects Dashboard</span>
+          </button>
+        </div>
+      )}
+
+      {currentProject ? (
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
               <LivePreview
                 project={currentProject}
@@ -1327,10 +1396,19 @@ export default function BuilderPage() {
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
                 onOpenManager={() => {
+                  if (!user) {
+                    setLoginModalReason("Sign in to your team account to access the Website Manager and Dashboard.");
+                    setLoginModalOpen(true);
+                    return;
+                  }
                   if (activeSavedProject) {
                     setViewMode("manager");
+                    setNavTab("projects");
                   } else {
-                    loadAllSavedProjects().then(() => setViewMode("dashboard"));
+                    loadAllSavedProjects().then(() => {
+                      setViewMode("dashboard");
+                      setNavTab("projects");
+                    });
                   }
                 }}
                 onOpenKeywordMap={() => setKeywordMapOpen(true)}
@@ -2700,229 +2778,256 @@ export default function BuilderPage() {
           </div>
               )}
             </main>
+      )}
+    </div>
+  );
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <p className="text-sm font-medium text-slate-400">Loading AltoFox workspace…</p>
+      </div>
+    );
+  }
+
+  // 1. PUBLIC WEBSITE BUILDER VIEW (Unauthenticated User)
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col bg-[#F8FAFC]">
+        {/* Toast Notification Container */}
+        <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+        {/* TopBar with Team Sign In */}
+        <TopBar
+          onOpenSettings={handleOpenSettings}
+          activeProvider={activeProvider}
+          activeModel={activeModel}
+          hasKey={hasKey}
+          viewMode="builder"
+          isLoggedIn={false}
+          onOpenLogin={() => {
+            setLoginModalReason("Sign in to your team account to manage saved websites, collaborate, and access Google Search Console tools.");
+            setLoginModalOpen(true);
+          }}
+          onOpenDashboard={() => {
+            setLoginModalReason("Please sign in to access the Team Dashboard.");
+            setLoginModalOpen(true);
+          }}
+        />
+
+        {/* Settings Slide-In Panel */}
+        <SettingsPanel
+          isOpen={settingsOpen}
+          onClose={() => {
+            setSettingsOpen(false);
+            setSettingsMessage(null);
+          }}
+          initialTab={settingsTab}
+          initialMessage={settingsMessage}
+          onSettingsUpdated={() => {
+            checkKeyStatus();
+            applyPreferences();
+          }}
+          onClearAllData={handleClearAllData}
+        />
+
+        {/* Team Sign In Modal */}
+        {loginModalOpen && (
+          <LoginCard
+            asModal
+            customSubtitle={loginModalReason || undefined}
+            onClose={() => setLoginModalOpen(false)}
+            onSuccess={() => {
+              setLoginModalOpen(false);
+              setNavTab("dashboard");
+            }}
+          />
+        )}
+
+        {/* Website Builder Workspace (6-step Wizard, Generation, LivePreview) */}
+        {renderBuilderWorkspace()}
+
+        {/* Advanced Modals */}
+        {renderModals()}
+      </div>
+    );
+  }
+
+  return (
+    <AppShell
+      currentTab={navTab}
+      onNavigate={(tab) => {
+        if (tab === "settings") {
+          handleOpenSettings("models");
+        } else {
+          setNavTab(tab);
+        }
+      }}
+      activeProjectId={activeSavedProject?.id}
+      onSelectProject={(projId) => {
+        const found = savedProjectsList.find((p) => p.id === projId);
+        if (found) {
+          setActiveSavedProject(found);
+          setViewMode("manager");
+          setNavTab("projects");
+        }
+      }}
+    >
+      {/* Toast Notification Container */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Settings Slide-In Panel */}
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsMessage(null);
+        }}
+        initialTab={settingsTab}
+        initialMessage={settingsMessage}
+        onSettingsUpdated={() => {
+          checkKeyStatus();
+          applyPreferences();
+        }}
+        onClearAllData={handleClearAllData}
+      />
+
+      {/* Import Legacy Local Data Modal */}
+      <ImportLocalDataModal
+        isOpen={isImportLocalModalOpen}
+        onClose={() => setIsImportLocalModalOpen(false)}
+        onImportComplete={loadAllSavedProjects}
+      />
+
+      {/* TAB 1: TEAM DASHBOARD */}
+      {navTab === "dashboard" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <TeamDashboard
+            onNewProject={() => {
+              setNavTab("projects");
+              setViewMode("builder");
+              setCurrentProject(null);
+              setCurrentStep(1);
+            }}
+            onOpenProject={async (projId) => {
+              let found: SavedProject | null | undefined = savedProjectsList.find((p) => p.id === projId);
+              if (!found) {
+                found = await getProjectByIdFromDB(projId);
+              }
+              if (found) {
+                setActiveSavedProject(found);
+                setViewMode("manager");
+                setNavTab("projects");
+              }
+            }}
+            onOpenImportLocal={() => setIsImportLocalModalOpen(true)}
+            onNavigateToProjects={() => {
+              setNavTab("projects");
+              setViewMode("dashboard");
+            }}
+          />
+        </div>
+      )}
+
+      {/* TAB 2: TEAM MANAGEMENT */}
+      {navTab === "team" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <TeamManagement />
+        </div>
+      )}
+
+      {/* TAB 3: ACTIVITY FEED */}
+      {navTab === "activity" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+            <ActivityFeed maxItems={100} />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PROJECTS / BUILDER WORKSPACE */}
+      {navTab === "projects" && (
+        <div className="flex-1 flex flex-col w-full min-h-0">
+          {viewMode === "dashboard" ? (
+            <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+              <ProjectsDashboard
+                projects={savedProjectsList}
+                onOpenProject={(proj) => {
+                  setActiveSavedProject(proj);
+                  setViewMode("manager");
+                }}
+                onNewWebsite={() => {
+                  setViewMode("builder");
+                  setCurrentProject(null);
+                  setCurrentStep(1);
+                }}
+                onDuplicateProject={async (id) => {
+                  try {
+                    await duplicateProjectInDB(id);
+                    await loadAllSavedProjects();
+                    addToast({
+                      type: "success",
+                      title: "Project Duplicated",
+                      message: "A copy of your project has been created.",
+                    });
+                  } catch (err) {
+                    addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
+                  }
+                }}
+                onDeleteProject={async (id) => {
+                  try {
+                    await deleteProjectFromDB(id);
+                    await loadAllSavedProjects();
+                    addToast({
+                      type: "info",
+                      title: "Project Deleted",
+                      message: "Project was removed from storage.",
+                    });
+                  } catch (err) {
+                    addToast({ type: "error", title: "Delete Failed", message: String(err) });
+                  }
+                }}
+                onProjectImported={async (importedProj) => {
+                  await saveProjectToDB(importedProj);
+                  await loadAllSavedProjects();
+                  setActiveSavedProject(importedProj);
+                  setViewMode("manager");
+                  addToast({
+                    type: "success",
+                    title: "Project Imported",
+                    message: `Imported "${importedProj.name}" successfully.`,
+                  });
+                }}
+              />
+            </div>
+          ) : viewMode === "manager" && activeSavedProject ? (
+            <WebsiteManager
+              project={activeSavedProject}
+              onBackToDashboard={() => {
+                loadAllSavedProjects();
+                setViewMode("dashboard");
+              }}
+              onProjectUpdated={async (updated) => {
+                setActiveSavedProject(updated);
+                await saveProjectToDB(updated);
+                if (currentProject && currentProject.projectId === updated.id) {
+                  setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
+                }
+              }}
+            />
+          ) : (
+            renderBuilderWorkspace()
+          
           )}
         </div>
       )}
 
-      {/* Keyword Map & Optimization Modal */}
-      {currentProject && (
-        <KeywordMapModal
-          isOpen={keywordMapOpen}
-          onClose={() => setKeywordMapOpen(false)}
-          files={currentProject.files}
-          businessType={businessType}
-          city={city}
-          state={stateRegion}
-          services={services}
-          keywordMap={
-            activeSavedProject?.keywordMap ||
-            currentProject.files
-              .filter((f) => f.path.endsWith(".html"))
-              .map((f) => {
-                const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
-                const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
-                return {
-                  pagePath: f.path,
-                  primaryKeyword: sug.primary,
-                  secondaryKeywords: sug.secondaries,
-                  seoScore: audit.totalScore,
-                };
-              })
-          }
-          onUpdateKeywordMap={(updated) => {
-            if (activeSavedProject) {
-              const updatedProject: SavedProject = {
-                ...activeSavedProject,
-                keywordMap: updated,
-              };
-              saveProjectToDB(updatedProject);
-              setActiveSavedProject(updatedProject);
-            }
-          }}
-          onApplyOptimizedHtml={(pagePath, newHtml) => {
-            const updatedFiles = currentProject.files.map((f) =>
-              f.path.toLowerCase() === pagePath.toLowerCase() ? { ...f, content: newHtml } : f
-            );
-            setCurrentProject({ ...currentProject, files: updatedFiles });
-            if (activeSavedProject) {
-              const updatedProject: SavedProject = {
-                ...activeSavedProject,
-                files: updatedFiles.map((f) => ({
-                  path: f.path,
-                  content: f.content,
-                  mimeType: f.mimeType || undefined,
-                })),
-                changeLog: [
-                  ...activeSavedProject.changeLog,
-                  {
-                    id: `log-${Date.now()}`,
-                    timestamp: Date.now(),
-                    dateStr: new Date().toLocaleDateString(),
-                    summary: `Optimized on-page SEO for ${pagePath}`,
-                    affectedPages: [pagePath],
-                  },
-                ],
-              };
-              saveProjectToDB(updatedProject);
-              setActiveSavedProject(updatedProject);
-            }
-            addToast({
-              type: "success",
-              title: "Page Optimized",
-              message: `Saved optimized HTML for ${pagePath}.`,
-            });
-          }}
-        />
-      )}
-
-      {/* Find & Replace & Business Details Modal */}
-      {currentProject && (
-        <FindReplaceModal
-          isOpen={findReplaceOpen}
-          onClose={() => setFindReplaceOpen(false)}
-          files={currentProject.files}
-          onUpdateFiles={(newFiles, logSummary) => {
-            setCurrentProject({ ...currentProject, files: newFiles });
-            if (activeSavedProject) {
-              const updatedProject: SavedProject = {
-                ...activeSavedProject,
-                files: newFiles.map((f) => ({
-                  path: f.path,
-                  content: f.content,
-                  mimeType: (f as any).mimeType || undefined,
-                })),
-                changeLog: [
-                  ...activeSavedProject.changeLog,
-                  {
-                    id: `log-${Date.now()}`,
-                    timestamp: Date.now(),
-                    dateStr: new Date().toLocaleDateString(),
-                    summary: logSummary,
-                    affectedPages: newFiles.map((f) => f.path),
-                  },
-                ],
-              };
-              saveProjectToDB(updatedProject);
-              setActiveSavedProject(updatedProject);
-            }
-            addToast({
-              type: "success",
-              title: "Site Updated",
-              message: logSummary,
-            });
-          }}
-          businessDetails={
-            activeSavedProject?.businessDetails || {
-              businessName,
-              phone,
-              email,
-              streetAddress,
-              city,
-              stateRegion,
-              zipPostalCode,
-              businessHours,
-              websiteDomain,
-            }
-          }
-          onUpdateBusinessDetails={(details) => {
-            if (activeSavedProject) {
-              const updatedProject: SavedProject = {
-                ...activeSavedProject,
-                businessDetails: details,
-              };
-              saveProjectToDB(updatedProject);
-              setActiveSavedProject(updatedProject);
-            }
-          }}
-          customBlocks={activeSavedProject?.customBlocks || []}
-          onUpdateCustomBlocks={(blocks) => {
-            if (activeSavedProject) {
-              const updatedProject: SavedProject = {
-                ...activeSavedProject,
-                customBlocks: blocks,
-              };
-              saveProjectToDB(updatedProject);
-              setActiveSavedProject(updatedProject);
-            }
-          }}
-          mustIncludeText=""
-          onUpdateMustIncludeText={() => {}}
-          canUndo={false}
-          onUndo={() => {}}
-        />
-      )}
-
-      {/* Blog Manager Modal */}
-      {blogManagerOpen && currentProject && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-[20px] max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative">
-            <button
-              type="button"
-              onClick={() => setBlogManagerOpen(false)}
-              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <BlogManager
-              businessType={businessType}
-              city={city}
-              state={stateRegion}
-              services={services}
-              businessInfo={{
-                businessName,
-                address: { city, state: stateRegion, street: streetAddress, zip: zipPostalCode },
-                phone,
-                email,
-              } as any}
-              theme={activeTheme}
-              domain={websiteDomain || "example.com"}
-              existingPosts={[]}
-              onAddBlogPost={(newFile) => {
-                const updatedFiles = [...currentProject.files, newFile];
-                setCurrentProject({ ...currentProject, files: updatedFiles });
-                if (activeSavedProject) {
-                  const updatedProject: SavedProject = {
-                    ...activeSavedProject,
-                    files: updatedFiles.map((f) => ({
-                      path: f.path,
-                      content: f.content,
-                      mimeType: (f as any).mimeType || undefined,
-                    })),
-                  };
-                  saveProjectToDB(updatedProject);
-                  setActiveSavedProject(updatedProject);
-                }
-                addToast({
-                  type: "success",
-                  title: "Blog Post Created",
-                  message: `Added ${newFile.path} to your website!`,
-                });
-              }}
-              onUpdateBlogIndex={(indexFile) => {
-                const updatedFiles = currentProject.files.map((f) =>
-                  f.path === indexFile.path ? indexFile : f
-                );
-                if (!updatedFiles.some((f) => f.path === indexFile.path)) {
-                  updatedFiles.push(indexFile);
-                }
-                setCurrentProject({ ...currentProject, files: updatedFiles });
-                if (activeSavedProject) {
-                  const updatedProject: SavedProject = {
-                    ...activeSavedProject,
-                    files: updatedFiles.map((f) => ({
-                      path: f.path,
-                      content: f.content,
-                      mimeType: (f as any).mimeType || undefined,
-                    })),
-                  };
-                  saveProjectToDB(updatedProject);
-                  setActiveSavedProject(updatedProject);
-                }
-              }}
-            />
-          </div>
-        </div>
-      )}
+            {/* Advanced Modals */}
+      {renderModals()}
+    
     </AppShell>
   );
 }

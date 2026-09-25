@@ -1,7 +1,17 @@
 "use client";
 
 import React from "react";
-import { Settings, Sparkles, CheckCircle2, AlertTriangle, ChevronRight, FolderKanban, Wand2 } from "lucide-react";
+import {
+  Settings,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  ChevronRight,
+  FolderKanban,
+  Wand2,
+  LogIn,
+  LayoutDashboard,
+} from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
 
 interface TopBarProps {
@@ -11,6 +21,9 @@ interface TopBarProps {
   hasKey: boolean;
   viewMode?: "builder" | "dashboard" | "manager";
   onSwitchView?: (view: "builder" | "dashboard") => void;
+  isLoggedIn?: boolean;
+  onOpenLogin?: () => void;
+  onOpenDashboard?: () => void;
 }
 
 export function TopBar({
@@ -20,6 +33,9 @@ export function TopBar({
   hasKey,
   viewMode = "builder",
   onSwitchView,
+  isLoggedIn = false,
+  onOpenLogin,
+  onOpenDashboard,
 }: TopBarProps) {
   // Format model display name cleanly
   const getModelDisplayName = () => {
@@ -35,7 +51,7 @@ export function TopBar({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-white/90 backdrop-blur-md border-b border-[#E2E8F0]">
+    <header className="sticky top-0 z-40 w-full bg-white/95 backdrop-blur-md border-b border-[#E2E8F0]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* App Logo & Brand Name */}
         <div className="flex items-center space-x-3">
@@ -53,7 +69,7 @@ export function TopBar({
         </div>
 
         {/* Center View Switcher */}
-        {onSwitchView && (
+        {onSwitchView && isLoggedIn && (
           <nav className="hidden md:flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-inner">
             <button
               type="button"
@@ -82,13 +98,13 @@ export function TopBar({
           </nav>
         )}
 
-        {/* Right Status Pill & Settings Button */}
+        {/* Right Status Pill, Settings & Sign In / Dashboard */}
         <div className="flex items-center space-x-2.5">
           {/* AI Connection Status Pill */}
           <button
             type="button"
             onClick={() => onOpenSettings("models")}
-            className={`inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+            className={`hidden sm:inline-flex items-center space-x-2 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
               hasKey
                 ? "bg-[#ECFDF5] text-[#065F46] border-[#A7F3D0] hover:bg-[#D1FAE5]"
                 : "bg-[#FFFBEB] text-[#92400E] border-[#FDE68A] hover:bg-[#FEF3C7]"
@@ -108,12 +124,33 @@ export function TopBar({
           <button
             type="button"
             onClick={() => onOpenSettings("models")}
-            className="w-9 h-9 rounded-[10px] border border-[#E2E8F0] bg-white hover:bg-slate-50 text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition shadow-sm"
+            className="w-9 h-9 rounded-[10px] border border-[#E2E8F0] bg-white hover:bg-slate-50 text-[#64748B] hover:text-[#0F172A] flex items-center justify-center transition shadow-xs"
             aria-label="Open AI & Builder Settings"
             title="Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
+
+          {/* Sign In / Dashboard CTA */}
+          {isLoggedIn ? (
+            <button
+              type="button"
+              onClick={onOpenDashboard}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold transition shadow-sm shadow-indigo-500/20"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" />
+              <span>Dashboard</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenLogin}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-xs font-bold transition shadow-sm shadow-indigo-500/20"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Team Sign In</span>
+            </button>
+          )}
         </div>
       </div>
     </header>
