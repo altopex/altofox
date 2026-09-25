@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import { Profile } from "./types";
 
-const BUILD_FALLBACK_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.build_placeholder";
+const DEFAULT_SUPABASE_URL = "https://udxjxkkcpdrlceucxqfk.supabase.co";
+const DEFAULT_SECRET_KEY = "sb_secret_DPkN0CsJNiRhF9iVeAtY6g_nOFXdDtA";
+const DEFAULT_ANON_KEY = "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
 
 /**
  * Server-only admin client with secret key.
@@ -13,9 +14,9 @@ export function getSupabaseAdminClient(): SupabaseClient {
   const supabaseUrl =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "https://udxjxkkcpdrlceucxqfk.supabase.co";
+    DEFAULT_SUPABASE_URL;
 
-  const secretKey = process.env.SUPABASE_SECRET_KEY || BUILD_FALLBACK_KEY;
+  const secretKey = process.env.SUPABASE_SECRET_KEY || DEFAULT_SECRET_KEY;
 
   return createClient(supabaseUrl, secretKey, {
     auth: {
@@ -32,13 +33,13 @@ export function getSupabaseUserClient(accessToken: string): SupabaseClient {
   const supabaseUrl =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    "https://udxjxkkcpdrlceucxqfk.supabase.co";
+    DEFAULT_SUPABASE_URL;
 
   const anonKey =
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    BUILD_FALLBACK_KEY;
+    DEFAULT_ANON_KEY;
 
   return createClient(supabaseUrl, anonKey, {
     global: {

@@ -19,8 +19,23 @@ export async function GET(req: NextRequest) {
       email: auth.user.email,
     });
 
-    // Keep the cookie refreshed with current status
+    // Keep the cookies refreshed with current status and token
+    response.cookies.set("ranklocal_status", auth.profile.status, {
+      path: "/",
+      maxAge: 604800,
+      sameSite: "lax",
+    });
     response.cookies.set("altofox_status", auth.profile.status, {
+      path: "/",
+      maxAge: 604800,
+      sameSite: "lax",
+    });
+    response.cookies.set("ranklocal_token", auth.accessToken, {
+      path: "/",
+      maxAge: 604800,
+      sameSite: "lax",
+    });
+    response.cookies.set("altofox_token", auth.accessToken, {
       path: "/",
       maxAge: 604800,
       sameSite: "lax",

@@ -3,10 +3,10 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 let browserClient: SupabaseClient | null = null;
 let clientInitializedWithDummyKey = false;
 
-// Fallback dummy JWT token so Next.js static prerendering on Vercel never crashes
-// when environment variables are not yet injected during build time.
-const BUILD_FALLBACK_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.build_placeholder";
+// Default project URL and publishable key (safe for browser exposure)
+// Ensures client authentication never fails even if environment variables are not injected at build time
+const DEFAULT_SUPABASE_URL = "https://udxjxkkcpdrlceucxqfk.supabase.co";
+const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
 
 /**
  * Returns the singleton Supabase browser client.
@@ -18,21 +18,18 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   const supabaseUrl =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
-    "https://udxjxkkcpdrlceucxqfk.supabase.co";
+    DEFAULT_SUPABASE_URL;
 
   const rawKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY;
 
-  const hasRealKey = Boolean(rawKey && rawKey.trim());
-  const supabaseAnonKey = hasRealKey ? rawKey!.trim() : BUILD_FALLBACK_ANON_KEY;
+  const supabaseAnonKey = (rawKey && rawKey.trim()) ? rawKey.trim() : DEFAULT_SUPABASE_ANON_KEY;
 
-  if (browserClient && (!clientInitializedWithDummyKey || !hasRealKey)) {
+  if (browserClient) {
     return browserClient;
   }
-
-  clientInitializedWithDummyKey = !hasRealKey;
 
   if (isBrowser) {
     try {
