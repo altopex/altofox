@@ -146,7 +146,8 @@ async function runTests() {
         Authorization: `Bearer ${token}`,
       },
     });
-    assert(apiRes.status === 200, `Protected API /api/projects returns 200 OK with Bearer token`);
+    const apiText = await apiRes.text();
+    assert(apiRes.status === 200, `Protected API /api/projects returns 200 OK with Bearer token (got ${apiRes.status}: ${apiText})`);
   }
 
   // 7. Test with Pending User
