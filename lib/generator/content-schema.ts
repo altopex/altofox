@@ -33,11 +33,20 @@ export interface SiteNavJSON {
   children?: { label: string; slug: string }[];
 }
 
+export interface RealReviewItemJSON {
+  author: string;
+  text: string;
+  rating: number;
+  source?: string;
+  date?: string;
+}
+
 export interface SiteInfoJSON {
   businessName: string;
   tagline?: string;
   phone: string;
   email?: string;
+  businessModel?: "storefront" | "service-area";
   address?: {
     street?: string;
     city: string;
@@ -49,6 +58,20 @@ export interface SiteInfoJSON {
   serviceAreas?: string[];
   social?: Record<string, string>;
   nav: SiteNavJSON[];
+  licenseNumber?: string;
+  certifications?: string;
+  yearsInBusiness?: string;
+  warrantyGuarantee?: string;
+  responseTime?: string;
+  emergency247?: boolean;
+  freeEstimates?: boolean;
+  insuredBonded?: boolean;
+  ownerName?: string;
+  ownerBio?: string;
+  googleReviewUrl?: string;
+  realReviewsConfirmed?: boolean;
+  realReviews?: RealReviewItemJSON[];
+  allowedClaims?: string[];
 }
 
 export interface SchemaOrgInfoJSON {
@@ -99,11 +122,20 @@ export const SiteNavSchema = z.object({
   children: z.array(z.object({ label: z.string(), slug: z.string() })).optional(),
 });
 
+export const RealReviewItemSchema = z.object({
+  author: z.string().default("Verified Customer"),
+  text: z.string().default("Great service!"),
+  rating: z.number().default(5),
+  source: z.string().optional().default("Google"),
+  date: z.string().optional(),
+});
+
 export const SiteInfoSchema = z.object({
   businessName: z.string().default("Local Business"),
   tagline: z.string().optional().default("Professional & Reliable Local Services"),
   phone: z.string().default("(555) 000-0000"),
   email: z.string().optional().default(""),
+  businessModel: z.enum(["storefront", "service-area"]).optional().default("storefront"),
   address: z
     .object({
       street: z.string().optional().default(""),
@@ -118,6 +150,20 @@ export const SiteInfoSchema = z.object({
   serviceAreas: z.array(z.string()).optional().default([]),
   social: z.record(z.string()).optional().default({}),
   nav: z.array(SiteNavSchema).default([]),
+  licenseNumber: z.string().optional(),
+  certifications: z.string().optional(),
+  yearsInBusiness: z.string().optional(),
+  warrantyGuarantee: z.string().optional(),
+  responseTime: z.string().optional(),
+  emergency247: z.boolean().optional(),
+  freeEstimates: z.boolean().optional(),
+  insuredBonded: z.boolean().optional(),
+  ownerName: z.string().optional(),
+  ownerBio: z.string().optional(),
+  googleReviewUrl: z.string().optional(),
+  realReviewsConfirmed: z.boolean().optional(),
+  realReviews: z.array(RealReviewItemSchema).optional(),
+  allowedClaims: z.array(z.string()).optional(),
 });
 
 export const SchemaOrgInfoSchema = z.object({

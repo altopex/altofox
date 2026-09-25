@@ -1,25 +1,103 @@
-import { SectionJSON } from "../../lib/generator/content-schema";
+import { SectionJSON, SiteContentJSON } from "../../lib/generator/content-schema";
 import { ResolvedImage } from "../../lib/photos/photo-service";
 
 export function renderHero(
   section: SectionJSON,
   sitePhone: string,
-  images: ResolvedImage[] = []
+  images: ResolvedImage[] = [],
+  site?: SiteContentJSON["site"]
 ): string {
   const content = section.content || {};
   const variant = section.variant || "split";
 
   const eyebrow = content.eyebrow || "Trusted Local Service";
   const h1 = content.h1 || "Expert Local Services in Your Area";
-  const subheadline = content.subheadline || "Fast response, upfront transparent pricing, and guaranteed workmanship on every job.";
+  const subheadline =
+    content.subheadline ||
+    "Fast response, upfront transparent pricing, and guaranteed workmanship on every job.";
   const phone = content.primaryCta || sitePhone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const secondaryCta = content.secondaryCta || "Get a Free Quote";
   const secondaryUrl = content.secondaryUrl || "contact.html";
-  const trustBadges: string[] = Array.isArray(content.trustBadges) && content.trustBadges.length > 0
-    ? content.trustBadges
-    : ["⭐ 5.0 Google Rating", "🛡️ Licensed & Insured", "⚡ Same-Day Dispatch"];
-  const ratingText = content.ratingText || "Over 500+ Local 5-Star Reviews";
+
+  // Build trust badges strictly from user-confirmed facts (Google Policy Compliance)
+  const confirmedBadges: string[] = [];
+  if (site?.insuredBonded || site?.licenseNumber) {
+    confirmedBadges.push(site.licenseNumber ? `Lic. #${site.licenseNumber}` : "🛡️ Licensed & Insured");
+  }
+  if (site?.yearsInBusiness) {
+    confirmedBadges.push(`⭐ ${site.yearsInBusiness} Experience`);
+  }
+  if (site?.warrantyGuarantee) {
+    confirmedBadges.push(`✅ ${site.warrantyGuarantee}`);
+  }
+  if (site?.responseTime) {
+    confirmedBadges.push(`⚡ ${site.responseTime} Response`);
+  } else if (site?.emergency247) {
+    confirmedBadges.push("⚡ 24/7 Emergency Dispatch");
+  }
+  if (site?.freeEstimates) {
+    confirmedBadges.push("📋 Free Estimates");
+  }
+  if (site?.allowedClaims && site.allowedClaims.length > 0) {
+    confirmedBadges.push(...site.allowedClaims.slice(0, 2));
+  }
+
+  // Filter any unbacked claims from AI section badges
+  const filteredAiBadges = Array.isArray(content.trustBadges)
+    ? content.trustBadges.filter((b: string) => {
+        const lower = b.toLowerCase();
+        if (
+          lower.includes("5-star") ||
+          lower.includes("5.0") ||
+          lower.includes("#1") ||
+          lower.includes("top rated") ||
+          lower.includes("top-rated") ||
+          lower.includes("best in")
+        ) {
+          return (site?.allowedClaims || []).some((ac) => lower.includes(ac.toLowerCase()));
+        }
+        return true;
+      })
+    : [];
+
+  const trustBadges: string[] =
+    confirmedBadges.length > 0
+      ? confirmedBadges
+      : filteredAiBadges.length > 0
+      ? filteredAiBadges
+      : ["Locally Owned & Operated", "Upfront Pricing", `Serving ${site?.address?.city || "Local Area"}`];
+
+  // Floating card display: only show ratings if verified real reviews exist or allowed claim
+  let floatingCardHtml = "";
+  if (site?.realReviewsConfirmed && site?.realReviews && site.realReviews.length > 0) {
+    floatingCardHtml = `
+        <div class="hero-floating-card">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#F59E0B" stroke="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+          <div>
+            <div style="font-weight: 700; color: var(--color-secondary); font-size: 0.95rem;">${site.realReviews.length} Verified Customer Reviews</div>
+            <div style="font-size: 0.8rem; color: var(--color-muted);">Real Local Feedback</div>
+          </div>
+        </div>`;
+  } else if (site?.insuredBonded || site?.licenseNumber) {
+    floatingCardHtml = `
+        <div class="hero-floating-card">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <div>
+            <div style="font-weight: 700; color: var(--color-secondary); font-size: 0.95rem;">Licensed &amp; Insured</div>
+            <div style="font-size: 0.8rem; color: var(--color-muted);">${site.licenseNumber ? `Lic. #${site.licenseNumber}` : "Verified Local Specialists"}</div>
+          </div>
+        </div>`;
+  } else {
+    floatingCardHtml = `
+        <div class="hero-floating-card">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <div>
+            <div style="font-weight: 700; color: var(--color-secondary); font-size: 0.95rem;">Dedicated Local Service</div>
+            <div style="font-size: 0.8rem; color: var(--color-muted);">Serving ${site?.address?.city || "Our Community"}</div>
+          </div>
+        </div>`;
+  }
 
   const fallbackImg: ResolvedImage = {
     url: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80",
@@ -60,13 +138,7 @@ export function renderHero(
           <source srcset="${mainImage.localWebpPath || mainImage.localPath || mainImage.url}" type="image/webp">
           <img src="${mainImage.localPath || mainImage.url}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-hero img-hero-split" width="1920" height="1080" fetchpriority="high" loading="eager">
         </picture>
-        <div class="hero-floating-card">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#F59E0B" stroke="#F59E0B"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-          <div>
-            <div style="font-weight: 700; color: var(--color-secondary); font-size: 0.95rem;">${ratingText}</div>
-            <div style="font-size: 0.8rem; color: var(--color-muted);">Verified Local Customers</div>
-          </div>
-        </div>
+        ${floatingCardHtml}
       </div>
     </div>
   </section>`;

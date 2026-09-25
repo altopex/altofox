@@ -49,7 +49,25 @@ import {
   Image as ImageIcon,
   DollarSign,
   BookOpen,
+  FolderKanban,
+  FileEdit,
+  Search,
 } from "lucide-react";
+import { ServiceAreaPicker, SelectedServiceCity } from "@/components/ServiceAreaPicker";
+import { ProjectsDashboard } from "@/components/ProjectsDashboard";
+import { WebsiteManager } from "@/components/WebsiteManager";
+import { KeywordMapModal, KeywordMapEntry } from "@/components/KeywordMapModal";
+import { FindReplaceModal } from "@/components/FindReplaceModal";
+import { BlogManager } from "@/components/BlogManager";
+import { auditPageSEO, suggestKeywordsForPage } from "@/lib/seo/on-page-scorer";
+import { SavedProject, ProjectKeywordItem } from "@/lib/storage/project-types";
+import {
+  saveProjectToDB,
+  getAllProjectsFromDB,
+  getProjectByIdFromDB,
+  deleteProjectFromDB,
+  duplicateProjectInDB,
+} from "@/lib/storage/db";
 
 // Popular Local Business Types (Featuring 20 Trade Niche Packs)
 const POPULAR_INDUSTRIES = [
@@ -206,9 +224,24 @@ const EXAMPLE_DATA = {
 };
 
 export default function BuilderPage() {
-  // Wizard Step State (1: Business, 2: Location/SEO, 3: Pages, 4: Theme, 5: Generate)
+  // Navigation & View Mode State ("builder" | "dashboard" | "manager")
+  const [viewMode, setViewMode] = useState<"builder" | "dashboard" | "manager">("builder");
+  const [savedProjectsList, setSavedProjectsList] = useState<SavedProject[]>([]);
+  const [activeSavedProject, setActiveSavedProject] = useState<SavedProject | null>(null);
+
+  // Wizard Step State (1: Business, 2: Location/SEO, 3: Service Areas, 4: Pages, 5: Theme, 6: Generate)
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [maxCompletedStep, setMaxCompletedStep] = useState<number>(1);
+
+  // Advanced Tools Modals
+  const [keywordMapOpen, setKeywordMapOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [blogManagerOpen, setBlogManagerOpen] = useState(false);
+
+  // Service Areas State (Step 3)
+  const [serviceAreaCities, setServiceAreaCities] = useState<SelectedServiceCity[]>([]);
+  const [createSeparateServiceLocationPages, setCreateSeparateServiceLocationPages] = useState(true);
+  const [confirmedServesAreas, setConfirmedServesAreas] = useState(false);
 
   // Settings Panel State
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -405,12 +438,33 @@ export default function BuilderPage() {
         if (data.customThemeColors && typeof data.customThemeColors === "object") {
           setCustomThemeColors(data.customThemeColors);
         }
+        if (Array.isArray(data.serviceAreaCities)) setServiceAreaCities(data.serviceAreaCities);
+        if (typeof data.createSeparateServiceLocationPages === "boolean") {
+          setCreateSeparateServiceLocationPages(data.createSeparateServiceLocationPages);
+        }
+        if (typeof data.confirmedServesAreas === "boolean") {
+          setConfirmedServesAreas(data.confirmedServesAreas);
+        }
         if (typeof data.maxCompletedStep === "number") setMaxCompletedStep(data.maxCompletedStep);
       }
     } catch {
       // Ignore cache parse errors
     }
   }, [checkKeyStatus, applyPreferences]);
+
+  // Load permanent projects from IndexedDB
+  const loadAllSavedProjects = useCallback(async () => {
+    try {
+      const list = await getAllProjectsFromDB();
+      setSavedProjectsList(list);
+    } catch (err) {
+      console.warn("Could not load projects from IndexedDB:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAllSavedProjects();
+  }, [loadAllSavedProjects]);
 
   // Auto-save form progress to localStorage
   useEffect(() => {
@@ -440,6 +494,9 @@ export default function BuilderPage() {
         selectedPages,
         separateServicePages,
         separateAreaPages,
+        serviceAreaCities,
+        createSeparateServiceLocationPages,
+        confirmedServesAreas,
         selectedThemeId,
         customThemeColors,
         maxCompletedStep,
@@ -473,6 +530,9 @@ export default function BuilderPage() {
     selectedPages,
     separateServicePages,
     separateAreaPages,
+    serviceAreaCities,
+    createSeparateServiceLocationPages,
+    confirmedServesAreas,
     selectedThemeId,
     customThemeColors,
     maxCompletedStep,
@@ -718,6 +778,16 @@ export default function BuilderPage() {
     return Object.keys(errors).length === 0;
   };
 
+  // Validate Step 3 (Service Areas)
+  const validateStep3 = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (serviceAreaCities.length > 0 && !confirmedServesAreas) {
+      errors.confirmedServesAreas = "Please confirm that your business genuinely serves all selected service areas.";
+    }
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   // Handle Wizard Navigation
   const handleNextStep = () => {
     if (currentStep === 1) {
@@ -738,9 +808,18 @@ export default function BuilderPage() {
         });
         return;
       }
+    } else if (currentStep === 3) {
+      if (!validateStep3()) {
+        addToast({
+          type: "warning",
+          title: "Confirmation Required",
+          message: "Please confirm that your business genuinely serves the selected service areas.",
+        });
+        return;
+      }
     }
 
-    const next = Math.min(currentStep + 1, 5);
+    const next = Math.min(currentStep + 1, 6);
     setCurrentStep(next);
     if (next > maxCompletedStep) setMaxCompletedStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -833,6 +912,16 @@ export default function BuilderPage() {
       country: country.trim(),
       serviceAreas: serviceAreas.join(", "),
       serviceAreasList: serviceAreas,
+      serviceAreaCities: serviceAreaCities.map((c) => ({
+        city: c.city,
+        stateId: c.stateId,
+        county: c.county,
+        lat: c.lat,
+        lng: c.lng,
+        population: c.population,
+        distanceOffset: c.distanceOffset,
+        localNotes: c.localNotes,
+      })),
       phone: phone.trim(),
       email: email.trim(),
       businessHours: businessHours.trim(),
@@ -892,7 +981,7 @@ export default function BuilderPage() {
       timers.forEach(clearTimeout);
 
       if (data.success && Array.isArray(data.files)) {
-        setCurrentProject({
+        const projData = {
           projectId: data.projectId,
           name: data.name,
           notes: data.notes,
@@ -903,7 +992,75 @@ export default function BuilderPage() {
           files: data.files,
           photos: data.photos,
           qualityReport: data.qualityReport,
-        });
+        };
+        setCurrentProject(projData);
+
+        // Auto-save permanent project into IndexedDB
+        try {
+          const initialKeywordMap: ProjectKeywordItem[] = data.files
+            .filter((f: any) => f.path.endsWith(".html"))
+            .map((f: any) => {
+              const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
+              const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
+              return {
+                pagePath: f.path,
+                primaryKeyword: sug.primary,
+                secondaryKeywords: sug.secondaries,
+                seoScore: audit.totalScore,
+              };
+            });
+
+          const newSavedProject: SavedProject = {
+            id: data.projectId || `proj-${Date.now()}`,
+            name: businessName || "Local Business Website",
+            createdAt: Date.now(),
+            lastEditedAt: Date.now(),
+            formData,
+            theme: activeTheme,
+            nicheId: currentNichePack.id,
+            schemaType: currentNichePack.schemaType,
+            businessDetails: {
+              businessName,
+              phone,
+              email,
+              streetAddress,
+              city,
+              stateRegion,
+              zipPostalCode,
+              businessHours,
+              websiteDomain,
+              socialLinks,
+            },
+            serviceAreaCities,
+            keywordMap: initialKeywordMap,
+            customBlocks: [],
+            mustIncludeText: "",
+            pageContentMap: {},
+            blogPosts: [],
+            files: data.files.map((f: any) => ({
+              path: f.path,
+              content: f.content,
+              mimeType: f.mimeType || undefined,
+            })),
+            changeLog: [
+              {
+                id: `log-${Date.now()}`,
+                timestamp: Date.now(),
+                dateStr: new Date().toLocaleDateString(),
+                summary: "Initial website generation",
+                affectedPages: data.files.map((f: any) => f.path),
+              },
+            ],
+            redirects: [],
+          };
+
+          await saveProjectToDB(newSavedProject);
+          setActiveSavedProject(newSavedProject);
+          await loadAllSavedProjects();
+        } catch (dbErr) {
+          console.warn("Could not save project to IndexedDB:", dbErr);
+        }
+
         addToast({
           type: "success",
           title: data.qualityReport?.overallScore
@@ -937,9 +1094,10 @@ export default function BuilderPage() {
   const stepsList = [
     { number: 1, label: "Business Info" },
     { number: 2, label: "Location & SEO" },
-    { number: 3, label: "Pages" },
-    { number: 4, label: "Theme" },
-    { number: 5, label: "Generate" },
+    { number: 3, label: "Service Areas" },
+    { number: 4, label: "Pages" },
+    { number: 5, label: "Theme" },
+    { number: 6, label: "Generate" },
   ];
 
   return (
@@ -953,6 +1111,13 @@ export default function BuilderPage() {
         activeProvider={activeProvider}
         activeModel={activeModel}
         hasKey={hasKey}
+        viewMode={viewMode}
+        onSwitchView={(v) => {
+          setViewMode(v);
+          if (v === "dashboard") {
+            loadAllSavedProjects();
+          }
+        }}
       />
 
       {/* Settings Slide-In Panel */}
@@ -996,8 +1161,72 @@ export default function BuilderPage() {
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-        {/* VIEW 1: RESULT SCREEN */}
-        {currentProject ? (
+        {viewMode === "dashboard" ? (
+          <ProjectsDashboard
+            projects={savedProjectsList}
+            onOpenProject={(proj) => {
+              setActiveSavedProject(proj);
+              setViewMode("manager");
+            }}
+            onNewWebsite={() => {
+              setViewMode("builder");
+              setCurrentProject(null);
+              setCurrentStep(1);
+            }}
+            onDuplicateProject={async (id) => {
+              try {
+                await duplicateProjectInDB(id);
+                await loadAllSavedProjects();
+                addToast({
+                  type: "success",
+                  title: "Project Duplicated",
+                  message: "A copy of your project has been created.",
+                });
+              } catch (err) {
+                addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
+              }
+            }}
+            onDeleteProject={async (id) => {
+              try {
+                await deleteProjectFromDB(id);
+                await loadAllSavedProjects();
+                addToast({
+                  type: "info",
+                  title: "Project Deleted",
+                  message: "Project was removed from storage.",
+                });
+              } catch (err) {
+                addToast({ type: "error", title: "Delete Failed", message: String(err) });
+              }
+            }}
+            onProjectImported={async (importedProj) => {
+              await saveProjectToDB(importedProj);
+              await loadAllSavedProjects();
+              setActiveSavedProject(importedProj);
+              setViewMode("manager");
+              addToast({
+                type: "success",
+                title: "Project Imported",
+                message: `Imported "${importedProj.name}" successfully.`,
+              });
+            }}
+          />
+        ) : viewMode === "manager" && activeSavedProject ? (
+          <WebsiteManager
+            project={activeSavedProject}
+            onBackToDashboard={() => {
+              loadAllSavedProjects();
+              setViewMode("dashboard");
+            }}
+            onProjectUpdated={async (updated) => {
+              setActiveSavedProject(updated);
+              await saveProjectToDB(updated);
+              if (currentProject && currentProject.projectId === updated.id) {
+                setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
+              }
+            }}
+          />
+        ) : currentProject ? (
           <LivePreview
             project={currentProject}
             onNewWebsite={() => {
@@ -1007,9 +1236,19 @@ export default function BuilderPage() {
             onGenerateAgain={handleGenerateWebsite}
             onTryAnotherTheme={() => {
               setCurrentProject(null);
-              setCurrentStep(4);
+              setCurrentStep(5);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onOpenManager={() => {
+              if (activeSavedProject) {
+                setViewMode("manager");
+              } else {
+                loadAllSavedProjects().then(() => setViewMode("dashboard"));
+              }
+            }}
+            onOpenKeywordMap={() => setKeywordMapOpen(true)}
+            onOpenFindReplace={() => setFindReplaceOpen(true)}
+            onOpenBlogManager={() => setBlogManagerOpen(true)}
           />
         ) : generating ? (
           /* VIEW 2: GENERATING SCREEN */
@@ -1752,8 +1991,27 @@ export default function BuilderPage() {
                 </div>
               )}
 
-              {/* STEP 3: PAGES SELECTION */}
+              {/* STEP 3: SERVICE AREAS & RADIUS COVERAGE */}
               {currentStep === 3 && (
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  <ServiceAreaPicker
+                    businessCity={city}
+                    businessState={stateRegion}
+                    businessName={businessName}
+                    mainService={services[0] || businessType}
+                    servicesList={services}
+                    selectedCities={serviceAreaCities}
+                    onSelectedCitiesChange={setServiceAreaCities}
+                    createSeparateServiceLocationPages={createSeparateServiceLocationPages}
+                    onCreateSeparateServiceLocationPagesChange={setCreateSeparateServiceLocationPages}
+                    confirmedServesAreas={confirmedServesAreas}
+                    onConfirmedServesAreasChange={setConfirmedServesAreas}
+                  />
+                </div>
+              )}
+
+              {/* STEP 4: PAGES SELECTION */}
+              {currentStep === 4 && (
                 <div className="space-y-5 animate-in fade-in duration-150">
                   <div>
                     <h2 className="text-lg font-bold text-[#0F172A]">Choose your website pages</h2>
@@ -1846,8 +2104,8 @@ export default function BuilderPage() {
                 </div>
               )}
 
-              {/* STEP 4: THEME SELECTION */}
-              {currentStep === 4 && (
+              {/* STEP 5: THEME SELECTION */}
+              {currentStep === 5 && (
                 <div className="space-y-6 animate-in fade-in duration-150">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
@@ -2064,8 +2322,8 @@ export default function BuilderPage() {
                 </div>
               )}
 
-              {/* STEP 5: REVIEW & GENERATE */}
-              {currentStep === 5 && (
+              {/* STEP 6: REVIEW & GENERATE */}
+              {currentStep === 6 && (
                 <div className="space-y-6 animate-in fade-in duration-150">
                   <div>
                     <h2 className="text-lg font-bold text-[#0F172A]">Review your website plan</h2>
@@ -2120,6 +2378,32 @@ export default function BuilderPage() {
                       </button>
                     </div>
 
+                    {/* Service Areas Item */}
+                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
+                      <div>
+                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                          Service Areas &amp; Location Pages
+                        </span>
+                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
+                          {serviceAreaCities.length > 0
+                            ? `${serviceAreaCities.length} Selected Coverage Cities`
+                            : "Standard Regional Coverage"}
+                        </h4>
+                        <p className="text-xs text-[#64748B] mt-0.5">
+                          {serviceAreaCities.length > 0
+                            ? `Includes service-areas.html directory hub + ${createSeparateServiceLocationPages ? "dedicated landing pages per city" : "radius coverage list"}`
+                            : "No extra location landing pages selected"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCurrentStep(3)}
+                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
+                      >
+                        Edit
+                      </button>
+                    </div>
+
                     {/* Pages Item */}
                     <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
                       <div>
@@ -2132,7 +2416,7 @@ export default function BuilderPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCurrentStep(3)}
+                        onClick={() => setCurrentStep(4)}
                         className="text-xs font-semibold text-[#4F46E5] hover:underline"
                       >
                         Edit
@@ -2174,7 +2458,7 @@ export default function BuilderPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setCurrentStep(4)}
+                        onClick={() => setCurrentStep(5)}
                         className="text-xs font-semibold text-[#4F46E5] hover:underline"
                       >
                         Edit
@@ -2311,7 +2595,7 @@ export default function BuilderPage() {
                   <div />
                 )}
 
-                {currentStep < 5 && (
+                {currentStep < 6 && (
                   <button
                     type="button"
                     onClick={handleNextStep}
@@ -2326,6 +2610,226 @@ export default function BuilderPage() {
           </div>
         )}
       </main>
+
+      {/* Keyword Map & Optimization Modal */}
+      {currentProject && (
+        <KeywordMapModal
+          isOpen={keywordMapOpen}
+          onClose={() => setKeywordMapOpen(false)}
+          files={currentProject.files}
+          businessType={businessType}
+          city={city}
+          state={stateRegion}
+          services={services}
+          keywordMap={
+            activeSavedProject?.keywordMap ||
+            currentProject.files
+              .filter((f) => f.path.endsWith(".html"))
+              .map((f) => {
+                const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
+                const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
+                return {
+                  pagePath: f.path,
+                  primaryKeyword: sug.primary,
+                  secondaryKeywords: sug.secondaries,
+                  seoScore: audit.totalScore,
+                };
+              })
+          }
+          onUpdateKeywordMap={(updated) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                keywordMap: updated,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          onApplyOptimizedHtml={(pagePath, newHtml) => {
+            const updatedFiles = currentProject.files.map((f) =>
+              f.path.toLowerCase() === pagePath.toLowerCase() ? { ...f, content: newHtml } : f
+            );
+            setCurrentProject({ ...currentProject, files: updatedFiles });
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                files: updatedFiles.map((f) => ({
+                  path: f.path,
+                  content: f.content,
+                  mimeType: f.mimeType || undefined,
+                })),
+                changeLog: [
+                  ...activeSavedProject.changeLog,
+                  {
+                    id: `log-${Date.now()}`,
+                    timestamp: Date.now(),
+                    dateStr: new Date().toLocaleDateString(),
+                    summary: `Optimized on-page SEO for ${pagePath}`,
+                    affectedPages: [pagePath],
+                  },
+                ],
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+            addToast({
+              type: "success",
+              title: "Page Optimized",
+              message: `Saved optimized HTML for ${pagePath}.`,
+            });
+          }}
+        />
+      )}
+
+      {/* Find & Replace & Business Details Modal */}
+      {currentProject && (
+        <FindReplaceModal
+          isOpen={findReplaceOpen}
+          onClose={() => setFindReplaceOpen(false)}
+          files={currentProject.files}
+          onUpdateFiles={(newFiles, logSummary) => {
+            setCurrentProject({ ...currentProject, files: newFiles });
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                files: newFiles.map((f) => ({
+                  path: f.path,
+                  content: f.content,
+                  mimeType: (f as any).mimeType || undefined,
+                })),
+                changeLog: [
+                  ...activeSavedProject.changeLog,
+                  {
+                    id: `log-${Date.now()}`,
+                    timestamp: Date.now(),
+                    dateStr: new Date().toLocaleDateString(),
+                    summary: logSummary,
+                    affectedPages: newFiles.map((f) => f.path),
+                  },
+                ],
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+            addToast({
+              type: "success",
+              title: "Site Updated",
+              message: logSummary,
+            });
+          }}
+          businessDetails={
+            activeSavedProject?.businessDetails || {
+              businessName,
+              phone,
+              email,
+              streetAddress,
+              city,
+              stateRegion,
+              zipPostalCode,
+              businessHours,
+              websiteDomain,
+            }
+          }
+          onUpdateBusinessDetails={(details) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                businessDetails: details,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          customBlocks={activeSavedProject?.customBlocks || []}
+          onUpdateCustomBlocks={(blocks) => {
+            if (activeSavedProject) {
+              const updatedProject: SavedProject = {
+                ...activeSavedProject,
+                customBlocks: blocks,
+              };
+              saveProjectToDB(updatedProject);
+              setActiveSavedProject(updatedProject);
+            }
+          }}
+          mustIncludeText=""
+          onUpdateMustIncludeText={() => {}}
+          canUndo={false}
+          onUndo={() => {}}
+        />
+      )}
+
+      {/* Blog Manager Modal */}
+      {blogManagerOpen && currentProject && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-[20px] max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 relative">
+            <button
+              type="button"
+              onClick={() => setBlogManagerOpen(false)}
+              className="absolute top-5 right-5 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <BlogManager
+              businessType={businessType}
+              city={city}
+              state={stateRegion}
+              services={services}
+              businessInfo={{
+                businessName,
+                address: { city, state: stateRegion, street: streetAddress, zip: zipPostalCode },
+                phone,
+                email,
+              } as any}
+              theme={activeTheme}
+              domain={websiteDomain || "example.com"}
+              existingPosts={[]}
+              onAddBlogPost={(newFile) => {
+                const updatedFiles = [...currentProject.files, newFile];
+                setCurrentProject({ ...currentProject, files: updatedFiles });
+                if (activeSavedProject) {
+                  const updatedProject: SavedProject = {
+                    ...activeSavedProject,
+                    files: updatedFiles.map((f) => ({
+                      path: f.path,
+                      content: f.content,
+                      mimeType: (f as any).mimeType || undefined,
+                    })),
+                  };
+                  saveProjectToDB(updatedProject);
+                  setActiveSavedProject(updatedProject);
+                }
+                addToast({
+                  type: "success",
+                  title: "Blog Post Created",
+                  message: `Added ${newFile.path} to your website!`,
+                });
+              }}
+              onUpdateBlogIndex={(indexFile) => {
+                const updatedFiles = currentProject.files.map((f) =>
+                  f.path === indexFile.path ? indexFile : f
+                );
+                if (!updatedFiles.some((f) => f.path === indexFile.path)) {
+                  updatedFiles.push(indexFile);
+                }
+                setCurrentProject({ ...currentProject, files: updatedFiles });
+                if (activeSavedProject) {
+                  const updatedProject: SavedProject = {
+                    ...activeSavedProject,
+                    files: updatedFiles.map((f) => ({
+                      path: f.path,
+                      content: f.content,
+                      mimeType: (f as any).mimeType || undefined,
+                    })),
+                  };
+                  saveProjectToDB(updatedProject);
+                  setActiveSavedProject(updatedProject);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

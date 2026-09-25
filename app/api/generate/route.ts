@@ -48,8 +48,24 @@ export async function POST(req: NextRequest) {
     const websiteData: WebsiteFormData = {
       businessName: (formData?.businessName || businessName || name || "").trim(),
       businessType: (formData?.businessType || serviceCategory || businessType || "").trim(),
+      businessModel: formData?.businessModel || "storefront",
+      nicheId: formData?.nicheId,
+      schemaType: formData?.schemaType,
       businessDescription: (formData?.businessDescription || "").trim(),
       yearsInBusiness: (formData?.yearsInBusiness || "").trim(),
+      licenseNumber: (formData?.licenseNumber || "").trim(),
+      certifications: (formData?.certifications || "").trim(),
+      warrantyGuarantee: (formData?.warrantyGuarantee || "").trim(),
+      responseTime: (formData?.responseTime || "").trim(),
+      emergency247: formData?.emergency247 !== undefined ? Boolean(formData.emergency247) : undefined,
+      freeEstimates: formData?.freeEstimates !== undefined ? Boolean(formData.freeEstimates) : undefined,
+      insuredBonded: formData?.insuredBonded !== undefined ? Boolean(formData.insuredBonded) : undefined,
+      ownerName: (formData?.ownerName || "").trim(),
+      ownerBio: (formData?.ownerBio || "").trim(),
+      googleReviewUrl: (formData?.googleReviewUrl || "").trim(),
+      realReviewsConfirmed: Boolean(formData?.realReviewsConfirmed),
+      realReviews: Array.isArray(formData?.realReviews) ? formData.realReviews : undefined,
+      allowedClaims: Array.isArray(formData?.allowedClaims) ? formData.allowedClaims : undefined,
       uniqueSellingPoints: (formData?.uniqueSellingPoints || "").trim(),
       servicesOffered: (formData?.servicesOffered || "").trim(),
       services: Array.isArray(formData?.services) ? formData.services : undefined,
@@ -139,6 +155,7 @@ export async function POST(req: NextRequest) {
       pexelsKey: effectivePexelsKey || undefined,
       pixabayKey: effectivePixabayKey || undefined,
       preferredSource: effectivePrefSource,
+      serviceAreaCities: Array.isArray(formData?.serviceAreaCities) ? formData.serviceAreaCities : undefined,
     };
 
     // If explicit demo requested, immediately assemble using trade template defaults
@@ -258,6 +275,34 @@ export async function POST(req: NextRequest) {
       } catch (reviewErr) {
         console.warn("[Generate] Quality Review pass encountered an issue; falling back cleanly to initial pass content:", reviewErr);
       }
+    }
+
+    // Merge ground-truth facts from websiteData into contentJSON.site
+    contentJSON.site = {
+      ...contentJSON.site,
+      businessName: websiteData.businessName || contentJSON.site.businessName,
+      phone: websiteData.phone || contentJSON.site.phone,
+      email: websiteData.email || contentJSON.site.email,
+      businessModel: websiteData.businessModel || contentJSON.site.businessModel || "storefront",
+      licenseNumber: websiteData.licenseNumber || contentJSON.site.licenseNumber,
+      certifications: websiteData.certifications || contentJSON.site.certifications,
+      yearsInBusiness: websiteData.yearsInBusiness || contentJSON.site.yearsInBusiness,
+      warrantyGuarantee: websiteData.warrantyGuarantee || contentJSON.site.warrantyGuarantee,
+      responseTime: websiteData.responseTime || contentJSON.site.responseTime,
+      emergency247: websiteData.emergency247 !== undefined ? websiteData.emergency247 : contentJSON.site.emergency247,
+      freeEstimates: websiteData.freeEstimates !== undefined ? websiteData.freeEstimates : contentJSON.site.freeEstimates,
+      insuredBonded: websiteData.insuredBonded !== undefined ? websiteData.insuredBonded : contentJSON.site.insuredBonded,
+      ownerName: websiteData.ownerName || contentJSON.site.ownerName,
+      ownerBio: websiteData.ownerBio || contentJSON.site.ownerBio,
+      googleReviewUrl: websiteData.googleReviewUrl || contentJSON.site.googleReviewUrl,
+      realReviewsConfirmed: websiteData.realReviewsConfirmed,
+      realReviews: websiteData.realReviews,
+      allowedClaims: websiteData.allowedClaims,
+    };
+
+    // If service-area business, strictly enforce hiding street address everywhere
+    if (contentJSON.site.businessModel === "service-area" && contentJSON.site.address) {
+      contentJSON.site.address.street = "";
     }
 
     // 4. Assemble final website from pre-built section templates + design tokens + real photos

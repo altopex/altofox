@@ -22,6 +22,10 @@ import {
   Loader2,
   Columns,
   ShieldCheck,
+  FolderKanban,
+  BookOpen,
+  Search,
+  FileEdit,
 } from "lucide-react";
 import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
 import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
@@ -68,6 +72,10 @@ interface LivePreviewProps {
   onNewWebsite: () => void;
   onGenerateAgain?: () => void;
   onTryAnotherTheme?: () => void;
+  onOpenManager?: () => void;
+  onOpenKeywordMap?: () => void;
+  onOpenFindReplace?: () => void;
+  onOpenBlogManager?: () => void;
 }
 
 export function LivePreview({
@@ -75,6 +83,10 @@ export function LivePreview({
   onNewWebsite,
   onGenerateAgain,
   onTryAnotherTheme,
+  onOpenManager,
+  onOpenKeywordMap,
+  onOpenFindReplace,
+  onOpenBlogManager,
 }: LivePreviewProps) {
   // Show mobile preview by default next to desktop preview ("split" mode)
   const [viewMode, setViewMode] = useState<"split" | "desktop" | "mobile" | "tablet">("split");
@@ -412,6 +424,17 @@ export function LivePreview({
 
         {/* Quick actions on mobile header */}
         <div className="flex items-center space-x-2">
+          {onOpenManager && (
+            <button
+              type="button"
+              onClick={onOpenManager}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[10px] border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-xs font-semibold text-indigo-700 transition"
+              title="Open full Website Manager with Page Editor, SEO snippet preview, and Search Console tab"
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>Website Manager</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onNewWebsite}
@@ -669,6 +692,93 @@ export function LivePreview({
             activePage={activePage}
             isMobileAuditing={isMobileAuditing}
           />
+
+          {/* Quick Optimization & Content Tools */}
+          {(onOpenKeywordMap || onOpenFindReplace || onOpenBlogManager || onOpenManager) && (
+            <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-5 shadow-sm space-y-3">
+              <div>
+                <span className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider block mb-1">
+                  Local SEO & Optimization
+                </span>
+                <h3 className="text-sm font-bold text-[#0F172A]">Site Optimization Tools</h3>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 pt-1">
+                {onOpenManager && (
+                  <button
+                    type="button"
+                    onClick={onOpenManager}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                        <FolderKanban className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">Website Manager</div>
+                        <div className="text-[11px] text-slate-500">Edit pages, GSC analytics & 301 redirects</div>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenKeywordMap && (
+                  <button
+                    type="button"
+                    onClick={onOpenKeywordMap}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <Search className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">Keyword Map & Scoring</div>
+                        <div className="text-[11px] text-slate-500">Target keywords, SEO score & cannibalization</div>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenFindReplace && (
+                  <button
+                    type="button"
+                    onClick={onOpenFindReplace}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center shrink-0">
+                        <FileEdit className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">Find & Replace & NAP</div>
+                        <div className="text-[11px] text-slate-500">Smart phone replacer & global business variables</div>
+                      </div>
+                    </div>
+                  </button>
+                )}
+
+                {onOpenBlogManager && (
+                  <button
+                    type="button"
+                    onClick={onOpenBlogManager}
+                    className="w-full flex items-center justify-between p-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 transition text-left group"
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
+                        <BookOpen className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">Homeowner Blog Posts</div>
+                        <div className="text-[11px] text-slate-500">Generate 15 topic ideas & 1200+ word guides</div>
+                      </div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Download & Action Card */}
           <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-5 shadow-sm space-y-4">
             <div>

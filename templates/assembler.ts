@@ -7,6 +7,9 @@ import { resolveStockPhoto, buildCreditsTxt, StockPhoto } from "../lib/photos/st
 import { findNicheByIndustry } from "../niches";
 import { PAGE_LAYOUTS, detectPageLayoutType } from "./layouts";
 import * as Sections from "./sections";
+import { renderServiceAreasHub, ServiceAreaCityItem } from "./sections/serviceAreasHub";
+import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "./sections/locationPage";
+import { getNearestSelectedCities } from "../lib/data/us-cities";
 import { runQualityChecksAndAutoFix, QualityReport, AssembleFile } from "../lib/quality/quality-checker";
 
 export interface AssembleOptions {
@@ -15,6 +18,17 @@ export interface AssembleOptions {
   pexelsKey?: string;
   pixabayKey?: string;
   preferredSource?: "pexels" | "pixabay";
+  serviceAreaCities?: {
+    city: string;
+    stateId: string;
+    county: string;
+    lat: number;
+    lng: number;
+    population?: number;
+    slug?: string;
+    distanceOffset?: string;
+    localNotes?: string;
+  }[];
 }
 
 export interface AssembledWebsite {
@@ -109,6 +123,18 @@ function buildSchemaOrg(
 
   // 1. Home Page: LocalBusiness Schema
   if (isHome) {
+    const isServiceArea = site.businessModel === "service-area";
+    const postalAddress: Record<string, any> = {
+      "@type": "PostalAddress",
+      addressLocality: address.city,
+      addressRegion: address.state,
+      postalCode: address.zip || undefined,
+      addressCountry: address.country || "US",
+    };
+    if (!isServiceArea && address.street) {
+      postalAddress.streetAddress = address.street;
+    }
+
     const localBusiness = {
       "@context": "https://schema.org",
       "@type": schemaType || "LocalBusiness",
@@ -117,14 +143,7 @@ function buildSchemaOrg(
       telephone: phone,
       email: site.email || undefined,
       url: `https://${domain}`,
-      address: {
-        "@type": "PostalAddress",
-        streetAddress: address.street || undefined,
-        addressLocality: address.city,
-        addressRegion: address.state,
-        postalCode: address.zip || undefined,
-        addressCountry: address.country || "US",
-      },
+      address: postalAddress,
       areaServed: (site.serviceAreas || []).map((a) => ({
         "@type": "AdministrativeArea",
         name: a,
@@ -352,10 +371,10 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
               ...section.content,
             },
           };
-          renderedSectionsHtml.push(Sections.renderHero(heroSection, data.site.phone, sectionImages));
+          renderedSectionsHtml.push(Sections.renderHero(heroSection, data.site.phone, sectionImages, data.site));
           break;
         case "trustBar":
-          renderedSectionsHtml.push(Sections.renderTrustBar(section));
+          renderedSectionsHtml.push(Sections.renderTrustBar(section, data.site));
           break;
         case "services":
           renderedSectionsHtml.push(Sections.renderServices(section, sectionImages));
@@ -379,7 +398,10 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderServiceAreas(section, data.site.serviceAreas, options?.mapEmbed));
           break;
         case "testimonials":
-          renderedSectionsHtml.push(Sections.renderTestimonials(section));
+          const testHtml = Sections.renderTestimonials(section, data.site);
+          if (testHtml && testHtml.trim()) {
+            renderedSectionsHtml.push(testHtml);
+          }
           break;
         case "faq":
           renderedSectionsHtml.push(Sections.renderFaq(section));
@@ -428,15 +450,169 @@ ${mobileCallBarHtml}
     });
   }
 
-  // 4. Generate sitemap.xml
+  // 3.5. Generate Service Areas Hub & Location Pages if requested
+  const effectiveAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+  if (Array.isArray(effectiveAreaCities) && effectiveAreaCities.length > 0) {
+    const headerHtml = Sections.renderHeader(data.site);
+    const footerHtml = Sections.renderFooter(data.site);
+    const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
+    const mainTrade = data.schema?.type || data.site.businessName || "Plumbing Service";
+    const tradeSlug = mainTrade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+    // A. Service Areas Hub (service-areas.html)
+    const hubCities: ServiceAreaCityItem[] = effectiveAreaCities.map((c) => ({
+      city: c.city,
+      stateId: c.stateId,
+      county: c.county,
+      slug: c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`,
+      population: c.population,
+      distanceOffset: c.distanceOffset,
+    }));
+
+    const hubBody = renderServiceAreasHub(
+      hubCities,
+      data.site,
+      theme,
+      data.site.address?.city || "Local",
+      data.site.address?.state || "TX"
+    );
+
+    const hubHead = buildHead(
+      {
+        title: `Service Areas in ${data.site.address?.city || "Local"} | ${data.site.businessName}`,
+        description: `Communities and neighboring cities served by ${data.site.businessName}. Upfront pricing and prompt local dispatch.`,
+        h1: `Areas We Serve Across ${data.site.address?.city || "Local"} and Surrounding Counties`,
+      },
+      data.site,
+      theme,
+      domain,
+      "service-areas"
+    );
+
+    const hubHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+${hubHead}
+</head>
+<body class="theme-${theme.id}">
+${headerHtml}
+<main>
+${hubBody}
+</main>
+${footerHtml}
+${mobileCallBarHtml}
+</body>
+</html>`;
+
+    files.push({
+      path: "service-areas.html",
+      content: hubHtml,
+      mimeType: "text/html",
+    });
+
+    // B. Dedicated Location Landing Page per City
+    const ROTATING_ANGLES = [
+      "Common seasonal challenges and climate conditions affecting local homes in this region",
+      "What local homeowners can expect during our dispatch, diagnosis, and arrival",
+      "Scheduling, travel, and how we coordinate same-day emergency coverage",
+      "How to choose an honest, licensed trade contractor in this specific community",
+      "Service-specific maintenance and prevention guide tailored to regional architecture",
+    ];
+
+    for (let i = 0; i < effectiveAreaCities.length; i++) {
+      const c = effectiveAreaCities[i];
+      const citySlug = c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`;
+      const assignedAngle = ROTATING_ANGLES[i % ROTATING_ANGLES.length];
+
+      const nearestCities = getNearestSelectedCities(
+        { lat: c.lat, lng: c.lng, city: c.city, stateId: c.stateId },
+        effectiveAreaCities.map((sc) => ({
+          ...sc,
+          slug: sc.slug || `${tradeSlug}-${sc.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${sc.stateId.toLowerCase()}.html`,
+        })),
+        4
+      );
+
+      const locCtx: LocationPageContext = {
+        city: c.city,
+        stateId: c.stateId,
+        stateName: c.stateId,
+        county: c.county || "Regional",
+        population: c.population,
+        distanceOffset: c.distanceOffset,
+        localNotes: c.localNotes,
+        angleUsed: assignedAngle,
+        nearestCities,
+        h1: `${mainTrade} in ${c.city}, ${c.stateId}`,
+        metaTitle: `${mainTrade} in ${c.city}, ${c.stateId} | ${data.site.businessName}`,
+        metaDescription: `Prompt, licensed ${mainTrade.toLowerCase()} in ${c.city}, ${c.stateId}. Upfront pricing and satisfaction guaranteed. Call now!`,
+        introParagraph: `When you need dependable, prompt ${mainTrade.toLowerCase()} in ${c.city} and throughout ${c.county} County, our experienced technicians provide upfront estimates and fast dispatch. We understand the specific plumbing and utility configurations across local properties.`,
+        angleSectionHeadline: `Professional Standards & Regional Service in ${c.city}`,
+        angleSectionContent: `<p>Homes and commercial facilities in ${c.city} face unique demands through changing regional seasons. From sudden winter freezes to heavy summer usage, ensuring reliable utility performance requires prompt local expertise.</p><p>Our certified technicians arrive fully equipped with modern diagnostic tools to resolve issues cleanly on the first visit, preventing costly secondary property damage.</p>`,
+        servicesIncluded:
+          data.site.serviceAreas && data.site.serviceAreas.length > 0
+            ? data.site.serviceAreas.slice(0, 6)
+            : ["24/7 Emergency Repairs", "Drain Clearing", "Water Heater Installation"],
+        processSteps: [
+          { title: "Direct Local Dispatch", desc: `Call our team for fast coordination to your ${c.city} location.` },
+          { title: "Upfront Evaluation", desc: "We diagnose the issue thoroughly and provide clear, flat-rate options." },
+          { title: "Guaranteed Resolution", desc: "Work completed cleanly according to local building codes with parts warranty." },
+        ],
+        faqs: [
+          { question: `How fast can you dispatch to ${c.city}?`, answer: `We typically arrive within 45 to 60 minutes for priority calls across ${c.city} and ${c.county} County.` },
+          { question: `Are your technicians licensed in ${c.stateId}?`, answer: `Yes, all work is performed by state-licensed technicians adhering strictly to municipal safety codes.` },
+          { question: `Do you provide upfront pricing for ${c.city} residents?`, answer: "Always. We evaluate your job on-site and present transparent flat-rate pricing before starting any work." },
+        ],
+      };
+
+      const locBody = renderLocationPage(locCtx, data.site, theme, effectiveAreaCities, { lat: c.lat, lng: c.lng });
+      const locSchema = buildLocationPageSchema(locCtx, data.site, domain, citySlug);
+      const locHead = buildHead(
+        {
+          title: locCtx.metaTitle,
+          description: locCtx.metaDescription,
+          h1: locCtx.h1,
+        },
+        data.site,
+        theme,
+        domain,
+        citySlug.replace(/\.html$/, "")
+      );
+
+      const locFullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+${locHead}
+${locSchema}
+</head>
+<body class="theme-${theme.id}">
+${headerHtml}
+<main>
+${locBody}
+</main>
+${footerHtml}
+${mobileCallBarHtml}
+</body>
+</html>`;
+
+      files.push({
+        path: citySlug,
+        content: locFullHtml,
+        mimeType: "text/html",
+      });
+    }
+  }
+
+  // 4. Generate sitemap.xml including ALL generated HTML pages
+  const allHtmlFiles = files.filter((f) => f.path.endsWith(".html"));
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${data.pages
+${allHtmlFiles
   .map(
-    (p) => `  <url>
-    <loc>https://${domain}/${p.slug === "index" ? "" : `${p.slug}.html`}</loc>
+    (h) => `  <url>
+    <loc>https://${domain}/${h.path === "index.html" ? "" : h.path}</loc>
     <changefreq>weekly</changefreq>
-    <priority>${p.slug === "index" ? "1.0" : "0.8"}</priority>
+    <priority>${h.path === "index.html" ? "1.0" : h.path === "service-areas.html" ? "0.9" : "0.8"}</priority>
   </url>`
   )
   .join("\n")}
@@ -471,6 +647,10 @@ ${data.pages
     state: data.site.address?.state,
     street: data.site.address?.street,
     domain,
+    businessModel: data.site.businessModel,
+    realReviewsConfirmed: data.site.realReviewsConfirmed,
+    allowedClaims: data.site.allowedClaims,
+    trade: data.schema?.type || data.site.businessName,
   });
 
   return {

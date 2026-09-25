@@ -8,13 +8,18 @@ export function renderContactForm(
   const content = section.content || {};
   const eyebrow = content.eyebrow || "Get In Touch";
   const headline = content.headline || "Request a Free Inspection & Upfront Quote";
-  const subheadline = content.subheadline || "Contact our friendly dispatch coordinators. We respond to all inquiries within minutes.";
+  const subheadline =
+    content.subheadline ||
+    "Contact our friendly dispatch coordinators. We respond to all inquiries within minutes.";
 
   const phone = site.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const email = site.email || "";
   const address = site.address || { city: "Local Area" };
-  const fullAddress = [address.street, address.city, address.state, address.zip].filter(Boolean).join(", ");
+  const isServiceArea = site.businessModel === "service-area";
+  const fullAddress = [address.street, address.city, address.state, address.zip]
+    .filter(Boolean)
+    .join(", ");
   const hours = site.hours || ["Mon - Sun: 24/7 Priority Emergency Service"];
 
   return `
@@ -55,7 +60,16 @@ export function renderContactForm(
             }
 
             ${
-              fullAddress
+              isServiceArea
+                ? `
+            <div class="contact-info-item">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              <div>
+                <strong>Service Area Coverage:</strong>
+                <div>Serving ${address.city || "our local community"} and surrounding areas</div>
+              </div>
+            </div>`
+                : fullAddress
                 ? `
             <div class="contact-info-item">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
@@ -77,7 +91,7 @@ export function renderContactForm(
           </div>
 
           ${
-            mapEmbed
+            !isServiceArea && mapEmbed
               ? `
           <div style="margin-top: 2rem; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm);">
             ${mapEmbed}

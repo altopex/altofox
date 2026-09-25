@@ -469,7 +469,7 @@ async function testWebsite(name: string, contentJSON: SiteContentJSON, themeId: 
   console.log(`[${name}] Checks Passed: ${report.passedChecksCount}/${report.totalChecksCount}`);
   if (report.autoFixes.length > 0) {
     console.log(`[${name}] Auto-fixes Applied (${report.autoFixes.length}):`);
-    report.autoFixes.slice(0, 3).forEach((f) => console.log(`   * ${f}`));
+    report.autoFixes.slice(0, 3).forEach((f: string) => console.log(`   * ${f}`));
   }
 
   // Verify Score Requirement (must be 90+)

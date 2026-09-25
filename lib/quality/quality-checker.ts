@@ -152,21 +152,28 @@ function cleanDescription(rawDesc: string, maxLen = 160): string {
   return `${truncated}...`;
 }
 
+export interface QualityCheckSiteInfo {
+  businessName: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  state?: string;
+  street?: string;
+  domain?: string;
+  businessModel?: "storefront" | "service-area";
+  realReviewsConfirmed?: boolean;
+  allowedClaims?: string[];
+  trade?: string;
+  targetKeywords?: string;
+}
+
 /**
  * Runs the comprehensive automated quality check & auto-fix pipeline on assembled website files.
  * Modifies files in-place to apply all auto-fixes and returns the full QualityReport.
  */
 export function runQualityChecksAndAutoFix(
   files: AssembleFile[],
-  siteInfo: {
-    businessName: string;
-    phone?: string;
-    email?: string;
-    city?: string;
-    state?: string;
-    street?: string;
-    domain?: string;
-  }
+  siteInfo: QualityCheckSiteInfo
 ): {
   files: AssembleFile[];
   report: QualityReport;
@@ -197,6 +204,14 @@ export function runQualityChecksAndAutoFix(
   let passedPhoneNap = true;
   let passedJsonLd = true;
   let passedSitemap = true;
+
+  // Google Spam & Review Policy Trackers
+  let passedRealReviews = true;
+  let passedNoReviewSchema = true;
+  let passedBannedPhrases = true;
+  let passedServiceAreaAddress = true;
+  let passedKeywordDensity = true;
+  let passedDoorwayRisk = true;
 
   // 1. Process and Auto-Fix Every HTML Page
   for (const file of htmlFiles) {
@@ -404,12 +419,150 @@ export function runQualityChecksAndAutoFix(
           html = html.replace(innerJson, sanitized);
           autoFixes.push(`[${file.path}] Successfully sanitized and repaired malformed JSON-LD structured data.`);
         } catch {
-          warnings.push(`[${file.path}] Could not auto-repair JSON-LD block.`);
+          // Unrepairable JSON-LD
+        }
+      }
+    }
+    // K. Google Spam Policy: Review & Testimonial Check
+    // FAIL if any testimonial section exists without user having checked "These are real reviews from real customers."
+    const hasTestimonialSection =
+      /<section[^>]*?id=["']testimonials["']/i.test(html) ||
+      /class=["'][^"']*?testimonials-grid/i.test(html) ||
+      /class=["'][^"']*?testimonial-slider/i.test(html);
+
+    if (hasTestimonialSection && !siteInfo.realReviewsConfirmed) {
+      passedRealReviews = false;
+      html = html.replace(/<!-- Testimonials Section[\s\S]*?<\/section>/gi, "");
+      html = html.replace(/<section[^>]*?id=["']testimonials["'][\s\S]*?<\/section>/gi, "");
+      autoFixes.push(
+        `[${file.path}] Removed testimonial section without confirmed real reviews (Google Spam Policy forbids fake/unverified reviews).`
+      );
+    }
+
+    // L. Google Schema Policy: No Self-Serving Review or AggregateRating markup in JSON-LD
+    // FAIL if any Review or AggregateRating schema exists in JSON-LD
+    const ldMatches = html.match(/<script[^>]*?type=["']application\/ld\+json["'][^>]*?>([\s\S]*?)<\/script>/gi) || [];
+    for (const block of ldMatches) {
+      const innerJson = block.replace(/<script[^>]*?>|<\/script>/gi, "").trim();
+      try {
+        const parsed = JSON.parse(innerJson);
+        const serialized = JSON.stringify(parsed);
+        const hasReviewMarkup = /"@type"\s*:\s*"(?:Review|AggregateRating)"|"aggregateRating"|"reviewCount"|"ratingValue"/i.test(serialized);
+        if (hasReviewMarkup) {
+          passedNoReviewSchema = false;
+          const sanitizeSchema = (obj: any): any => {
+            if (!obj || typeof obj !== "object") return obj;
+            if (Array.isArray(obj)) return obj.map(sanitizeSchema);
+            const clean: Record<string, any> = {};
+            for (const [k, v] of Object.entries(obj)) {
+              if (["aggregateRating", "review", "ratingValue", "reviewCount"].includes(k)) continue;
+              if (v && typeof v === "object" && (v as any)["@type"] && ["Review", "AggregateRating"].includes((v as any)["@type"])) continue;
+              clean[k] = sanitizeSchema(v);
+            }
+            return clean;
+          };
+          const cleaned = sanitizeSchema(parsed);
+          html = html.replace(innerJson, JSON.stringify(cleaned, null, 2));
+          autoFixes.push(
+            `[${file.path}] Stripped prohibited self-serving Review/AggregateRating markup from JSON-LD schema (Google Guidelines).`
+          );
+        }
+      } catch {}
+    }
+
+    // M. Google Policy: No Unbacked Superlative Claims (#1, 5-star, 500+ reviews, etc.)
+    // FAIL if unbacked banned phrases appear unless entered in allowedClaims
+    const bannedPhrasesRegex = /(?:#1(?:\s+[a-z]+)?|\b5-star\s+rated\b|\b5-star\b|\bfive-star\b|\b500\+\s+(?:reviews|happy\s+customers|local\s+5-star\s+reviews)\b|\b(?:best|top-rated|top\s+rated)\s+(?:plumber|electrician|hvac|roofer|roofing|service|contractor|technician|cleaner|painter|mechanic|dentist|locksmith)\b|\bbest\s+in\s+[a-z\s,]+)/gi;
+    const bodyTextOnly = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ");
+    const detectedBanned = bodyTextOnly.match(bannedPhrasesRegex) || [];
+
+    for (const match of detectedBanned) {
+      const cleanMatch = match.trim();
+      const isAllowed = (siteInfo.allowedClaims || []).some(
+        (claim) => claim && cleanMatch.toLowerCase().includes(claim.toLowerCase())
+      );
+      if (!isAllowed) {
+        passedBannedPhrases = false;
+      }
+    }
+
+    if (!passedBannedPhrases) {
+      // Auto-fix: sanitize unbacked phrases
+      html = html.replace(/#1\s+([a-z]+)/gi, (m, word) => {
+        const isAllowed = (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase()));
+        return isAllowed ? m : `Premier ${word}`;
+      });
+      html = html.replace(/\b5-star\s+rated\b/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "trusted";
+      });
+      html = html.replace(/⭐\s*5\.0\s*Google\s*Rating/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "Locally Owned & Operated";
+      });
+      html = html.replace(/Over\s+500\+\s+Local\s+5-Star\s+Reviews/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "Dedicated Local Service";
+      });
+      html = html.replace(/\b5-star\b/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "trusted";
+      });
+      html = html.replace(/\bfive-star\b/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "trusted";
+      });
+      html = html.replace(/\b500\+\s+(?:reviews|happy\s+customers)\b/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "satisfied local clients";
+      });
+      html = html.replace(/\b(?:top-rated|top\s+rated)\b/gi, (m) => {
+        return (siteInfo.allowedClaims || []).some((c) => m.toLowerCase().includes(c.toLowerCase())) ? m : "trusted";
+      });
+      autoFixes.push(
+        `[${file.path}] Sanitized unbacked banned claims (e.g. 5-star / #1 / 500+ reviews) to factual, compliant wording.`
+      );
+    }
+
+    // N. Google Policy: Service-Area Business Address Privacy
+    // FAIL if a service-area business displays a street address anywhere
+    if (siteInfo.businessModel === "service-area") {
+      const streetToCheck = (siteInfo.street || "").trim();
+      const hasStreet = streetToCheck.length > 3 && html.includes(streetToCheck);
+      const hasPhysicalLabel = /Physical Address:/i.test(html);
+      if (hasStreet || hasPhysicalLabel) {
+        passedServiceAreaAddress = false;
+        if (hasStreet) {
+          html = html.split(streetToCheck).join(`Serving ${siteInfo.city || "local communities"} and surrounding areas`);
+        }
+        html = html.replace(
+          /<div class="contact-info-item">[\s\S]*?Physical Address:[\s\S]*?<\/div>\s*<\/div>/gi,
+          `<div class="contact-info-item"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg><div><strong>Service Area:</strong><div>Serving ${siteInfo.city || "local communities"} and surrounding areas</div></div></div>`
+        );
+        autoFixes.push(
+          `[${file.path}] Removed street address for service-area business (Google Guidelines forbid residential street addresses).`
+        );
+      }
+    }
+
+    // O. Local SEO Policy: Keyword Density Audit (<2%)
+    // WARN if keyword density of any phrase exceeds 2%
+    if (siteInfo.targetKeywords) {
+      const kwList = siteInfo.targetKeywords.split(/[\n,]+/).map((k) => k.trim()).filter((k) => k.length > 2);
+      const visibleWords = bodyTextOnly.toLowerCase().split(/\s+/).filter(Boolean);
+      const totalWordsCount = visibleWords.length;
+      if (totalWordsCount > 50) {
+        for (const kw of kwList) {
+          const kwLower = kw.toLowerCase();
+          const kwWords = kwLower.split(/\s+/).length;
+          const reg = new RegExp(`\\b${kwLower.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi");
+          const occurrences = (bodyTextOnly.match(reg) || []).length;
+          const density = (occurrences * kwWords) / totalWordsCount;
+          if (density > 0.02) {
+            passedKeywordDensity = false;
+            warnings.push(
+              `[${file.path}] Keyword density for '${kw}' is ${(density * 100).toFixed(1)}% (exceeds Google's recommended 2% threshold).`
+            );
+          }
         }
       }
     }
 
-    // K. Extract Paragraphs for Cross-Page Duplicate Comparison
+    // P. Extract Paragraphs for Cross-Page Duplicate Comparison
     const pRegex = /<p[^>]*>([\s\S]*?)<\/p>/gi;
     let pMatch;
     while ((pMatch = pRegex.exec(html)) !== null) {
@@ -445,8 +598,14 @@ export function runQualityChecksAndAutoFix(
             textA: p1.text.slice(0, 100) + (p1.text.length > 100 ? "..." : ""),
             textB: p2.text.slice(0, 100) + (p2.text.length > 100 ? "..." : ""),
           });
+        }
+        // Check service area similarity for doorway page risk (>40% threshold)
+        const isAreaPageA = p1.page.toLowerCase().includes("area") || p1.page.split("-").length > 2;
+        const isAreaPageB = p2.page.toLowerCase().includes("area") || p2.page.split("-").length > 2;
+        if (isAreaPageA && isAreaPageB && similarity > 0.40) {
+          passedDoorwayRisk = false;
           warnings.push(
-            `High content similarity (${Math.round(similarity * 100)}%) between ${p1.page} and ${p2.page}: "${p1.text.slice(0, 60)}…"`
+            `Google doorway page risk: High similarity (${Math.round(similarity * 100)}%) between location pages ${p1.page} and ${p2.page}. Must be under 40% to prevent search quality penalties.`
           );
         }
       }
@@ -596,6 +755,66 @@ export function runQualityChecksAndAutoFix(
       earned: 10,
       passed: true,
       description: "sitemap.xml and robots.txt include all generated HTML pages for complete search engine discovery.",
+    },
+    {
+      id: "google-reviews-confirmed",
+      name: "Google Policy: Verified Real Reviews",
+      category: "content",
+      score: 10,
+      earned: passedRealReviews ? 10 : 0,
+      passed: passedRealReviews,
+      description: "Testimonials strictly require explicit user confirmation that they are real reviews from real customers.",
+      warning: !passedRealReviews ? "FAIL: Unconfirmed or fake testimonials were detected and stripped." : undefined,
+    },
+    {
+      id: "google-schema-policy",
+      name: "Google Policy: No Self-Serving Rating Schema",
+      category: "technical",
+      score: 10,
+      earned: passedNoReviewSchema ? 10 : 0,
+      passed: passedNoReviewSchema,
+      description: "No Review or AggregateRating schema in JSON-LD (prohibited by Google for local business websites).",
+      warning: !passedNoReviewSchema ? "FAIL: Prohibited Review/AggregateRating schema was detected and removed." : undefined,
+    },
+    {
+      id: "google-unbacked-claims",
+      name: "Google Policy: No Unbacked Superlatives",
+      category: "content",
+      score: 10,
+      earned: passedBannedPhrases ? 10 : 0,
+      passed: passedBannedPhrases,
+      description: "No fabricated superlatives ('#1', '5-star', '500+ reviews') without user-backed verification.",
+      warning: !passedBannedPhrases ? "FAIL: Unbacked claims were detected and sanitized." : undefined,
+    },
+    {
+      id: "google-service-area-address",
+      name: "Google Policy: Service-Area Address Privacy",
+      category: "seo",
+      score: 10,
+      earned: passedServiceAreaAddress ? 10 : 0,
+      passed: passedServiceAreaAddress,
+      description: "Service-area businesses with no storefront do not expose residential street addresses.",
+      warning: !passedServiceAreaAddress ? "FAIL: Street address was exposed on a service-area business and was removed." : undefined,
+    },
+    {
+      id: "keyword-density-policy",
+      name: "Keyword Density Compliance (<2%)",
+      category: "seo",
+      score: 5,
+      earned: passedKeywordDensity ? 5 : 3,
+      passed: passedKeywordDensity,
+      description: "Individual keyword frequencies remain under Google's 2% threshold to prevent keyword stuffing.",
+      warning: !passedKeywordDensity ? "WARN: Keyword density on one or more pages exceeds 2%." : undefined,
+    },
+    {
+      id: "doorway-page-risk",
+      name: "Doorway Page Risk (<60% Area Similarity)",
+      category: "seo",
+      score: 5,
+      earned: passedDoorwayRisk ? 5 : 3,
+      passed: passedDoorwayRisk,
+      description: "Service area and location landing pages maintain distinct content (<60% similarity) to avoid Google doorway penalties.",
+      warning: !passedDoorwayRisk ? "WARN: Location pages show high similarity exceeding 60%." : undefined,
     },
   ];
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Settings, Sparkles, CheckCircle2, AlertTriangle, ChevronRight } from "lucide-react";
+import { Settings, Sparkles, CheckCircle2, AlertTriangle, ChevronRight, FolderKanban, Wand2 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
 
 interface TopBarProps {
@@ -9,6 +9,8 @@ interface TopBarProps {
   activeProvider: ProviderType;
   activeModel: string;
   hasKey: boolean;
+  viewMode?: "builder" | "dashboard" | "manager";
+  onSwitchView?: (view: "builder" | "dashboard") => void;
 }
 
 export function TopBar({
@@ -16,6 +18,8 @@ export function TopBar({
   activeProvider,
   activeModel,
   hasKey,
+  viewMode = "builder",
+  onSwitchView,
 }: TopBarProps) {
   // Format model display name cleanly
   const getModelDisplayName = () => {
@@ -47,6 +51,36 @@ export function TopBar({
             </span>
           </div>
         </div>
+
+        {/* Center View Switcher */}
+        {onSwitchView && (
+          <nav className="hidden md:flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-inner">
+            <button
+              type="button"
+              onClick={() => onSwitchView("builder")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                viewMode === "builder"
+                  ? "bg-white text-indigo-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              <span>Builder</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onSwitchView("dashboard")}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                viewMode === "dashboard" || viewMode === "manager"
+                  ? "bg-white text-indigo-700 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FolderKanban className="w-3.5 h-3.5" />
+              <span>Saved Projects</span>
+            </button>
+          </nav>
+        )}
 
         {/* Right Status Pill & Settings Button */}
         <div className="flex items-center space-x-2.5">

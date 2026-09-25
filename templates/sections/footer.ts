@@ -6,7 +6,13 @@ export function renderFooter(site: SiteContentJSON["site"]): string {
   const phone = site.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const address = site.address || { city: "Local Area" };
-  const fullAddress = [address.street, address.city, address.state, address.zip].filter(Boolean).join(", ");
+  const isServiceArea = site.businessModel === "service-area";
+
+  // Google Policy: Service-area businesses must hide street address everywhere on the site
+  const addressDisplay = isServiceArea
+    ? `Serving ${address.city || "local communities"} and surrounding areas`
+    : [address.street, address.city, address.state, address.zip].filter(Boolean).join(", ") || `Serving ${address.city || "local communities"}`;
+
   const email = site.email || "";
   const areas = site.serviceAreas && site.serviceAreas.length > 0 ? site.serviceAreas : ["Local Communities", "Suburbs", "Metro Area"];
 
@@ -44,22 +50,24 @@ export function renderFooter(site: SiteContentJSON["site"]): string {
         <!-- Col 3: Service Areas Covered -->
         <div class="footer-col">
           <h4>Service Areas</h4>
+          <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.75rem;">Serving ${address.city || "local communities"} and surrounding areas.</p>
           <ul class="footer-links">
-            ${areas.slice(0, 6).map((a) => `<li><a href="service-areas.html">${a}</a></li>`).join("\n            ")}
+            <li><a href="service-areas.html" style="color: var(--color-accent); font-weight: 700;">View Service Areas Hub →</a></li>
+            ${areas.slice(0, 4).map((a) => `<li><a href="service-areas.html">${a}</a></li>`).join("\n            ")}
           </ul>
         </div>
 
         <!-- Col 4: Contact & Hours -->
         <div class="footer-col">
           <h4>Dispatch & Contact</h4>
-          <p>${fullAddress || "Serving Metro Area & Surrounds"}</p>
+          <p>${addressDisplay}</p>
           ${email ? `<p style="margin-top: 0.5rem;"><a href="mailto:${email}" style="color: #CBD5E1;">${email}</a></p>` : ""}
           <p style="margin-top: 0.75rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>
         </div>
       </div>
 
       <div class="footer-bottom">
-        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated.</p>
+        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated. City data by <a href="https://simplemaps.com/data/us-cities" target="_blank" rel="noopener noreferrer" style="color: #94A3B8; text-decoration: underline;">SimpleMaps</a> under CC BY 4.0.</p>
       </div>
     </div>
   </footer>`;

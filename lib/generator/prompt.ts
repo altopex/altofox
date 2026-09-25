@@ -22,16 +22,16 @@ Include every requested page as its own .html file.
 - Fast and lightweight: no frameworks, no heavy libraries.
 
 === HOME PAGE STRUCTURE (high-converting local layout) ===
-1. Hero: H1 with main service + city (e.g. "Trusted Plumber in Dallas, TX"), a benefit-driven subheadline, two CTAs ("Call (555) 123-4567" as tel: link + "Get a Free Quote"), and trust badges (years in business, licensed & insured, 5-star rated, same-day service — only use claims supported by the details given, otherwise use general ones like "Locally owned").
-2. Trust bar: short row of key selling points with icons.
+1. Hero: H1 with main service + city (e.g. "Trusted Plumber in Dallas, TX"), a benefit-driven subheadline, two CTAs ("Call (555) 123-4567" as tel: link + "Get a Free Quote"), and trust badges (only use claims supported by verified user details such as licensed & insured, years in business, or safe general claims like "Locally owned"). Never invent 5-star ratings or unbacked claims.
+2. Trust bar: short row of key selling points with icons (only confirmed facts).
 3. Services grid: card per service with icon, short description, and link to its page if it exists.
 4. Why choose us: 3–4 benefits specific to this business.
 5. How it works: 3 simple steps (Call → We arrive/assess → Problem solved).
 6. Service areas: list of cities/neighborhoods served with links to area pages if they exist, and a sentence mentioning the main city.
-7. Testimonials: 3 realistic sample reviews marked clearly in an HTML comment as placeholders for the owner to replace.
+7. Reviews: Never generate fake reviews or sample testimonials. Use only verified customer reviews provided by the user or a Google review CTA button.
 8. FAQ: 5–6 local questions in an accessible accordion.
 9. Final CTA banner: strong headline + phone button.
-10. Footer: logo/name, short description, full NAP, hours, quick links, service areas, social links, copyright with current year.
+10. Footer: logo/name, short description, full NAP (omit street address for service-area businesses), hours, quick links, service areas, social links, copyright with current year.
 
 === OTHER PAGES ===
 - About: story, values, why local customers trust them, CTA.
@@ -67,13 +67,35 @@ export interface TargetPage {
   description?: string;
 }
 
+export interface RealReviewItem {
+  author: string;
+  text: string;
+  rating: number;
+  source?: "Google" | "Yelp" | "Facebook" | "Direct" | string;
+  date?: string;
+}
+
 export interface WebsiteFormData {
   businessName: string;
   businessType: string;
+  businessModel?: "storefront" | "service-area";
   nicheId?: string;
   schemaType?: string;
   businessDescription?: string;
   yearsInBusiness?: string;
+  licenseNumber?: string;
+  certifications?: string;
+  warrantyGuarantee?: string;
+  responseTime?: string;
+  emergency247?: boolean;
+  freeEstimates?: boolean;
+  insuredBonded?: boolean;
+  ownerName?: string;
+  ownerBio?: string;
+  googleReviewUrl?: string;
+  realReviewsConfirmed?: boolean;
+  realReviews?: RealReviewItem[];
+  allowedClaims?: string[];
   uniqueSellingPoints?: string;
   servicesOffered?: string;
   services?: string[];

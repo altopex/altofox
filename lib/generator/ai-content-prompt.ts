@@ -7,13 +7,20 @@ export const AI_CONTENT_SYSTEM_PROMPT = `You are an expert local-business copywr
 
 You DO NOT write HTML or CSS. You return ONLY valid JSON in the exact format given — no markdown, no code fences, no commentary. The app turns your JSON into a designed website.
 
+GOOGLE POLICY RULES (strict):
+- NEVER write reviews, testimonials, customer names, or quotes. The app handles reviews separately.
+- NEVER invent facts: years in business, license numbers, awards, response times, or guarantees. Only use what the user provided.
+- If the business has no storefront, do not include a street address.
+- Service area pages must have 100% unique text with genuinely different angles — no template copying.
+- No unbacked claims: do NOT write "#1", "top-rated", "5-star", "best in [city]" unless instructed.
+
 CONTENT RULES
 - Write specifically for THIS business, THIS trade, and THIS city. Use the niche knowledge provided (services, pain points, trust signals, process).
 - Every page must have 100% unique content. Never repeat the same sentences or paragraphs across pages.
 - Service area pages: each one must be genuinely different — change the angle, examples, and structure, mention the area naturally, and relate services to local situations (home types, weather, seasons) only when generally true for that region. Never just swap the city name.
 - Sound human, confident, and helpful. Short paragraphs, clear benefits, active voice. No clichés like "look no further", "in today's fast-paced world", "one-stop shop", "we pride ourselves".
 - Never invent facts: no fake awards, license numbers, review counts, prices, or years in business. Only use claims from the provided details. Where helpful, use safe general claims (e.g. "locally owned", "upfront pricing", "free estimates" only if stated).
-- Testimonials: write 3 realistic samples and set "isPlaceholder": true so the owner knows to replace them.
+- REVIEWS & TESTIMONIALS: DO NOT write reviews or testimonials. The application handles reviews separately using verified customer data or Google Review links.
 - Each service page: 500+ words covering what the service is, signs you need it, what's included, the process, why choose this business, and 3–4 service-specific FAQs.
 - Each service area page: 400+ words.
 - Home page: strong hero headline with main service + city, clear value, and calls to action throughout.
@@ -54,30 +61,29 @@ EXACT JSON FORMAT TO RETURN:
       "seo": {
         "title": "Primary Keyword in City | Business Name",
         "description": "Compelling meta description under 155 chars including city and phone CTA.",
-        "h1": "Top-Rated Service in City, ST",
+        "h1": "Trusted Service in City, ST",
         "primaryKeyword": "emergency plumber dallas",
-        "ogDescription": "Fast 24/7 dispatch across the area."
+        "ogDescription": "Fast dispatch across the area."
       },
       "sections": [
         {
           "type": "emergencyBanner",
-          "content": { "text": "24/7 Emergency Service — Fast Dispatch in Under 45 Mins!" }
+          "content": { "text": "24/7 Priority Emergency Service Available in City" }
         },
         {
           "type": "hero",
           "variant": "split",
           "content": {
-            "eyebrow": "24/7 Priority Dispatch",
-            "h1": "Trusted Local Plumber in Dallas, TX",
-            "subheadline": "Immediate arrival, upfront flat rates, and master licensed technicians.",
+            "eyebrow": "Local Trade Specialists",
+            "h1": "Trusted Plumber in Dallas, TX",
+            "subheadline": "Upfront pricing, fast dispatch, and guaranteed workmanship on every repair.",
             "primaryCta": "Call (214) 555-0198",
             "secondaryCta": "Get a Free Quote",
             "secondaryUrl": "contact.html",
-            "trustBadges": ["⭐ 5.0 Google Rating", "🛡️ Licensed & Insured", "⚡ 45-Min Arrival"],
-            "ratingText": "Over 500+ Local 5-Star Reviews"
+            "trustBadges": ["Locally Owned & Operated", "Upfront Pricing", "Guaranteed Workmanship"]
           },
           "images": [
-            { "slot": "main", "query": "plumber fixing kitchen sink", "alt": "Licensed master plumber repairing a sink in Dallas home" }
+            { "slot": "main", "query": "plumber fixing kitchen sink", "alt": "Plumber repairing a sink in Dallas home" }
           ]
         },
         { "type": "trustBar", "content": {} },
@@ -87,7 +93,7 @@ EXACT JSON FORMAT TO RETURN:
           "content": {
             "eyebrow": "Our Capabilities",
             "headline": "Full-Service Residential & Commercial Solutions",
-            "subheadline": "Every job handled cleanly by certified master technicians.",
+            "subheadline": "Every job handled cleanly by certified technicians.",
             "items": [
               { "title": "Emergency Repairs", "description": "Rapid response for sudden leaks and pipe bursts.", "slug": "services" },
               { "title": "Drain Clearing", "description": "High-pressure hydro-jetting to clear stubborn clogs.", "slug": "services" }
@@ -98,17 +104,14 @@ EXACT JSON FORMAT TO RETURN:
           "type": "stats",
           "content": {
             "stats": [
-              { "number": "20+", "label": "Years in Business" },
-              { "number": "45m", "label": "Avg. Arrival Time" },
-              { "number": "10,000+", "label": "Repairs Completed" },
-              { "number": "100%", "label": "Satisfaction Guarantee" }
+              { "number": "100%", "label": "Satisfaction Guarantee" },
+              { "number": "Fast", "label": "Local Response" }
             ]
           }
         },
         { "type": "whyUs", "content": {} },
         { "type": "process", "content": {} },
         { "type": "serviceAreas", "content": {} },
-        { "type": "testimonials", "variant": "grid", "content": { "items": [{ "quote": "...", "author": "John D.", "location": "Dallas, TX", "rating": 5, "isPlaceholder": true }] } },
         { "type": "faq", "content": {} },
         { "type": "ctaBanner", "variant": "gradient", "content": {} },
         { "type": "contactForm", "content": {} }
@@ -124,16 +127,16 @@ EXACT JSON FORMAT TO RETURN:
 AVAILABLE SECTION TYPES & VARIANTS TO CHOOSE:
 - header (rendered automatically by app)
 - emergencyBanner: content: { text: "..." } (only if niche offers emergency services)
-- hero: variants: "split", "fullImage", "centered" | content: { eyebrow, h1, subheadline, primaryCta, secondaryCta, secondaryUrl, trustBadges: string[], ratingText } | images: [{ slot: "main", query, alt }]
+- hero: variants: "split", "fullImage", "centered" | content: { eyebrow, h1, subheadline, primaryCta, secondaryCta, secondaryUrl, trustBadges: string[] } | images: [{ slot: "main", query, alt }]
 - trustBar: content: { badges?: [{ icon, label, subtext }] }
 - services: variants: "cards", "icons", "alternating" | content: { eyebrow, headline, subheadline, items: [{ title, description, icon?, slug }] }
-- stats: content: { stats: [{ number, label }] } (3-4 realistic metrics from provided details)
+- stats: content: { stats: [{ number, label }] } (metrics strictly derived from provided details)
 - about: variants: "split", "collage" | content: { eyebrow, headline, story, highlights: string[], values: string[] } | images: [{ slot: "main", query, alt }]
 - whyUs: content: { eyebrow, headline, subheadline, reasons: [{ title, description, icon? }] } (4-6 benefit cards)
 - process: content: { eyebrow, headline, steps: [{ step: 1, title, description }] } (3-4 numbered steps from niche process)
 - gallery: content: { eyebrow, headline, items: [{ title, category, query, alt }] } (photo grid with lightbox)
 - serviceAreas: content: { eyebrow, headline, description, areas: string[], guarantees: string[] } (list/grid of areas with map)
-- testimonials: variants: "grid", "slider" | content: { eyebrow, headline, items: [{ quote, author, location, rating: 5, isPlaceholder: true }] } (set isPlaceholder: true on realistic samples)
+- testimonials: (rendered automatically by app only if user verified real reviews or Google Review link; DO NOT write quotes or names)
 - faq: content: { eyebrow, headline, questions: [{ q, a }] } (accessible accordion with trade-specific Q&As)
 - ctaBanner: variants: "gradient", "photo" | content: { headline, subheadline, buttonText, phone }
 - contactForm: content: { headline, subheadline, formHeadline, address, phone, email, hours }
@@ -154,16 +157,19 @@ AUDIT & CORRECTION TASKS:
 2. ELIMINATE GENERIC FILLER & CLICHÉS:
    - Remove clichés like "look no further", "in today's fast-paced world", "one-stop shop", "we pride ourselves", "second to none".
    - Replace with human, confident, active, benefit-driven copy.
-3. AUDIT & REMOVE INVENTED FACTS:
-   - Check for any fake awards, invented license numbers, hallucinated prices, exaggerated review counts, or unverified claims not provided in the original business details.
-   - Replace them with safe general claims (e.g. "locally owned", "upfront flat rates", "free estimates" only if originally stated).
-4. VERIFY LOCAL SEO & TARGET KEYWORDS:
+3. AUDIT & REMOVE INVENTED FACTS & UNBACKED CLAIMS (STRICT GOOGLE POLICY):
+   - Strictly remove unbacked banned phrases: "#1", "top-rated", "5-star", "five-star", "500+ reviews", "500+ happy customers", "best in [city]" unless provided in user details or allowed claims.
+   - Remove any fake awards, invented license numbers, hallucinated prices, or unverified claims.
+   - Replace them with safe general claims (e.g. "locally owned", "upfront pricing", "free estimates" only if stated).
+4. REVIEWS & TESTIMONIALS CLEANUP:
+   - If any AI-generated reviews, testimonials, customer names, or quotes were generated, REMOVE them completely. The application injects verified reviews or a Google review CTA separately.
+5. SERVICE-AREA BUSINESS ADDRESS COMPLIANCE:
+   - If the business model is a service-area business (travels to customers, no storefront), ensure NO street address appears anywhere in the content or address object.
+6. VERIFY LOCAL SEO & TARGET KEYWORDS:
    - Ensure the primary keyword and city are naturally present in the SEO title, H1, first paragraph, and at least one section heading.
    - Ensure SEO title is under 60 characters ("Primary Keyword in City | Business Name") and meta description under 155 characters with a clear phone call-to-action.
-   - Ensure image alt text naturally describes the photo + service + city.
-5. TESTIMONIALS CHECK:
-   - Verify that all sample testimonials have "isPlaceholder": true so the business owner knows to replace them.
-6. PAGE WORD COUNT & DEPTH:
+   - Ensure keyword density remains under 2% for any phrase.
+7. PAGE WORD COUNT & DEPTH:
    - Ensure service pages have 500+ words of depth (what it is, signs you need it, process, FAQs).
    - Ensure service area pages have 400+ words.
 
@@ -177,18 +183,42 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   const pages = targetPages || computeTargetPages(formData);
   const niche = findNicheByIndustry(formData.businessType);
   const themeName = formData.theme?.name || (formData.styleTone ? formData.styleTone.split("-")[0].trim() : "Modern Pro");
+  const isServiceArea = formData.businessModel === "service-area";
   const lines: string[] = [];
 
   lines.push("Please generate the structured content JSON for this local service business website:");
   lines.push("");
 
-  // === 1. BUSINESS DETAILS ===
-  lines.push("=== 1. BUSINESS DETAILS ===");
+  // === STRICT GOOGLE COMPLIANCE RULES ===
+  lines.push("=== STRICT GOOGLE COMPLIANCE RULES ===");
+  lines.push("- NEVER write reviews, testimonials, customer names, or quotes. The app handles reviews separately.");
+  lines.push("- NEVER invent facts: years in business, license numbers, awards, response times, or guarantees. Only use what the user provided.");
+  if (isServiceArea) {
+    lines.push("- SERVICE-AREA BUSINESS (NO STOREFRONT): DO NOT include a street address anywhere in text, contact, or address objects. Use 'Serving [City] and surrounding areas'.");
+  }
+  lines.push("- Service area pages must have 100% unique text with genuinely different angles — no template copying.");
+  lines.push("- No unbacked claims: do NOT write '#1', 'top-rated', '5-star', '500+ reviews', 'best in [city]' unless explicitly provided in Allowed Claims.");
+  lines.push("");
+
+  // === 1. BUSINESS DETAILS & CONFIRMED FACTS ===
+  lines.push("=== 1. BUSINESS DETAILS & CONFIRMED FACTS ===");
   lines.push(`- Business Name: ${formData.businessName}`);
   lines.push(`- Trade / Industry: ${formData.businessType}`);
+  lines.push(`- Business Model: ${isServiceArea ? "Service-Area Business (travels to customers, NO public storefront)" : "Storefront / Office (customers visit location)"}`);
   if (formData.businessDescription) lines.push(`- Business Description: ${formData.businessDescription}`);
-  if (formData.yearsInBusiness) lines.push(`- Years in Business: ${formData.yearsInBusiness}`);
-  if (formData.uniqueSellingPoints) lines.push(`- Unique Selling Points & Guarantees: ${formData.uniqueSellingPoints}`);
+  if (formData.yearsInBusiness) lines.push(`- Confirmed Years in Business: ${formData.yearsInBusiness}`);
+  if (formData.licenseNumber) lines.push(`- Confirmed License Number: ${formData.licenseNumber}`);
+  if (formData.certifications) lines.push(`- Confirmed Certifications: ${formData.certifications}`);
+  if (formData.warrantyGuarantee) lines.push(`- Confirmed Warranty/Guarantee: ${formData.warrantyGuarantee}`);
+  if (formData.responseTime) lines.push(`- Confirmed Response Time: ${formData.responseTime}`);
+  if (formData.emergency247 !== undefined) lines.push(`- 24/7 Emergency Service: ${formData.emergency247 ? "YES" : "NO"}`);
+  if (formData.freeEstimates !== undefined) lines.push(`- Free Estimates: ${formData.freeEstimates ? "YES" : "NO"}`);
+  if (formData.insuredBonded !== undefined) lines.push(`- Insured & Bonded: ${formData.insuredBonded ? "YES" : "NO"}`);
+  if (formData.ownerName) lines.push(`- Business Owner: ${formData.ownerName}${formData.ownerBio ? ` (${formData.ownerBio})` : ""}`);
+  if (formData.allowedClaims && formData.allowedClaims.length > 0) {
+    lines.push(`- User-Verified Allowed Claims: ${formData.allowedClaims.join(", ")}`);
+  }
+  if (formData.uniqueSellingPoints) lines.push(`- Unique Selling Points: ${formData.uniqueSellingPoints}`);
   const services = formData.services || (formData.servicesOffered ? formData.servicesOffered.split(",") : []);
   if (services.length > 0) lines.push(`- Core Services Offered: ${services.join(", ")}`);
   if (formData.phone) lines.push(`- Phone Number: ${formData.phone} (MUST be used for all click-to-call CTAs)`);
@@ -199,16 +229,20 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   // === 2. LOCATION & GEOGRAPHY ===
   lines.push("");
   lines.push("=== 2. LOCATION & GEOGRAPHY ===");
-  const addressParts = [formData.streetAddress, formData.city, formData.stateRegion, formData.zipPostalCode, formData.country]
-    .filter(Boolean)
-    .map((s) => s?.trim())
-    .filter(Boolean);
-  if (addressParts.length > 0) lines.push(`- Full Address: ${addressParts.join(", ")}`);
+  if (!isServiceArea) {
+    const addressParts = [formData.streetAddress, formData.city, formData.stateRegion, formData.zipPostalCode, formData.country]
+      .filter(Boolean)
+      .map((s) => s?.trim())
+      .filter(Boolean);
+    if (addressParts.length > 0) lines.push(`- Physical Address: ${addressParts.join(", ")}`);
+  } else {
+    lines.push(`- Address Rule: Service-area business — OMIT street address. Serving ${formData.city} and surrounding areas.`);
+  }
   lines.push(`- Primary City: ${formData.city}`);
   if (formData.stateRegion) lines.push(`- State / Region: ${formData.stateRegion}`);
   if (formData.zipPostalCode) lines.push(`- ZIP / Postal Code: ${formData.zipPostalCode}`);
   if (formData.country) lines.push(`- Country: ${formData.country}`);
-  if (formData.googleMaps) lines.push(`- Google Maps Link: ${formData.googleMaps}`);
+  if (!isServiceArea && formData.googleMaps) lines.push(`- Google Maps Link: ${formData.googleMaps}`);
 
   // === 3. SERVICE AREAS ===
   lines.push("");
@@ -273,16 +307,15 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   lines.push("=== 8. AVAILABLE SECTION TYPES & VARIANTS ===");
   lines.push("Available section types you may choose from (order and select them to fit the trade):");
   lines.push("- emergencyBanner: content: { text: string } (use if emergency trade)");
-  lines.push("- hero: variants: 'split', 'fullImage', 'centered' | content: { eyebrow, h1, subheadline, primaryCta, secondaryCta, secondaryUrl, trustBadges, ratingText } | images: [{ slot: 'main', query, alt }]");
+  lines.push("- hero: variants: 'split', 'fullImage', 'centered' | content: { eyebrow, h1, subheadline, primaryCta, secondaryCta, secondaryUrl, trustBadges } | images: [{ slot: 'main', query, alt }]");
   lines.push("- trustBar: content: { badges?: [{ icon, label, subtext }] }");
   lines.push("- services: variants: 'cards', 'icons', 'alternating' | content: { eyebrow, headline, subheadline, items: [{ title, description, icon?, slug }] }");
-  lines.push("- stats: content: { stats: [{ number, label }] } (3-4 metrics from provided details)");
+  lines.push("- stats: content: { stats: [{ number, label }] } (metrics strictly derived from provided details)");
   lines.push("- about: variants: 'split', 'collage' | content: { eyebrow, headline, story, highlights, values } | images: [{ slot: 'main', query, alt }]");
   lines.push("- whyUs: content: { eyebrow, headline, subheadline, reasons: [{ title, description, icon? }] }");
   lines.push("- process: content: { eyebrow, headline, steps: [{ step, title, description }] }");
   lines.push("- gallery: content: { eyebrow, headline, items: [{ title, category, query, alt }] }");
   lines.push("- serviceAreas: content: { eyebrow, headline, description, areas, guarantees }");
-  lines.push("- testimonials: variants: 'grid', 'slider' | content: { eyebrow, headline, items: [{ quote, author, location, rating: 5, isPlaceholder: true }] }");
   lines.push("- faq: content: { eyebrow, headline, questions: [{ q, a }] }");
   lines.push("- ctaBanner: variants: 'gradient', 'photo' | content: { headline, subheadline, buttonText, phone }");
   lines.push("- contactForm: content: { headline, subheadline, formHeadline, address, phone, email, hours }");
@@ -290,7 +323,7 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   // === 9. EXACT JSON OUTPUT INSTRUCTION ===
   lines.push("");
   lines.push("=== 9. EXACT JSON OUTPUT INSTRUCTION ===");
-  lines.push("Respond with ONLY valid JSON in the exact format specified in the system prompt. No markdown, no code fences, no commentary. Ensure every page has 100% unique content, service pages 500+ words, service area pages 400+ words, realistic image queries, and isPlaceholder: true on testimonials.");
+  lines.push("Respond with ONLY valid JSON in the exact format specified in the system prompt. No markdown, no code fences, no commentary. Ensure every page has 100% unique content, service pages 500+ words, service area pages 400+ words, realistic image queries, and DO NOT generate fake reviews or quotes.");
 
   return lines.join("\n");
 }
@@ -368,6 +401,38 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
   ];
 
   const schemaType = tradeCategory === "tree" ? "TreeService" : (niche.schemaType || "HomeAndConstructionBusiness");
+  const isServiceArea = formData.businessModel === "service-area";
+
+  // Build verified trust badges dynamically
+  const verifiedTrustBadges: string[] = [];
+  if (formData.insuredBonded || formData.licenseNumber) {
+    verifiedTrustBadges.push(formData.licenseNumber ? `Lic. #${formData.licenseNumber}` : "🛡️ Licensed & Insured");
+  }
+  if (formData.yearsInBusiness) {
+    verifiedTrustBadges.push(`⭐ ${formData.yearsInBusiness} Experience`);
+  }
+  if (formData.warrantyGuarantee) {
+    verifiedTrustBadges.push(`✅ ${formData.warrantyGuarantee}`);
+  }
+  if (formData.responseTime) {
+    verifiedTrustBadges.push(`⚡ ${formData.responseTime} Response`);
+  } else if (isEmergencyTrade && formData.emergency247) {
+    verifiedTrustBadges.push("⚡ 24/7 Emergency Dispatch");
+  }
+  if (formData.freeEstimates) {
+    verifiedTrustBadges.push("📋 Free Estimates");
+  }
+  if (formData.allowedClaims && formData.allowedClaims.length > 0) {
+    verifiedTrustBadges.push(...formData.allowedClaims.slice(0, 2));
+  }
+  if (verifiedTrustBadges.length === 0) {
+    verifiedTrustBadges.push("Locally Owned & Operated", "Upfront Pricing", `Serving ${city}`);
+  }
+
+  // Include testimonials section ONLY if real reviews are confirmed or Google Review link is given
+  const hasRealReviews = Boolean(formData.realReviewsConfirmed && formData.realReviews && formData.realReviews.length > 0);
+  const hasGoogleReviewUrl = Boolean(formData.googleReviewUrl?.trim());
+  const shouldIncludeReviews = hasRealReviews || hasGoogleReviewUrl;
 
   // Build each page content
   const pagesContent = pages.map((page) => {
@@ -380,7 +445,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
         slug: "index",
         seo: {
           title: `${formData.targetKeywords?.split(",")[0] || `${formData.businessType} in ${city}, ${state}`} | ${bizName}`,
-          description: `Top-rated ${formData.businessType.toLowerCase()} in ${city}, ${state}. Fast response, licensed master specialists, and upfront flat pricing. Call ${phone}.`,
+          description: `Dependable ${formData.businessType.toLowerCase()} in ${city}, ${state}. Fast response, licensed specialists, and upfront flat pricing. Call ${phone}.`,
           h1: `Trusted ${formData.businessType} in ${city}, ${state}`,
           primaryKeyword: formData.targetKeywords?.split(",")[0] || `${formData.businessType} ${city}`,
           ogDescription: `Reliable ${isEmergencyTrade ? "24/7 " : ""}${formData.businessType.toLowerCase()} in ${city}. Call ${phone}.`,
@@ -391,7 +456,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
                 {
                   type: "emergencyBanner",
                   content: {
-                    text: `24/7 Priority Emergency Service Available in ${city} — Fast Dispatch Within 45 Minutes!`,
+                    text: `24/7 Priority Emergency Service Available in ${city} — Fast Dispatch!`,
                     phone,
                   },
                 },
@@ -401,19 +466,13 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
             type: "hero",
             variant: tradeCategory === "tree" ? "fullImage" : "split",
             content: {
-              eyebrow: isEmergencyTrade ? `24/7 Priority Dispatch in ${city}` : `Top-Rated ${niche.name} in ${city}`,
+              eyebrow: isEmergencyTrade ? `24/7 Priority Dispatch in ${city}` : `Professional ${niche.name} in ${city}`,
               h1: `Trusted ${formData.businessType} in ${city}, ${state}`,
               subheadline: formData.businessDescription || `Delivering dependable, upfront-priced solutions for homes and businesses across ${city} with master certified specialists.`,
               primaryCta: `Call ${phone}`,
               secondaryCta: "Get a Free Quote",
               secondaryUrl: "contact.html",
-              trustBadges: [
-                "⭐ 5.0 Google Rating",
-                niche.trustSignals[0] || "🛡️ Licensed & Insured",
-                `${formData.yearsInBusiness || "20+"} Years Experience`,
-                isEmergencyTrade ? "⚡ 45-Min Arrival" : "✅ Satisfaction Guaranteed",
-              ],
-              ratingText: "Over 500+ Verified 5-Star Reviews",
+              trustBadges: verifiedTrustBadges,
             },
             images: [
               {
@@ -442,11 +501,11 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
             type: "stats",
             content: {
               stats: [
-                { number: formData.yearsInBusiness || "20+", label: `Years Serving ${city}` },
-                { number: isEmergencyTrade ? "45m" : "24h", label: isEmergencyTrade ? "Average Arrival Time" : "Response Time" },
-                { number: "10,000+", label: "Completed Projects" },
+                formData.yearsInBusiness ? { number: formData.yearsInBusiness, label: `Years Serving ${city}` } : null,
+                formData.responseTime ? { number: formData.responseTime, label: "Response Time" } : (isEmergencyTrade ? { number: "45m", label: "Average Arrival Time" } : null),
                 { number: "100%", label: "Satisfaction Guarantee" },
-              ],
+                { number: "Fast", label: "Local Dispatch" },
+              ].filter(Boolean),
             },
           },
           {
@@ -490,15 +549,21 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
               subheadline: "Stationed dispatch hubs enable fast response times across the entire metro area.",
             },
           },
-          {
-            type: "testimonials",
-            variant: tradeCategory === "tree" ? "slider" : "grid",
-            content: {
-              eyebrow: "Verified Testimonials",
-              headline: "What Local Customers Say",
-              subheadline: "Read authentic feedback from your neighbors.",
-            },
-          },
+          ...(shouldIncludeReviews
+            ? [
+                {
+                  type: "testimonials",
+                  variant: tradeCategory === "tree" ? "slider" : "grid",
+                  content: {
+                    eyebrow: hasRealReviews ? "Customer Reviews" : "Client Feedback",
+                    headline: hasRealReviews ? "What Our Customers Are Saying" : "Review Us on Google",
+                    subheadline: hasRealReviews
+                      ? "Real feedback from property owners across our local community."
+                      : "Help other homeowners discover our dependable service by sharing your experience.",
+                  },
+                },
+              ]
+            : []),
           {
             type: "faq",
             content: {
@@ -532,7 +597,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
         description: `Professional, licensed ${page.title.toLowerCase()} in ${city}, ${state}. Upfront pricing and written warranties. Call ${phone}.`,
         h1: page.title,
         primaryKeyword: `${page.title} ${city}`,
-        ogDescription: `Contact ${bizName} for top-rated ${page.title.toLowerCase()} in ${city}.`,
+        ogDescription: `Contact ${bizName} for dependable ${page.title.toLowerCase()} in ${city}.`,
       },
       sections: [
         {
@@ -545,7 +610,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
             primaryCta: `Call ${phone}`,
             secondaryCta: "Request Quote",
             secondaryUrl: "contact.html",
-            trustBadges: ["⭐ 5.0 Google Rating", "🛡️ Licensed & Insured", "⚡ Same-Day Response"],
+            trustBadges: verifiedTrustBadges,
           },
           images: [
             {
@@ -561,7 +626,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           content: {
             eyebrow: "Our Standard of Service",
             headline: `Delivering Unmatched ${page.title} in ${city}`,
-            story: `At ${bizName}, we take immense pride in providing dependable, safe, and transparent services. When you contact us for ${page.title.toLowerCase()}, you get seasoned master technicians who respect your schedule and property.`,
+            story: `At ${bizName}, we take immense pride in providing dependable, safe, and transparent services. When you contact us for ${page.title.toLowerCase()}, you get seasoned technicians who respect your schedule and property.`,
           },
           images: [
             {
@@ -591,11 +656,12 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
   return {
     site: {
       businessName: bizName,
-      tagline: formData.businessDescription?.slice(0, 80) || `Top-Rated ${formData.businessType} in ${city}`,
+      tagline: formData.businessDescription?.slice(0, 80) || `Reliable ${formData.businessType} in ${city}`,
       phone,
       email: formData.email || `dispatch@${domain}`,
+      businessModel: formData.businessModel || "storefront",
       address: {
-        street: formData.streetAddress || "4512 Main Street",
+        street: isServiceArea ? "" : (formData.streetAddress || ""),
         city,
         state,
         zip: formData.zipPostalCode || "75201",
@@ -608,6 +674,20 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
         instagram: "https://instagram.com",
       },
       nav: navItems,
+      licenseNumber: formData.licenseNumber,
+      certifications: formData.certifications,
+      yearsInBusiness: formData.yearsInBusiness,
+      warrantyGuarantee: formData.warrantyGuarantee,
+      responseTime: formData.responseTime,
+      emergency247: formData.emergency247,
+      freeEstimates: formData.freeEstimates,
+      insuredBonded: formData.insuredBonded,
+      ownerName: formData.ownerName,
+      ownerBio: formData.ownerBio,
+      googleReviewUrl: formData.googleReviewUrl,
+      realReviewsConfirmed: formData.realReviewsConfirmed,
+      realReviews: formData.realReviews,
+      allowedClaims: formData.allowedClaims,
     },
     pages: pagesContent,
     schema: {
