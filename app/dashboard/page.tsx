@@ -5,10 +5,28 @@ export const dynamic = "force-dynamic";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { BRAND } from "@/config/brand";
+import nextDynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
-import { SettingsPanel } from "@/components/SettingsPanel";
-import { LivePreview, ProjectData } from "@/components/LivePreview";
 import { ToastContainer, ToastMessage } from "@/components/Toast";
+import type { ProjectData } from "@/components/LivePreview";
+
+const SettingsPanel = nextDynamic(
+  () => import("@/components/SettingsPanel").then((mod) => mod.SettingsPanel),
+  { ssr: false }
+);
+
+const LivePreview = nextDynamic(
+  () => import("@/components/LivePreview").then((mod) => mod.LivePreview),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-slate-500 font-medium">Preparing Live Website Preview…</span>
+      </div>
+    ),
+  }
+);
 import { ProviderType } from "@/lib/ai/types";
 import {
   THEMES,
@@ -57,12 +75,46 @@ import {
   FileEdit,
   Search,
 } from "lucide-react";
-import { ServiceAreaPicker, SelectedServiceCity } from "@/components/ServiceAreaPicker";
-import { ProjectsDashboard } from "@/components/ProjectsDashboard";
-import { WebsiteManager } from "@/components/WebsiteManager";
-import { KeywordMapModal, KeywordMapEntry } from "@/components/KeywordMapModal";
-import { FindReplaceModal } from "@/components/FindReplaceModal";
-import { BlogManager } from "@/components/BlogManager";
+import type { SelectedServiceCity } from "@/components/ServiceAreaPicker";
+import type { KeywordMapEntry } from "@/components/KeywordMapModal";
+
+const ServiceAreaPicker = nextDynamic(
+  () => import("@/components/ServiceAreaPicker").then((mod) => mod.ServiceAreaPicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center p-12 space-y-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        <span className="text-xs text-slate-500 font-medium">Loading Interactive Service Areas & Map…</span>
+      </div>
+    ),
+  }
+);
+
+const ProjectsDashboard = nextDynamic(
+  () => import("@/components/ProjectsDashboard").then((mod) => mod.ProjectsDashboard),
+  { ssr: false }
+);
+
+const WebsiteManager = nextDynamic(
+  () => import("@/components/WebsiteManager").then((mod) => mod.WebsiteManager),
+  { ssr: false }
+);
+
+const KeywordMapModal = nextDynamic(
+  () => import("@/components/KeywordMapModal").then((mod) => mod.KeywordMapModal),
+  { ssr: false }
+);
+
+const FindReplaceModal = nextDynamic(
+  () => import("@/components/FindReplaceModal").then((mod) => mod.FindReplaceModal),
+  { ssr: false }
+);
+
+const BlogManager = nextDynamic(
+  () => import("@/components/BlogManager").then((mod) => mod.BlogManager),
+  { ssr: false }
+);
 import { auditPageSEO, suggestKeywordsForPage } from "@/lib/seo/on-page-scorer";
 import { SavedProject, ProjectKeywordItem } from "@/lib/storage/project-types";
 import {
@@ -72,13 +124,33 @@ import {
   deleteProjectFromDB,
   duplicateProjectInDB,
 } from "@/lib/storage/db";
-import { useAuth } from "@/lib/auth/AuthContext";
-import { LoginCard } from "@/components/auth/LoginCard";
 import { AppShell, NavTab } from "@/components/navigation/AppShell";
-import { TeamDashboard } from "@/components/dashboard/TeamDashboard";
-import { TeamManagement } from "@/components/team/TeamManagement";
-import { ActivityFeed } from "@/components/activity/ActivityFeed";
-import { ImportLocalDataModal } from "@/components/migration/ImportLocalDataModal";
+import { useAuth } from "@/lib/auth/AuthContext";
+
+const LoginCard = nextDynamic(
+  () => import("@/components/auth/LoginCard").then((mod) => mod.LoginCard),
+  { ssr: false }
+);
+
+const TeamDashboard = nextDynamic(
+  () => import("@/components/dashboard/TeamDashboard").then((mod) => mod.TeamDashboard),
+  { ssr: false }
+);
+
+const TeamManagement = nextDynamic(
+  () => import("@/components/team/TeamManagement").then((mod) => mod.TeamManagement),
+  { ssr: false }
+);
+
+const ActivityFeed = nextDynamic(
+  () => import("@/components/activity/ActivityFeed").then((mod) => mod.ActivityFeed),
+  { ssr: false }
+);
+
+const ImportLocalDataModal = nextDynamic(
+  () => import("@/components/migration/ImportLocalDataModal").then((mod) => mod.ImportLocalDataModal),
+  { ssr: false }
+);
 
 // Popular Local Business Types (Featuring 20 Trade Niche Packs)
 const POPULAR_INDUSTRIES = [

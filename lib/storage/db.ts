@@ -5,9 +5,8 @@
  */
 
 import { SavedProject, URLRedirect, ProjectChangeLogEntry } from "./project-types";
-import JSZip from "jszip";
 
-const DB_NAME = "altofox_projects_db";
+const DB_NAME = "ranklocal_projects_db";
 const DB_VERSION = 1;
 const STORE_NAME = "projects";
 
@@ -215,6 +214,7 @@ ${redirects
  * Exports a project as a downloadable `.siteproject` ZIP containing project.json.
  */
 export async function exportProjectBackup(project: SavedProject): Promise<Blob> {
+  const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   const backupData = {
     version: "1.0",
@@ -240,6 +240,7 @@ export async function exportProjectBackup(project: SavedProject): Promise<Blob> 
  * Imports a project from an uploaded `.siteproject` ZIP file.
  */
 export async function importProjectBackup(file: File): Promise<SavedProject> {
+  const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(file);
   const projFile = zip.file("project.json");
   if (!projFile) {
@@ -269,6 +270,7 @@ export async function generateWebsiteZIP(
   mode: "full" | "changed-only" = "full",
   sinceTimestamp?: number
 ): Promise<{ blob: Blob; changedFilesCount: number; changedFilePaths: string[] }> {
+  const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   const redirects = generateRedirectFiles(project.redirects || []);
 

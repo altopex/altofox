@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import JSZip from "jszip";
+import { BRAND } from "@/config/brand";
 import {
   Download,
   Smartphone,
@@ -252,6 +252,7 @@ export function LivePreview({
     try {
       setIsZipping(true);
       setZippingStatus("Gathering website files…");
+      const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
 
       // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt, CREDITS.txt
@@ -262,7 +263,7 @@ export function LivePreview({
       // Add clean README
       zip.file(
         "README.md",
-        `# ${project.name}\n\nGenerated with AltoFox Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links, styles, and stock photos in /images are self-contained with zero build step required.\n`
+        `# ${project.name}\n\nGenerated with ${BRAND.name} Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links, styles, and stock photos in /images are self-contained with zero build step required.\n`
       );
 
       // Collect photos to bundle into /images
