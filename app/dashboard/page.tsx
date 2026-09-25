@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { TopBar } from "@/components/TopBar";
 import { SettingsPanel } from "@/components/SettingsPanel";
