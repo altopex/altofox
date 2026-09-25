@@ -17,6 +17,12 @@ export async function GET(req: NextRequest) {
       "pixabay.com",
       "cdn.pixabay.com",
       "images.unsplash.com",
+      "tse1.mm.bing.net",
+      "tse2.mm.bing.net",
+      "tse3.mm.bing.net",
+      "tse4.mm.bing.net",
+      "mm.bing.net",
+      "bing.net",
     ];
 
     const isAllowed = allowedHosts.some(

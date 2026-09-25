@@ -147,7 +147,10 @@ export async function POST(req: NextRequest) {
 
     const effectivePexelsKey = (pexelsKey || formData?.pexelsKey || process.env.PEXELS_API_KEY || "").trim();
     const effectivePixabayKey = (pixabayKey || formData?.pixabayKey || process.env.PIXABAY_API_KEY || "").trim();
-    const effectivePrefSource = (preferredSource || formData?.preferredSource || "pexels") as "pexels" | "pixabay";
+    const effectivePrefSource = (preferredSource || formData?.preferredSource || "bing") as
+      | "bing"
+      | "pexels"
+      | "pixabay";
 
     const assembleOptions = {
       domain: websiteData.websiteDomain,

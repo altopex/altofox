@@ -8,6 +8,7 @@ import { FindReplaceModal } from "./FindReplaceModal";
 import { SearchConsoleHub } from "./SearchConsoleHub";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { Theme, THEMES } from "../lib/themes";
+import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
 import {
   FolderKanban,
   FileText,
@@ -37,7 +38,15 @@ import {
   ArrowUpDown,
   Tag,
   ShieldCheck,
+  Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
 } from "lucide-react";
+import { useProjectPresence } from "@/lib/supabase/presence";
+import { ConflictModal } from "./editor/ConflictModal";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { logActivity } from "@/lib/supabase/activity";
+import { ActivityFeed } from "./activity/ActivityFeed";
 
 interface WebsiteManagerProps {
   project: SavedProject;
@@ -52,17 +61,33 @@ export function WebsiteManager({
 }: WebsiteManagerProps) {
   const [project, setProject] = useState<SavedProject>(initialProject);
   const [activeTab, setActiveTab] = useState<
-    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console"
+    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles"
   >("pages");
+
+  // Modals
+  const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
+  const [isFindReplaceModalOpen, setIsFindReplaceModalOpen] = useState(false);
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
 
   // Selected Page in Pages Tab
   const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "offline">("saved");
+  const [pageOpenedAt, setPageOpenedAt] = useState<number>(Date.now());
+  const [conflictData, setConflictData] = useState<{
+    isOpen: boolean;
+    changerName: string;
+    changerUpdatedAt: string;
+    remoteContent: any;
+  } | null>(null);
 
-  // Modals
-  const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
-  const [isFindReplaceModalOpen, setIsFindReplaceModalOpen] = useState(false);
+  // Supabase Realtime Presence
+  const { activeUsers, concurrentEditors } = useProjectPresence(
+    project.id,
+    selectedPagePath,
+    true
+  );
 
   // Page Editor Field State for Selected Page
   const currentPageFile = useMemo(() => {
@@ -113,9 +138,55 @@ export function WebsiteManager({
     );
   }, [currentPageFile, activeHtmlContent, selectedPagePath, currentKeywordEntry]);
 
-  // Auto-Save helper
+  // Save Page Edits with conflict check
   const handleSavePageEdits = async () => {
     setIsSaving(true);
+    setSaveStatus("saving");
+
+    // Check remote conflict in Supabase
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const slug = selectedPagePath.replace(/\.html$/, "");
+      const { data: remotePage } = await supabase
+        .from("pages")
+        .select("title, seo, content, updated_at, updated_by")
+        .eq("project_id", project.id)
+        .eq("slug", slug)
+        .single();
+
+      if (remotePage && remotePage.updated_at) {
+        const remoteTime = new Date(remotePage.updated_at).getTime();
+        if (remoteTime > pageOpenedAt + 1500) {
+          // Conflict detected!
+          let changerName = "Another team member";
+          if (remotePage.updated_by) {
+            const { data: changerProfile } = await supabase
+              .from("profiles")
+              .select("full_name")
+              .eq("id", remotePage.updated_by)
+              .single();
+            if (changerProfile?.full_name) changerName = changerProfile.full_name;
+          }
+
+          setConflictData({
+            isOpen: true,
+            changerName,
+            changerUpdatedAt: remotePage.updated_at,
+            remoteContent: remotePage,
+          });
+          setIsSaving(false);
+          setSaveStatus("saved");
+          return;
+        }
+      }
+    } catch (checkErr) {
+      console.warn("Conflict check bypassed:", checkErr);
+    }
+
+    await executeSave();
+  };
+
+  const executeSave = async () => {
     let updatedHtml = activeHtmlContent;
 
     // Update <title>
@@ -163,10 +234,30 @@ export function WebsiteManager({
       changeLog: [logEntry, ...(project.changeLog || [])],
     };
 
-    await saveProjectToDB(updatedProject);
+    try {
+      await saveProjectToDB(updatedProject);
+      setSaveStatus("saved");
+    } catch {
+      setSaveStatus("offline");
+    }
+
     setProject(updatedProject);
     onProjectUpdated(updatedProject);
+    setPageOpenedAt(Date.now());
     setIsSaving(false);
+
+    // Log to Supabase Activity Log
+    await logActivity({
+      projectId: project.id,
+      action: "edit",
+      entityType: "page",
+      entityId: selectedPagePath,
+      details: {
+        description: `Updated title and sections on /${selectedPagePath}`,
+        pageSlug: selectedPagePath.replace(/\.html$/, ""),
+        projectName: project.name,
+      },
+    });
   };
 
   // Download ZIP
@@ -245,8 +336,38 @@ export function WebsiteManager({
           </div>
         </div>
 
+        {/* Teammates Presence Avatars */}
+        {activeUsers.length > 0 && (
+          <div className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-full text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[11px] font-medium text-slate-600 hidden md:inline">
+              {activeUsers.length} online
+            </span>
+            <div className="flex -space-x-1.5 ml-1">
+              {activeUsers.slice(0, 4).map((u, i) => (
+                <div
+                  key={u.userId || i}
+                  title={`${u.fullName || u.email || "Teammate"} ${u.isEditing ? "(editing " + u.currentPageSlug + ")" : ""}`}
+                  className="w-5 h-5 rounded-full bg-indigo-600 text-white font-bold text-[9px] flex items-center justify-center ring-2 ring-white uppercase shadow-xs"
+                >
+                  {(u.fullName || u.email || "U").charAt(0)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Global Action Buttons */}
         <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => setIsCycleModalOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Optimize this month</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setIsKeywordModalOpen(true)}
@@ -352,6 +473,26 @@ export function WebsiteManager({
             >
               <TrendingUp className="w-4 h-4" />
               <span>Search Console</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("cycles")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition ${
+                activeTab === "cycles"
+                  ? "bg-indigo-600 text-white font-bold"
+                  : "hover:bg-slate-800 text-slate-400"
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <RefreshCw className="w-4 h-4" />
+                <span>Cycles</span>
+              </div>
+              {(project.optimizationCycles?.length || 0) > 0 && (
+                <span className="text-[10px] font-bold bg-indigo-500/40 text-indigo-200 px-1.5 py-0.5 rounded-full">
+                  {project.optimizationCycles?.length}
+                </span>
+              )}
             </button>
 
             <button
@@ -537,6 +678,24 @@ export function WebsiteManager({
                   </button>
                 </div>
 
+                {/* Concurrent Editors Warning Banner */}
+                {concurrentEditors.length > 0 && (
+                  <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center justify-between text-xs text-amber-900 shrink-0">
+                    <div className="flex items-center space-x-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                      </span>
+                      <span>
+                        <strong>{concurrentEditors.map((u) => u.fullName || u.email).join(", ")}</strong> is currently editing this page.
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full font-semibold">
+                      Simultaneous edit protection active
+                    </span>
+                  </div>
+                )}
+
                 {/* Editor Scrollable Body */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6">
                   {/* Google Search Result Preview */}
@@ -676,7 +835,31 @@ export function WebsiteManager({
 
           {/* TAB 2: SEARCH CONSOLE TAB */}
           {activeTab === "search-console" && (
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">
+                      Guided Monthly Optimization Cycle
+                    </h3>
+                    <p className="text-[11px] text-slate-600">
+                      7-step guided workflow: upload Search Console data, compare deltas vs last cycle, pick priority opportunities, optimize HTML, and export changed files.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCycleModalOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Optimize this month</span>
+                </button>
+              </div>
+
               <SearchConsoleHub
                 files={project.files}
                 keywordMap={project.keywordMap}
@@ -768,8 +951,231 @@ export function WebsiteManager({
               </div>
             </div>
           )}
+
+          {/* TAB 5: OPTIMIZATION CYCLES */}
+          {activeTab === "cycles" && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                    <RefreshCw className="w-4 h-4 text-indigo-600" />
+                    <span>Monthly Optimization Cycles</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Search Console cycle history, rankings progress, and month-over-month performance benchmarks.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsCycleModalOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Optimize this month</span>
+                </button>
+              </div>
+
+              {!project.optimizationCycles || project.optimizationCycles.length === 0 ? (
+                <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-8 space-y-4 shadow-xs max-w-lg mx-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-base font-bold text-slate-900">
+                      No Optimization Cycles Yet
+                    </h3>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Upload your first monthly Google Search Console performance export to establish your baseline rankings, uncover striking-distance keywords, and optimize pages.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCycleModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Run Your First Cycle</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {[...(project.optimizationCycles || [])]
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .map((cycle, idx, allCycles) => {
+                      const prevCycle = allCycles[idx + 1] || null;
+                      const clicksDiff = prevCycle
+                        ? cycle.siteMetrics.clicks - prevCycle.siteMetrics.clicks
+                        : null;
+                      const impDiff = prevCycle
+                        ? cycle.siteMetrics.impressions - prevCycle.siteMetrics.impressions
+                        : null;
+                      const posDiff = prevCycle
+                        ? Number((prevCycle.siteMetrics.position - cycle.siteMetrics.position).toFixed(1))
+                        : null;
+                      const ctrDiff = prevCycle
+                        ? Number(((cycle.siteMetrics.ctr - prevCycle.siteMetrics.ctr) * 100).toFixed(2))
+                        : null;
+
+                      return (
+                        <div
+                          key={cycle.id}
+                          className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4"
+                        >
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div className="flex items-center space-x-2.5">
+                              <span className="text-xs font-bold bg-indigo-600 text-white px-2.5 py-0.5 rounded-full">
+                                Cycle #{cycle.cycleNumber}
+                              </span>
+                              <span className="text-xs font-bold text-slate-900">
+                                {cycle.dateStr}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                ({cycle.dateRange})
+                              </span>
+                            </div>
+
+                            <span className="text-xs text-slate-500">
+                              {cycle.pagesChanged.length} pages optimized
+                            </span>
+                          </div>
+
+                          {/* Metrics Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">
+                                Clicks
+                              </span>
+                              <div className="text-base font-extrabold text-slate-900">
+                                {cycle.siteMetrics.clicks.toLocaleString()}
+                              </div>
+                              {clicksDiff !== null && (
+                                <div
+                                  className={`text-[10px] font-bold flex items-center ${
+                                    clicksDiff >= 0 ? "text-emerald-600" : "text-red-600"
+                                  }`}
+                                >
+                                  {clicksDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                  <span>{clicksDiff >= 0 ? "+" : ""}{clicksDiff} vs prev</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">
+                                Impressions
+                              </span>
+                              <div className="text-base font-extrabold text-slate-900">
+                                {cycle.siteMetrics.impressions.toLocaleString()}
+                              </div>
+                              {impDiff !== null && (
+                                <div
+                                  className={`text-[10px] font-bold flex items-center ${
+                                    impDiff >= 0 ? "text-emerald-600" : "text-red-600"
+                                  }`}
+                                >
+                                  {impDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                  <span>{impDiff >= 0 ? "+" : ""}{impDiff.toLocaleString()} vs prev</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">
+                                Avg Position
+                              </span>
+                              <div className="text-base font-extrabold text-slate-900">
+                                {cycle.siteMetrics.position.toFixed(1)}
+                              </div>
+                              {posDiff !== null && (
+                                <div
+                                  className={`text-[10px] font-bold flex items-center ${
+                                    posDiff >= 0 ? "text-emerald-600" : "text-amber-600"
+                                  }`}
+                                >
+                                  {posDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                  <span>{posDiff >= 0 ? "+" : ""}{posDiff} rank</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
+                              <span className="text-[10px] uppercase font-bold text-slate-400">
+                                Organic CTR
+                              </span>
+                              <div className="text-base font-extrabold text-slate-900">
+                                {(cycle.siteMetrics.ctr * 100).toFixed(1)}%
+                              </div>
+                              {ctrDiff !== null && (
+                                <div
+                                  className={`text-[10px] font-bold flex items-center ${
+                                    ctrDiff >= 0 ? "text-emerald-600" : "text-red-600"
+                                  }`}
+                                >
+                                  {ctrDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                  <span>{ctrDiff >= 0 ? "+" : ""}{ctrDiff}% vs prev</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Applied Optimizations Details */}
+                          {cycle.appliedOptimizations && cycle.appliedOptimizations.length > 0 && (
+                            <div className="space-y-2 pt-2 border-t border-slate-100">
+                              <h4 className="text-xs font-bold text-slate-800">
+                                Applied Page Optimizations:
+                              </h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                                {cycle.appliedOptimizations.map((opt, i) => (
+                                  <div
+                                    key={i}
+                                    className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between font-mono font-bold text-[11px] text-slate-900">
+                                      <span>/{opt.pagePath}</span>
+                                      {opt.seoScoreAfter && (
+                                        <span className="text-emerald-600 font-bold">
+                                          SEO: {opt.seoScoreBefore || 70} → {opt.seoScoreAfter}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-600 leading-snug">
+                                      {opt.summary}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {cycle.notes && (
+                            <div className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl text-xs text-indigo-900">
+                              <span className="font-bold">Cycle Notes:</span> {cycle.notes}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
+
+      {/* Monthly Optimization Cycle Modal */}
+      {isCycleModalOpen && (
+        <MonthlyOptimizationCycleModal
+          isOpen={true}
+          onClose={() => setIsCycleModalOpen(false)}
+          project={project}
+          onCycleSaved={(updated) => {
+            setProject(updated);
+            onProjectUpdated(updated);
+            setIsCycleModalOpen(false);
+          }}
+        />
+      )}
 
       {/* Find & Replace Modal */}
       <FindReplaceModal
@@ -818,6 +1224,36 @@ export function WebsiteManager({
         canUndo={false}
         onUndo={() => {}}
       />
+
+      {/* Conflict Modal */}
+      {conflictData && (
+        <ConflictModal
+          isOpen={conflictData.isOpen}
+          onClose={() => setConflictData(null)}
+          pageTitle={pageTitle || selectedPagePath}
+          changerName={conflictData.changerName}
+          changerUpdatedAt={conflictData.changerUpdatedAt}
+          localContent={{
+            title: pageTitle,
+            metaDescription,
+            h1: pageH1,
+          }}
+          remoteContent={conflictData.remoteContent}
+          onReloadRemote={() => {
+            const r = conflictData.remoteContent;
+            if (r?.content?.html) setActiveHtmlContent(r.content.html);
+            if (r?.title) setPageTitle(r.title);
+            if (r?.seo?.metaDescription) setMetaDescription(r.seo.metaDescription);
+            if (r?.content?.h1) setPageH1(r.content.h1);
+            setPageOpenedAt(Date.now());
+            setConflictData(null);
+          }}
+          onOverwriteKeepMine={async () => {
+            setConflictData(null);
+            await executeSave();
+          }}
+        />
+      )}
     </div>
   );
 }

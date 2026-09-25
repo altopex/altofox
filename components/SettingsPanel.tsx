@@ -193,11 +193,11 @@ export function SettingsPanel({
   const [isEditingPixabayKey, setIsEditingPixabayKey] = useState(false);
   const [pixabayStatus, setPixabayStatus] = useState<"connected" | "not_connected" | "error">("not_connected");
 
-  const [preferredImageSource, setPreferredImageSource] = useState<"pexels" | "pixabay">("pexels");
-  const [testingImageSource, setTestingImageSource] = useState<"pexels" | "pixabay" | null>(null);
+  const [preferredImageSource, setPreferredImageSource] = useState<"bing" | "pexels" | "pixabay">("bing");
+  const [testingImageSource, setTestingImageSource] = useState<"bing" | "pexels" | "pixabay" | null>(null);
   const [imageTestResults, setImageTestResults] = useState<
-    Record<"pexels" | "pixabay", { success: boolean; message: string } | null>
-  >({ pexels: null, pixabay: null });
+    Record<"bing" | "pexels" | "pixabay", { success: boolean; message: string } | null>
+  >({ bing: null, pexels: null, pixabay: null });
 
   // Preferences states
   const [prefCountry, setPrefCountry] = useState("United States");
@@ -264,7 +264,7 @@ export function SettingsPanel({
     setPixabayStatus(pixabayKey ? "connected" : "not_connected");
 
     const prefSource =
-      (localStorage.getItem("altofox_image_preferred_source") as "pexels" | "pixabay") || "pexels";
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
     setPreferredImageSource(prefSource);
 
     // Load preferences
@@ -477,7 +477,35 @@ export function SettingsPanel({
   };
 
   // Test Image Source API Key
-  const handleTestImageKey = async (source: "pexels" | "pixabay") => {
+  const handleTestImageKey = async (source: "bing" | "pexels" | "pixabay") => {
+    if (source === "bing") {
+      setTestingImageSource("bing");
+      setImageTestResults((prev) => ({ ...prev, bing: null }));
+      try {
+        const res = await fetch("/api/images/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "bing" }),
+        });
+        const data = await res.json();
+        setImageTestResults((prev) => ({
+          ...prev,
+          bing: { success: data.success, message: data.message || "Bing Free Image CDN is active and ready." },
+        }));
+      } catch (err) {
+        setImageTestResults((prev) => ({
+          ...prev,
+          bing: {
+            success: false,
+            message: err instanceof Error ? err.message : "Network error testing Bing CDN.",
+          },
+        }));
+      } finally {
+        setTestingImageSource(null);
+      }
+      return;
+    }
+
     const rawKey =
       source === "pexels"
         ? pexelsKeyInput.trim() || savedPexelsKey
@@ -594,7 +622,7 @@ export function SettingsPanel({
   };
 
   // Preferred Source Change
-  const handlePreferredImageSourceChange = (pref: "pexels" | "pixabay") => {
+  const handlePreferredImageSourceChange = (pref: "bing" | "pexels" | "pixabay") => {
     setPreferredImageSource(pref);
     localStorage.setItem("altofox_image_preferred_source", pref);
     onSettingsUpdated();
@@ -1037,7 +1065,7 @@ export function SettingsPanel({
                     <span>Free Royalty-Free Stock Photos</span>
                   </div>
                   <p className="text-[11px] text-[#64748B] leading-relaxed">
-                    Connect free API keys from <strong>Pexels</strong> and <strong>Pixabay</strong> to automatically search and embed real, license-free commercial photography for hero banners, service cards, about sections, and project galleries.
+                    AltoFox supports multiple image sources: the built-in <strong>Bing Free Image CDN</strong> (zero API keys required, dynamic keywords) as well as free API keys from <strong>Pexels</strong> and <strong>Pixabay</strong> to automatically search and embed real, license-free commercial photography.
                   </p>
                 </div>
 
@@ -1045,7 +1073,7 @@ export function SettingsPanel({
                 <div className="flex items-center space-x-2 text-[11px] text-[#64748B] bg-slate-50 p-2.5 rounded-[10px] border border-[#E2E8F0]">
                   <Lock className="w-3.5 h-3.5 text-[#10B981] shrink-0" />
                   <span>
-                    Your image API keys are stored only in this browser (localStorage). They are never sent to external servers other than the official image providers.
+                    Your optional image API keys are stored only in this browser (localStorage). They are never sent to external servers other than the official image providers.
                   </span>
                 </div>
 
@@ -1055,9 +1083,29 @@ export function SettingsPanel({
                     Preferred Image Source
                   </label>
                   <p className="text-[11px] text-[#64748B]">
-                    AltoFox queries your preferred provider first. If no matching photos are returned, it automatically searches the second source.
+                    AltoFox queries your preferred provider first. If no matching photos are returned, it automatically cascades to alternative sources.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handlePreferredImageSourceChange("bing")}
+                      className={`p-3 rounded-[10px] border text-left transition flex flex-col justify-between ${
+                        preferredImageSource === "bing"
+                          ? "bg-[#EEF2FF] border-[#4F46E5] ring-2 ring-[#4F46E5]/20"
+                          : "bg-white border-[#E2E8F0] hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs font-bold text-[#0F172A]">Bing Free CDN</span>
+                        {preferredImageSource === "bing" && (
+                          <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#64748B]">
+                        Zero API key needed. Instant dynamic keywords (e.g. water damage, plumber in CA).
+                      </span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => handlePreferredImageSourceChange("pexels")}
@@ -1074,7 +1122,7 @@ export function SettingsPanel({
                         )}
                       </div>
                       <span className="text-[10px] text-[#64748B]">
-                        High aesthetic quality, modern residential & interior photography (Recommended).
+                        High aesthetic quality, modern residential &amp; interior photography.
                       </span>
                     </button>
 
@@ -1094,13 +1142,117 @@ export function SettingsPanel({
                         )}
                       </div>
                       <span className="text-[10px] text-[#64748B]">
-                        Huge variety of tools, contractor gear, outdoor landscapes, and equipment.
+                        Contractor tools, work trucks, equipment, and outdoor landscapes.
                       </span>
                     </button>
                   </div>
                 </div>
 
-                {/* 1. PEXELS CARD */}
+                {/* 1. BING FREE IMAGE CDN CARD */}
+                <div className="rounded-[12px] border bg-white border-[#CBD5E1] shadow-xs overflow-hidden">
+                  {/* Card Header */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-[8px] bg-[#008373] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        BG
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                            Bing Free Image Search (CDN)
+                          </h3>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                            No API Key Needed
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#64748B]">
+                          High-speed CDN delivering instant keyword-tailored photography
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div>
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                        <span>Ready &amp; Active</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    <p className="text-xs text-[#475569] leading-relaxed">
+                      Bing Free Image CDN dynamically generates photos matching your website&apos;s specific trade and location keywords (e.g. <code className="px-1 py-0.5 bg-slate-100 rounded text-[11px] text-slate-800">water damage</code>, <code className="px-1 py-0.5 bg-slate-100 rounded text-[11px] text-slate-800">plumber in CA</code>) with custom responsive dimensions.
+                    </p>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-3 space-y-2">
+                      <div className="text-[11px] font-semibold text-slate-700 flex items-center justify-between">
+                        <span>Sample Dynamic CDN Queries:</span>
+                        <span className="text-[10px] text-slate-500 font-normal">Free royalty-free thumbnails</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                        <a
+                          href="https://tse1.mm.bing.net/th?q=water+damage&w=575&h=274"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between p-2 rounded-md bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 transition group"
+                        >
+                          <span className="truncate mr-2">q=water+damage &amp; w=575&amp;h=274</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                        </a>
+                        <a
+                          href="https://tse1.mm.bing.net/th?q=plumber+in+CA&w=575&h=274"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between p-2 rounded-md bg-white border border-slate-200 hover:border-indigo-400 text-slate-700 hover:text-indigo-600 transition group"
+                        >
+                          <span className="truncate mr-2">q=plumber+in+CA &amp; w=575&amp;h=274</span>
+                          <ExternalLink className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Test Result Message */}
+                    {imageTestResults.bing && (
+                      <div
+                        className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                          imageTestResults.bing.success
+                            ? "bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        }`}
+                      >
+                        {imageTestResults.bing.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        )}
+                        <span>{imageTestResults.bing.message}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={testingImageSource === "bing"}
+                        onClick={() => handleTestImageKey("bing")}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
+                      >
+                        {testingImageSource === "bing" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing CDN…</span>
+                          </>
+                        ) : (
+                          <span>Test CDN connection</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. PEXELS CARD */}
                 <div
                   className={`rounded-[12px] border transition overflow-hidden ${
                     savedPexelsKey

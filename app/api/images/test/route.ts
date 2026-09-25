@@ -8,6 +8,13 @@ export async function POST(req: NextRequest) {
     const { source, apiKey } = body;
 
     const trimmedKey = (apiKey || "").trim();
+    if (source === "bing") {
+      return NextResponse.json({
+        success: true,
+        message: "Bing Free Image CDN is active! Generates high-relevance keyword photos with zero API keys required.",
+      });
+    }
+
     if (!trimmedKey) {
       return NextResponse.json(
         { success: false, message: "Please provide an API key to test." },
@@ -82,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, message: "Invalid image source. Must be 'pexels' or 'pixabay'." },
+      { success: false, message: "Invalid image source. Must be 'bing', 'pexels', or 'pixabay'." },
       { status: 400 }
     );
   } catch (error) {

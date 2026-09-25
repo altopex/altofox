@@ -19,6 +19,8 @@ import {
   Globe,
   Sparkles,
 } from "lucide-react";
+import { ImportWebsiteModal } from "./ImportWebsiteModal";
+import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
 
 interface ProjectsDashboardProps {
   projects: SavedProject[];
@@ -27,6 +29,7 @@ interface ProjectsDashboardProps {
   onDuplicateProject: (projectId: string) => void;
   onDeleteProject: (projectId: string) => void;
   onProjectImported: (project: SavedProject) => void;
+  onStartMonthlyOptimization?: (project: SavedProject) => void;
 }
 
 export function ProjectsDashboard({
@@ -36,10 +39,12 @@ export function ProjectsDashboard({
   onDuplicateProject,
   onDeleteProject,
   onProjectImported,
+  onStartMonthlyOptimization,
 }: ProjectsDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"lastEdited" | "name">("lastEdited");
-  const [isImporting, setIsImporting] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [cycleProject, setCycleProject] = useState<SavedProject | null>(null);
 
   // Filter & Sort Projects
   const filteredProjects = useMemo(() => {
@@ -73,23 +78,6 @@ export function ProjectsDashboard({
     URL.revokeObjectURL(url);
   };
 
-  // Handle Import Backup
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setIsImporting(true);
-    try {
-      const imported = await importProjectBackup(file);
-      onProjectImported(imported);
-    } catch (err: any) {
-      alert(`Import failed: ${err.message}`);
-    } finally {
-      setIsImporting(false);
-      e.target.value = "";
-    }
-  };
-
   return (
     <div className="max-w-6xl mx-auto py-10 px-4 sm:px-6 lg:px-8 space-y-8 animate-in fade-in duration-200">
       {/* Header Banner */}
@@ -105,16 +93,14 @@ export function ProjectsDashboard({
         </div>
 
         <div className="flex items-center space-x-2.5">
-          <label className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition shadow-2xs">
-            <Upload className="w-3.5 h-3.5 text-slate-500" />
-            <span>{isImporting ? "Importing…" : "Import .siteproject"}</span>
-            <input
-              type="file"
-              accept=".siteproject,.zip"
-              onChange={handleImportFile}
-              className="hidden"
-            />
-          </label>
+          <button
+            type="button"
+            onClick={() => setIsImportModalOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer transition shadow-2xs"
+          >
+            <Upload className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Import website</span>
+          </button>
 
           <button
             type="button"
@@ -268,15 +254,57 @@ export function ProjectsDashboard({
                     </button>
                   </div>
 
-                  <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-0.5 transition inline-flex items-center">
-                    <span>Manage</span>
-                    <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onStartMonthlyOptimization) {
+                          onStartMonthlyOptimization(proj);
+                        } else {
+                          setCycleProject(proj);
+                        }
+                      }}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition shadow-2xs"
+                      title="Run Monthly Search Console Optimization"
+                    >
+                      <Sparkles className="w-3 h-3 text-indigo-600" />
+                      <span>Optimize this month</span>
+                    </button>
+
+                    <span className="text-xs font-bold text-indigo-600 group-hover:translate-x-0.5 transition inline-flex items-center">
+                      <span>Manage</span>
+                      <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
+                    </span>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* Import Website Modal */}
+      <ImportWebsiteModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onProjectImported={(imported) => {
+          onProjectImported(imported);
+          setIsImportModalOpen(false);
+        }}
+      />
+
+      {/* Monthly Optimization Cycle Modal */}
+      {cycleProject && (
+        <MonthlyOptimizationCycleModal
+          isOpen={true}
+          onClose={() => setCycleProject(null)}
+          project={cycleProject}
+          onCycleSaved={(updated) => {
+            onProjectImported(updated);
+            setCycleProject(null);
+          }}
+        />
       )}
     </div>
   );

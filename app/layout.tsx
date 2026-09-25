@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Create complete, beautiful, SEO-optimized static websites in seconds with Google Gemini, OpenAI, or OpenRouter.",
 };
 
+import { AuthProvider } from "@/lib/auth/AuthContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -13,8 +15,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-[#F8FAFC] text-[#0F172A] min-h-screen antialiased selection:bg-indigo-500/20 selection:text-indigo-900">
-        {children}
+      <body className="bg-[#F8FAFC] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100 min-h-screen antialiased selection:bg-indigo-500/20 selection:text-indigo-900">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

@@ -12,7 +12,7 @@ export type ImageSlotType = "hero" | "service" | "about" | "gallery" | "avatar" 
 
 export interface StockPhoto {
   id: string;
-  source: "Pexels" | "Pixabay" | "Curated";
+  source: "Pexels" | "Pixabay" | "Bing" | "Curated";
   url: string;              // High-quality CDN URL for web preview
   downloadUrl: string;      // Sized direct image URL for ZIP bundle
   width: number;
@@ -30,7 +30,7 @@ export interface StockPhotoSearchOptions {
   query: string;
   alt?: string;
   slot?: ImageSlotType | string;
-  preferredSource?: "pexels" | "pixabay";
+  preferredSource?: "bing" | "pexels" | "pixabay";
   pexelsKey?: string;
   pixabayKey?: string;
   usedPhotoIds?: Set<string>;
@@ -38,6 +38,8 @@ export interface StockPhotoSearchOptions {
   city?: string;
   businessName?: string;
   index?: number;
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -94,6 +96,24 @@ export function simplifyQuery(query: string, tradeCategory?: string): string {
   }
 
   return tradeCategory || "craftsman work";
+}
+
+/**
+ * Builds a Bing dynamic thumbnail image URL for any keyword and dimensions.
+ * Uses Bing's high-speed image CDN (tse1.mm.bing.net) with zero API keys required.
+ * Examples:
+ * https://tse1.mm.bing.net/th?q=water+damage&w=575&h=274
+ * https://tse1.mm.bing.net/th?q=plumber+in+CA&w=575&h=274
+ */
+export function buildBingImageUrl(
+  query: string,
+  width: number = 575,
+  height: number = 274,
+  shardIndex: number = 1
+): string {
+  const hostIndex = (Math.abs(shardIndex) % 4) + 1; // 1 to 4
+  const clean = (query || "home service").trim().replace(/\s+/g, "+");
+  return `https://tse${hostIndex}.mm.bing.net/th?q=${encodeURIComponent(clean).replace(/%2B/g, "+")}&w=${width}&h=${height}`;
 }
 
 /**
@@ -221,12 +241,49 @@ export async function resolveStockPhoto(options: StockPhotoSearchOptions): Promi
   const orientation = getOrientationForSlot(slot);
   const tradeCategory = options.tradeCategory || detectTradeCategory(options.query || "");
   const usedIds = options.usedPhotoIds || new Set<string>();
-  const preferred = options.preferredSource || "pexels";
+  const preferred =
+    options.preferredSource ||
+    (options.pexelsKey ? "pexels" : options.pixabayKey ? "pixabay" : "bing");
   const index = options.index || 0;
 
   // Target max width depending on slot
   const targetWidth = slot === "hero" ? 1920 : slot === "avatar" ? 200 : 800;
   const targetHeight = slot === "hero" ? 1080 : slot === "avatar" ? 200 : 600;
+
+  // 1. Direct Bing Free Image Search (Zero API keys required, dynamic keywords)
+  if (preferred === "bing") {
+    const rawQuery = (
+      options.query ||
+      options.alt ||
+      (tradeCategory !== "general" ? `${tradeCategory} in ${options.city || "CA"}` : "professional service")
+    ).trim();
+
+    // Default card/service sizes to 575x274 (standard Bing thumbnail aspect) or 1200x600 for hero
+    const bingWidth = options.width || (slot === "hero" ? 1200 : slot === "avatar" ? 200 : 575);
+    const bingHeight = options.height || (slot === "hero" ? 600 : slot === "avatar" ? 200 : 274);
+    const bingUrl = buildBingImageUrl(rawQuery, bingWidth, bingHeight, index + 1);
+
+    const altText = options.alt || options.query || `${tradeCategory.toUpperCase()} professional service`;
+    const filenameSlug = slugifyImageName(altText, index + 1);
+    const photoId = `bing-${encodeURIComponent(rawQuery).replace(/[^a-zA-Z0-9]/g, "-")}-${index}`;
+    usedIds.add(photoId);
+
+    return {
+      id: photoId,
+      source: "Bing",
+      url: bingUrl,
+      downloadUrl: bingUrl,
+      width: bingWidth,
+      height: bingHeight,
+      alt: altText,
+      photographer: "Bing Free Image Search",
+      photographerUrl: "https://www.bing.com/images",
+      sourceUrl: bingUrl,
+      slot,
+      localPath: `images/${filenameSlug}.jpg`,
+      localWebpPath: `images/${filenameSlug}.webp`,
+    };
+  }
 
   let candidates: Array<{
     id: string;
@@ -322,7 +379,38 @@ export async function resolveStockPhoto(options: StockPhotoSearchOptions): Promi
     };
   }
 
-  // Graceful Fallback: Curated high-res trade stock (never broken, zero failure)
+  // Fallback 1: Bing Free Image Search (dynamic keywords matching trade & location)
+  const dynamicQuery = (
+    options.query ||
+    options.alt ||
+    (tradeCategory !== "general" ? `${tradeCategory} in ${options.city || "CA"}` : "professional service")
+  ).trim();
+
+  const bingWidth = options.width || (slot === "hero" ? 1200 : slot === "avatar" ? 200 : 575);
+  const bingHeight = options.height || (slot === "hero" ? 600 : slot === "avatar" ? 200 : 274);
+  const bingUrl = buildBingImageUrl(dynamicQuery, bingWidth, bingHeight, index + 1);
+  const bingId = `bing-${encodeURIComponent(dynamicQuery).replace(/[^a-zA-Z0-9]/g, "-")}-${index}`;
+
+  if (!usedIds.has(bingId)) {
+    usedIds.add(bingId);
+    return {
+      id: bingId,
+      source: "Bing",
+      url: bingUrl,
+      downloadUrl: bingUrl,
+      width: bingWidth,
+      height: bingHeight,
+      alt: altText,
+      photographer: "Bing Free Image Search",
+      photographerUrl: "https://www.bing.com/images",
+      sourceUrl: bingUrl,
+      slot,
+      localPath: `images/${filenameSlug}.jpg`,
+      localWebpPath: `images/${filenameSlug}.webp`,
+    };
+  }
+
+  // Fallback 2: Curated high-res trade stock (never broken, zero failure)
   const curated = resolvePhoto(tradeCategory, slot, altText, index);
   const fallbackId = `curated-${tradeCategory}-${slot}-${index}`;
   usedIds.add(fallbackId);
@@ -356,7 +444,7 @@ export function buildCreditsTxt(photos: StockPhoto[], businessName: string): str
   lines.push("==================================================================\n");
   lines.push(
     "All photos in this directory are royalty-free assets provided under\n" +
-    "the Pexels, Pixabay, or Unsplash licenses for commercial & personal use.\n"
+    "the Bing Free Image Search, Pexels, Pixabay, or Unsplash licenses for commercial & personal use.\n"
   );
 
   const seen = new Set<string>();

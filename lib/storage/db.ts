@@ -34,68 +34,124 @@ function openDB(): Promise<IDBDatabase> {
   });
 }
 
+import {
+  saveProjectToSupabase,
+  getAllProjectsFromSupabase,
+  getProjectByIdFromSupabase,
+  deleteProjectFromSupabase,
+} from "./supabase-project-store";
+
 /**
- * Saves or updates a project in IndexedDB.
+ * Saves or updates a project in Supabase with IndexedDB offline fallback.
  */
 export async function saveProjectToDB(project: SavedProject): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const updatedProject = {
-      ...project,
-      lastEditedAt: Date.now(),
-    };
-    const req = store.put(updatedProject);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  // 1. Always save to local IndexedDB for instant responsiveness and offline caching
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const updatedProject = {
+        ...project,
+        lastEditedAt: Date.now(),
+      };
+      const req = store.put(updatedProject);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (localErr) {
+    console.warn("[DB] Local IndexedDB write error:", localErr);
+  }
+
+  // 2. Sync to Supabase team database
+  try {
+    await saveProjectToSupabase(project);
+  } catch (cloudErr) {
+    console.warn("[DB] Supabase cloud sync paused (will sync when online):", cloudErr);
+  }
 }
 
 /**
- * Fetches all saved projects from IndexedDB.
+ * Fetches all saved projects from Supabase with IndexedDB fallback.
  */
 export async function getAllProjectsFromDB(): Promise<SavedProject[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.getAll();
-    req.onsuccess = () => {
-      const list = (req.result || []) as SavedProject[];
-      list.sort((a, b) => b.lastEditedAt - a.lastEditedAt);
-      resolve(list);
-    };
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const cloudProjects = await getAllProjectsFromSupabase();
+    if (cloudProjects.length > 0) {
+      return cloudProjects;
+    }
+  } catch (err) {
+    console.warn("[DB] Could not load from Supabase; using local cache:", err);
+  }
+
+  // Offline / local cache fallback
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        const list = (req.result || []) as SavedProject[];
+        list.sort((a, b) => b.lastEditedAt - a.lastEditedAt);
+        resolve(list);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return [];
+  }
 }
 
 /**
- * Retrieves a single project by ID.
+ * Retrieves a single project by ID (Supabase first, IndexedDB fallback).
  */
 export async function getProjectByIdFromDB(id: string): Promise<SavedProject | null> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.get(id);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const cloud = await getProjectByIdFromSupabase(id);
+    if (cloud) return cloud;
+  } catch (err) {
+    console.warn("[DB] Supabase project fetch exception:", err);
+  }
+
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Deletes a project by ID from IndexedDB.
+ * Deletes a project by ID from Supabase and IndexedDB.
  */
 export async function deleteProjectFromDB(id: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    const req = store.delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-  });
+  // Delete from Supabase
+  try {
+    await deleteProjectFromSupabase(id);
+  } catch (err) {
+    console.warn("[DB] Supabase project delete warning:", err);
+  }
+
+  // Delete from IndexedDB
+  try {
+    const db = await openDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.delete(id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  } catch (localErr) {
+    console.warn("[DB] Local project delete warning:", localErr);
+  }
 }
 
 /**

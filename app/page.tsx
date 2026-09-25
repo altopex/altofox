@@ -68,6 +68,13 @@ import {
   deleteProjectFromDB,
   duplicateProjectInDB,
 } from "@/lib/storage/db";
+import { useAuth } from "@/lib/auth/AuthContext";
+import { LoginCard } from "@/components/auth/LoginCard";
+import { AppShell, NavTab } from "@/components/navigation/AppShell";
+import { TeamDashboard } from "@/components/dashboard/TeamDashboard";
+import { TeamManagement } from "@/components/team/TeamManagement";
+import { ActivityFeed } from "@/components/activity/ActivityFeed";
+import { ImportLocalDataModal } from "@/components/migration/ImportLocalDataModal";
 
 // Popular Local Business Types (Featuring 20 Trade Niche Packs)
 const POPULAR_INDUSTRIES = [
@@ -224,6 +231,10 @@ const EXAMPLE_DATA = {
 };
 
 export default function BuilderPage() {
+  const { user, profile, isOwner, loading: authLoading } = useAuth();
+  const [navTab, setNavTab] = useState<NavTab>("dashboard");
+  const [isImportLocalModalOpen, setIsImportLocalModalOpen] = useState(false);
+
   // Navigation & View Mode State ("builder" | "dashboard" | "manager")
   const [viewMode, setViewMode] = useState<"builder" | "dashboard" | "manager">("builder");
   const [savedProjectsList, setSavedProjectsList] = useState<SavedProject[]>([]);
@@ -852,7 +863,8 @@ export default function BuilderPage() {
 
     const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
     const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
-    const preferredSource = (localStorage.getItem("altofox_image_preferred_source") as "pexels" | "pixabay") || "pexels";
+    const preferredSource =
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
 
     setGenerating(true);
     setGenerationPercent(15);
@@ -1100,25 +1112,43 @@ export default function BuilderPage() {
     { number: 6, label: "Generate" },
   ];
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <p className="text-sm font-medium text-slate-400">Loading AltoFox workspace…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginCard />;
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A]">
+    <AppShell
+      currentTab={navTab}
+      onNavigate={(tab) => {
+        if (tab === "settings") {
+          handleOpenSettings("models");
+        } else {
+          setNavTab(tab);
+        }
+      }}
+      activeProjectId={activeSavedProject?.id}
+      onSelectProject={(projId) => {
+        const found = savedProjectsList.find((p) => p.id === projId);
+        if (found) {
+          setActiveSavedProject(found);
+          setViewMode("manager");
+          setNavTab("projects");
+        }
+      }}
+    >
       {/* Toast Notification Container */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Top Bar Navigation */}
-      <TopBar
-        onOpenSettings={(tab) => handleOpenSettings(tab || "models")}
-        activeProvider={activeProvider}
-        activeModel={activeModel}
-        hasKey={hasKey}
-        viewMode={viewMode}
-        onSwitchView={(v) => {
-          setViewMode(v);
-          if (v === "dashboard") {
-            loadAllSavedProjects();
-          }
-        }}
-      />
 
       {/* Settings Slide-In Panel */}
       <SettingsPanel
@@ -1159,100 +1189,160 @@ export default function BuilderPage() {
         }}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-        {viewMode === "dashboard" ? (
-          <ProjectsDashboard
-            projects={savedProjectsList}
-            onOpenProject={(proj) => {
-              setActiveSavedProject(proj);
-              setViewMode("manager");
-            }}
-            onNewWebsite={() => {
+      {/* Import Legacy Local Data Modal */}
+      <ImportLocalDataModal
+        isOpen={isImportLocalModalOpen}
+        onClose={() => setIsImportLocalModalOpen(false)}
+        onImportComplete={loadAllSavedProjects}
+      />
+
+      {/* TAB 1: TEAM DASHBOARD */}
+      {navTab === "dashboard" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <TeamDashboard
+            onNewProject={() => {
+              setNavTab("projects");
               setViewMode("builder");
               setCurrentProject(null);
               setCurrentStep(1);
             }}
-            onDuplicateProject={async (id) => {
-              try {
-                await duplicateProjectInDB(id);
-                await loadAllSavedProjects();
-                addToast({
-                  type: "success",
-                  title: "Project Duplicated",
-                  message: "A copy of your project has been created.",
-                });
-              } catch (err) {
-                addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
+            onOpenProject={async (projId) => {
+              let found: SavedProject | null | undefined = savedProjectsList.find((p) => p.id === projId);
+              if (!found) {
+                found = await getProjectByIdFromDB(projId);
+              }
+              if (found) {
+                setActiveSavedProject(found);
+                setViewMode("manager");
+                setNavTab("projects");
               }
             }}
-            onDeleteProject={async (id) => {
-              try {
-                await deleteProjectFromDB(id);
-                await loadAllSavedProjects();
-                addToast({
-                  type: "info",
-                  title: "Project Deleted",
-                  message: "Project was removed from storage.",
-                });
-              } catch (err) {
-                addToast({ type: "error", title: "Delete Failed", message: String(err) });
-              }
-            }}
-            onProjectImported={async (importedProj) => {
-              await saveProjectToDB(importedProj);
-              await loadAllSavedProjects();
-              setActiveSavedProject(importedProj);
-              setViewMode("manager");
-              addToast({
-                type: "success",
-                title: "Project Imported",
-                message: `Imported "${importedProj.name}" successfully.`,
-              });
-            }}
-          />
-        ) : viewMode === "manager" && activeSavedProject ? (
-          <WebsiteManager
-            project={activeSavedProject}
-            onBackToDashboard={() => {
-              loadAllSavedProjects();
+            onOpenImportLocal={() => setIsImportLocalModalOpen(true)}
+            onNavigateToProjects={() => {
+              setNavTab("projects");
               setViewMode("dashboard");
             }}
-            onProjectUpdated={async (updated) => {
-              setActiveSavedProject(updated);
-              await saveProjectToDB(updated);
-              if (currentProject && currentProject.projectId === updated.id) {
-                setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
-              }
-            }}
           />
-        ) : currentProject ? (
-          <LivePreview
-            project={currentProject}
-            onNewWebsite={() => {
-              setCurrentProject(null);
-              setCurrentStep(1);
-            }}
-            onGenerateAgain={handleGenerateWebsite}
-            onTryAnotherTheme={() => {
-              setCurrentProject(null);
-              setCurrentStep(5);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            onOpenManager={() => {
-              if (activeSavedProject) {
-                setViewMode("manager");
-              } else {
-                loadAllSavedProjects().then(() => setViewMode("dashboard"));
-              }
-            }}
-            onOpenKeywordMap={() => setKeywordMapOpen(true)}
-            onOpenFindReplace={() => setFindReplaceOpen(true)}
-            onOpenBlogManager={() => setBlogManagerOpen(true)}
-          />
-        ) : generating ? (
-          /* VIEW 2: GENERATING SCREEN */
-          <div className="max-w-xl mx-auto w-full my-auto py-16 px-4">
+        </div>
+      )}
+
+      {/* TAB 2: TEAM MANAGEMENT */}
+      {navTab === "team" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <TeamManagement />
+        </div>
+      )}
+
+      {/* TAB 3: ACTIVITY FEED */}
+      {navTab === "activity" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+            <ActivityFeed maxItems={100} />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: PROJECTS / BUILDER WORKSPACE */}
+      {navTab === "projects" && (
+        <div className="flex-1 flex flex-col w-full min-h-0">
+          {viewMode === "dashboard" ? (
+            <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+              <ProjectsDashboard
+                projects={savedProjectsList}
+                onOpenProject={(proj) => {
+                  setActiveSavedProject(proj);
+                  setViewMode("manager");
+                }}
+                onNewWebsite={() => {
+                  setViewMode("builder");
+                  setCurrentProject(null);
+                  setCurrentStep(1);
+                }}
+                onDuplicateProject={async (id) => {
+                  try {
+                    await duplicateProjectInDB(id);
+                    await loadAllSavedProjects();
+                    addToast({
+                      type: "success",
+                      title: "Project Duplicated",
+                      message: "A copy of your project has been created.",
+                    });
+                  } catch (err) {
+                    addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
+                  }
+                }}
+                onDeleteProject={async (id) => {
+                  try {
+                    await deleteProjectFromDB(id);
+                    await loadAllSavedProjects();
+                    addToast({
+                      type: "info",
+                      title: "Project Deleted",
+                      message: "Project was removed from storage.",
+                    });
+                  } catch (err) {
+                    addToast({ type: "error", title: "Delete Failed", message: String(err) });
+                  }
+                }}
+                onProjectImported={async (importedProj) => {
+                  await saveProjectToDB(importedProj);
+                  await loadAllSavedProjects();
+                  setActiveSavedProject(importedProj);
+                  setViewMode("manager");
+                  addToast({
+                    type: "success",
+                    title: "Project Imported",
+                    message: `Imported "${importedProj.name}" successfully.`,
+                  });
+                }}
+              />
+            </div>
+          ) : viewMode === "manager" && activeSavedProject ? (
+            <WebsiteManager
+              project={activeSavedProject}
+              onBackToDashboard={() => {
+                loadAllSavedProjects();
+                setViewMode("dashboard");
+              }}
+              onProjectUpdated={async (updated) => {
+                setActiveSavedProject(updated);
+                await saveProjectToDB(updated);
+                if (currentProject && currentProject.projectId === updated.id) {
+                  setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
+                }
+              }}
+            />
+          ) : currentProject ? (
+            <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+              <LivePreview
+                project={currentProject}
+                onNewWebsite={() => {
+                  setCurrentProject(null);
+                  setCurrentStep(1);
+                }}
+                onGenerateAgain={handleGenerateWebsite}
+                onTryAnotherTheme={() => {
+                  setCurrentProject(null);
+                  setCurrentStep(5);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                onOpenManager={() => {
+                  if (activeSavedProject) {
+                    setViewMode("manager");
+                  } else {
+                    loadAllSavedProjects().then(() => setViewMode("dashboard"));
+                  }
+                }}
+                onOpenKeywordMap={() => setKeywordMapOpen(true)}
+                onOpenFindReplace={() => setFindReplaceOpen(true)}
+                onOpenBlogManager={() => setBlogManagerOpen(true)}
+              />
+            </div>
+          ) : (
+            <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+              {generating ? (
+                /* VIEW 2: GENERATING SCREEN */
+                <div className="max-w-xl mx-auto w-full my-auto py-16 px-4">
             <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6">
               <div className="w-16 h-16 rounded-full bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto shadow-sm">
                 <Loader2 className="w-8 h-8 animate-spin" />
@@ -2608,8 +2698,11 @@ export default function BuilderPage() {
               </div>
             </div>
           </div>
-        )}
-      </main>
+              )}
+            </main>
+          )}
+        </div>
+      )}
 
       {/* Keyword Map & Optimization Modal */}
       {currentProject && (
@@ -2830,6 +2923,6 @@ export default function BuilderPage() {
           </div>
         </div>
       )}
-    </div>
+    </AppShell>
   );
 }

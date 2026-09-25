@@ -17,7 +17,7 @@ export interface AssembleOptions {
   mapEmbed?: string;
   pexelsKey?: string;
   pixabayKey?: string;
-  preferredSource?: "pexels" | "pixabay";
+  preferredSource?: "bing" | "pexels" | "pixabay";
   serviceAreaCities?: {
     city: string;
     stateId: string;

@@ -100,7 +100,7 @@ export function parseGscCsv(rawText: string, defaultPageUrl?: string): { queries
   let positionCol = -1;
 
   headerTokens.forEach((col, idx) => {
-    if (col.includes("query") || col.includes("search term") || col.includes("requête") || col.includes("consultas")) {
+    if (col.includes("query") || col.includes("queries") || col.includes("search term") || col.includes("requête") || col.includes("consultas")) {
       queryCol = idx;
     } else if (col.includes("page") || col.includes("url") || col.includes("seite") || col.includes("página")) {
       pageCol = idx;

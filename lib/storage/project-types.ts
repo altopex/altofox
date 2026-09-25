@@ -26,6 +26,45 @@ export interface URLRedirect {
   createdAt: number;
 }
 
+export interface PageMetricSnapshot {
+  pagePath: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface AppliedPageOptimization {
+  pagePath: string;
+  targetQuery?: string;
+  previousPosition?: number;
+  impressions?: number;
+  summary: string;
+  appliedAt: number;
+  seoScoreBefore?: number;
+  seoScoreAfter?: number;
+}
+
+export interface OptimizationCycle {
+  id: string;
+  cycleNumber: number;
+  date: string; // ISO date string e.g. "2026-10-20"
+  dateStr: string; // Formatted date e.g. "Oct 20, 2026"
+  dateRange: string; // User entered, e.g. "Last 28 days, ending Oct 20"
+  timestamp: number;
+  notes?: string;
+  siteMetrics: {
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  };
+  pageMetrics: PageMetricSnapshot[];
+  pagesChanged: string[];
+  appliedOptimizations: AppliedPageOptimization[];
+  pageScores?: Record<string, number>;
+}
+
 export interface SavedProject {
   id: string; // unique project id
   name: string; // e.g. "Lone Star Plumbing"
@@ -73,4 +112,7 @@ export interface SavedProject {
   // Change History & Redirects
   changeLog: ProjectChangeLogEntry[];
   redirects: URLRedirect[];
+
+  // Monthly Optimization Cycles
+  optimizationCycles?: OptimizationCycle[];
 }

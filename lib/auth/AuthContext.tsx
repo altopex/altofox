@@ -1,0 +1,261 @@
+"use client";
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { User, Session } from "@supabase/supabase-js";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Profile, UserRole } from "@/lib/supabase/types";
+
+interface AuthContextValue {
+  user: User | null;
+  profile: Profile | null;
+  role: UserRole;
+  isOwner: boolean;
+  loading: boolean;
+  session: Session | null;
+  signInWithPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithOtp: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  resetPasswordForEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  updateProfile: (fullName: string, avatarUrl?: string) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const supabase = getSupabaseBrowserClient();
+
+  const loadUserProfile = useCallback(async (userId: string, userEmail?: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (data && !error) {
+        setProfile({ ...data, email: userEmail });
+        // Touch last_active_at in background
+        supabase
+          .from("profiles")
+          .update({ last_active_at: new Date().toISOString() })
+          .eq("id", userId)
+          .then();
+      } else {
+        // Fallback default profile if trigger hasn't fired yet
+        setProfile({
+          id: userId,
+          full_name: userEmail?.split("@")[0] || "Team Member",
+          avatar_url: null,
+          role: "owner", // default owner if sole user
+          last_active_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          email: userEmail,
+        });
+      }
+    } catch (err) {
+      console.warn("[Auth] Profile load exception:", err);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function initAuth() {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        if (!mounted) return;
+
+        if (initialSession?.user) {
+          setSession(initialSession);
+          setUser(initialSession.user);
+          await loadUserProfile(initialSession.user.id, initialSession.user.email);
+        } else {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        }
+      } catch (err) {
+        console.error("[Auth] Init error:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    initAuth();
+
+    // Listen to Supabase Auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        if (!mounted) return;
+        setSession(currentSession);
+        setUser(currentSession?.user || null);
+
+        if (currentSession?.user) {
+          await loadUserProfile(currentSession.user.id, currentSession.user.email);
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, loadUserProfile]);
+
+  const signInWithPassword = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        setUser(data.user);
+        setSession(data.session);
+        await loadUserProfile(data.user.id, data.user.email);
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to sign in" };
+    }
+  };
+
+  const signInWithOtp = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: false, // strictly invite-only! No auto-signup
+          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+        },
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return {
+        success: true,
+        message: "Login link sent! Please check your email inbox.",
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to send magic link" };
+    }
+  };
+
+  const resetPasswordForEmail = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return {
+        success: true,
+        message: "Password reset link sent! Please check your email inbox.",
+      };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to send reset link" };
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to update password" };
+    }
+  };
+
+  const updateProfile = async (fullName: string, avatarUrl?: string) => {
+    if (!user) return { success: false, error: "Not authenticated" };
+    try {
+      const updates: any = {
+        full_name: fullName.trim(),
+        updated_at: new Date().toISOString(),
+      };
+      if (avatarUrl !== undefined) updates.avatar_url = avatarUrl.trim();
+
+      const { error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id);
+
+      if (error) return { success: false, error: error.message };
+
+      setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to update profile" };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (user) {
+      await loadUserProfile(user.id, user.email);
+    }
+  };
+
+  const role: UserRole = profile?.role || "editor";
+  const isOwner = role === "owner";
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        role,
+        isOwner,
+        loading,
+        session,
+        signInWithPassword,
+        signInWithOtp,
+        resetPasswordForEmail,
+        updatePassword,
+        updateProfile,
+        signOut,
+        refreshProfile,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
+}
