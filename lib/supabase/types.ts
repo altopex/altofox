@@ -2,6 +2,8 @@ export type UserRole = "owner" | "editor";
 export type UserStatus = "pending" | "approved" | "disabled";
 export type SignupMode = "approval_required" | "invite_only" | "open";
 
+export type PlanType = "starter" | "agency" | "unlimited";
+
 export interface Profile {
   id: string;
   full_name: string | null;
@@ -9,6 +11,8 @@ export interface Profile {
   role: UserRole;
   status: UserStatus;
   company_name?: string | null;
+  plan?: PlanType | null;
+  website_limit?: number | null;
   last_active_at: string;
   created_at: string;
   updated_at: string;
@@ -190,6 +194,8 @@ export interface TeamMember {
   role: UserRole;
   status?: UserStatus;
   company_name?: string | null;
+  plan?: PlanType | null;
+  website_limit?: number | null;
   last_active_at: string;
   created_at: string;
 }

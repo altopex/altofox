@@ -30,6 +30,7 @@ import {
   Fan,
   Home as HomeIcon,
   Trees,
+  Menu,
 } from "lucide-react";
 
 // Interactive Niche showcase presets for the hero mockup
@@ -103,6 +104,7 @@ export default function MarketingLandingPage() {
   const { user, isApproved, loading } = useAuth();
   const [activeNicheIndex, setActiveNicheIndex] = useState(0);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const activeNiche = HERO_NICHES[activeNicheIndex];
 
@@ -132,11 +134,12 @@ export default function MarketingLandingPage() {
             <a href="#niches" className="hover:text-white transition">20 Niche Packs</a>
             <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
             <a href="#comparison" className="hover:text-white transition">Why AltoFox</a>
+            <Link href="/pricing" className="text-indigo-400 font-bold hover:text-indigo-300 transition">Pricing</Link>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
           </nav>
 
-          {/* CTA Buttons */}
-          <div className="flex items-center space-x-3">
+          {/* Desktop CTA Buttons */}
+          <div className="hidden md:flex items-center space-x-3">
             {loading ? (
               <div className="w-24 h-8 bg-slate-800 animate-pulse rounded-xl" />
             ) : isApproved ? (
@@ -172,7 +175,94 @@ export default function MarketingLandingPage() {
               </>
             )}
           </div>
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            aria-label="Toggle mobile menu"
+          >
+            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
         </div>
+
+        {/* Mobile Dropdown Menu Drawer */}
+        {mobileMenuOpen && (
+          <div className="md:hidden bg-slate-900 border-b border-slate-800 px-4 pt-3 pb-6 space-y-3">
+            <a
+              href="#features"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
+            >
+              Features
+            </a>
+            <a
+              href="#niches"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
+            >
+              20 Niche Packs
+            </a>
+            <a
+              href="#how-it-works"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
+            >
+              How It Works
+            </a>
+            <a
+              href="#comparison"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
+            >
+              Why AltoFox
+            </a>
+            <Link
+              href="/pricing"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-bold text-indigo-400 py-2"
+            >
+              Pricing
+            </Link>
+            <a
+              href="#faq"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
+            >
+              FAQ
+            </a>
+
+            <div className="pt-3 border-t border-slate-800 flex flex-col gap-2">
+              {isApproved ? (
+                <Link
+                  href="/dashboard"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs"
+                >
+                  Go to Dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full text-center py-2.5 rounded-xl border border-slate-700 text-slate-200 font-semibold text-xs"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/signup"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="w-full text-center py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-xs shadow-md shadow-indigo-600/30"
+                  >
+                    Get Access
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* 2. HERO SECTION */}
@@ -636,6 +726,7 @@ export default function MarketingLandingPage() {
           </div>
 
           <div className="flex items-center space-x-6 text-slate-400">
+            <Link href="/pricing" className="text-indigo-400 font-semibold hover:text-white transition">Pricing</Link>
             <Link href="/privacy" className="hover:text-white transition">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-white transition">Terms of Service</Link>
             <Link href="/login" className="hover:text-white transition">Sign In</Link>

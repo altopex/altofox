@@ -44,6 +44,8 @@ export async function GET(req: NextRequest) {
         role: p?.role || (u.user_metadata?.role as string) || "editor",
         status: p?.status || "pending",
         company_name: p?.company_name || (u.user_metadata?.company_name as string) || null,
+        plan: p?.plan || (u.user_metadata?.plan as string) || (p?.role === "owner" ? "unlimited" : "starter"),
+        website_limit: p?.website_limit ?? (u.user_metadata?.website_limit as number) ?? (p?.role === "owner" ? 999999 : 5),
         last_active_at: p?.last_active_at || u.last_sign_in_at || u.created_at,
         created_at: u.created_at,
       };

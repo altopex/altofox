@@ -23,7 +23,9 @@ import {
   Menu,
   X,
   Bell,
+  Layers,
 } from "lucide-react";
+import Link from "next/link";
 
 export type NavTab = "dashboard" | "projects" | "activity" | "team" | "settings";
 
@@ -33,6 +35,7 @@ interface AppShellProps {
   children: React.ReactNode;
   activeProjectId?: string;
   onSelectProject?: (projectId: string) => void;
+  projectsCount?: number;
 }
 
 export function AppShell({
@@ -41,8 +44,12 @@ export function AppShell({
   children,
   activeProjectId,
   onSelectProject,
+  projectsCount = 0,
 }: AppShellProps) {
   const { user, profile, isOwner, signOut } = useAuth();
+  const userPlan = profile?.plan || "starter";
+  const isUnlimited = isOwner || userPlan === "unlimited";
+  const websiteLimit = isUnlimited ? 999999 : (profile?.website_limit ?? (userPlan === "agency" ? 30 : 5));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -176,6 +183,53 @@ export function AppShell({
             );
           })}
         </nav>
+
+        {/* Plan & Usage Indicator Widget */}
+        {!sidebarCollapsed && (
+          <div className="p-3 mx-2.5 mb-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 capitalize">
+                  {isUnlimited ? "Unlimited Plan" : `${userPlan} Plan`}
+                </span>
+              </div>
+              {!isUnlimited && (
+                <Link
+                  href="/pricing"
+                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                >
+                  Upgrade
+                </Link>
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                <span>Usage</span>
+                <span>
+                  {isUnlimited
+                    ? `${projectsCount} websites`
+                    : `${projectsCount} of ${websiteLimit} used`}
+                </span>
+              </div>
+              {!isUnlimited && (
+                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      projectsCount >= websiteLimit
+                        ? "bg-rose-500"
+                        : projectsCount / websiteLimit >= 0.8
+                        ? "bg-amber-500"
+                        : "bg-indigo-600"
+                    }`}
+                    style={{ width: `${Math.min(100, Math.max(0, (projectsCount / websiteLimit) * 100))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* User Mini-Profile at bottom of sidebar */}
         <div className="p-2.5 border-t border-slate-100 dark:border-slate-800">

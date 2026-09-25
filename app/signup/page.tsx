@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { AuthBrandedPanel } from "@/components/auth/AuthBrandedPanel";
 import {
@@ -21,10 +21,16 @@ import {
   AlertCircle,
   Shield,
   HelpCircle,
+  CreditCard,
+  Layers,
 } from "lucide-react";
 
-export default function SignUpPage() {
+function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialPlan = searchParams.get("plan") === "agency" ? "agency" : "starter";
+  const [selectedPlan, setSelectedPlan] = useState<"starter" | "agency">(initialPlan);
+
   const { signUp, user, isApproved, loading: authLoading } = useAuth();
 
   const [fullName, setFullName] = useState("");
@@ -149,6 +155,7 @@ export default function SignUpPage() {
         password,
         fullName,
         companyName,
+        plan: selectedPlan,
       });
 
       if (!res.success) {
@@ -289,6 +296,62 @@ export default function SignUpPage() {
                 )}
 
                 <form onSubmit={handleSignUp} className="space-y-4">
+                  {/* Plan Selection Widget */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                        <span>Choose Workspace Plan:</span>
+                      </span>
+                      <Link href="/pricing" className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+                        Compare plans →
+                      </Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlan("starter")}
+                        className={`p-2.5 rounded-xl border text-left transition ${
+                          selectedPlan === "starter"
+                            ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-white ring-1 ring-indigo-500 shadow-xs"
+                            : "border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <div className="font-bold text-xs flex items-center justify-between">
+                          <span>Starter</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">$99</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Up to 5 static websites
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPlan("agency")}
+                        className={`p-2.5 rounded-xl border text-left transition relative ${
+                          selectedPlan === "agency"
+                            ? "border-indigo-600 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-950 dark:text-white ring-1 ring-indigo-500 shadow-xs"
+                            : "border-slate-200 dark:border-slate-800 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        <span className="absolute -top-2 right-2 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-indigo-500 to-indigo-600 text-white text-[9px] font-bold shadow-xs">
+                          Best value
+                        </span>
+                        <div className="font-bold text-xs flex items-center justify-between">
+                          <span>Agency</span>
+                          <span className="text-indigo-600 dark:text-indigo-400 font-extrabold">$499</span>
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Up to 30 static websites
+                        </div>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5 pt-1">
+                      <CreditCard className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span>Payment integration coming soon — quota unlocks upon approval!</span>
+                    </p>
+                  </div>
+
                   {/* Full Name */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -478,5 +541,19 @@ export default function SignUpPage() {
         <AuthBrandedPanel />
       </div>
     </div>
+  );
+}
+
+export default function SignUpPage() {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4">
+          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        </div>
+      }
+    >
+      <SignUpForm />
+    </React.Suspense>
   );
 }

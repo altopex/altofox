@@ -49,6 +49,48 @@ export function TeamManagement() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
 
+  // Plan editing modal state (Owner only)
+  const [updatingPlanMember, setUpdatingPlanMember] = useState<TeamMember | null>(null);
+  const [selectedNewPlan, setSelectedNewPlan] = useState<"starter" | "agency" | "unlimited">("starter");
+  const [customLimit, setCustomLimit] = useState<number>(5);
+  const [savingPlan, setSavingPlan] = useState(false);
+
+  const handleSavePlan = async () => {
+    if (!updatingPlanMember) return;
+    try {
+      setSavingPlan(true);
+      const res = await fetch("/api/team/plan", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token || ""}`,
+        },
+        body: JSON.stringify({
+          userId: updatingPlanMember.id,
+          plan: selectedNewPlan,
+          websiteLimit: selectedNewPlan === "unlimited" ? 999999 : Number(customLimit) || 5,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === updatingPlanMember.id
+              ? { ...m, plan: selectedNewPlan, website_limit: data.websiteLimit }
+              : m
+          )
+        );
+        setUpdatingPlanMember(null);
+      } else {
+        alert(data.error || "Failed to update plan");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update plan");
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
   const fetchMembers = useCallback(async () => {
     try {
       setLoading(true);
@@ -554,6 +596,7 @@ export function TeamManagement() {
                 <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400 font-semibold">
                   <th className="py-3 px-5">Member</th>
                   <th className="py-3 px-4">Role</th>
+                  <th className="py-3 px-4">Plan &amp; Quota</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4">Last Active</th>
                   {isOwner && <th className="py-3 px-5 text-right">Actions</th>}
@@ -606,6 +649,41 @@ export function TeamManagement() {
                                 Editor
                               </span>
                             </>
+                          )}
+                        </div>
+                      </td>
+
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase ${
+                              m.role === "owner" || m.plan === "unlimited"
+                                ? "bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                : m.plan === "agency"
+                                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                            }`}
+                          >
+                            {m.role === "owner" ? "Unlimited" : m.plan === "agency" ? "Agency" : m.plan === "unlimited" ? "Unlimited" : "Starter"}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {m.role === "owner" || m.plan === "unlimited" ? "∞ sites" : `${m.website_limit ?? 5} sites`}
+                          </span>
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUpdatingPlanMember(m);
+                                const currentPlan = (m.plan as any) || "starter";
+                                setSelectedNewPlan(currentPlan);
+                                setCustomLimit(
+                                  m.website_limit ?? (currentPlan === "agency" ? 30 : currentPlan === "unlimited" ? 999999 : 5)
+                                );
+                              }}
+                              className="text-[10px] text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 font-semibold underline underline-offset-2 ml-1"
+                            >
+                              Edit
+                            </button>
                           )}
                         </div>
                       </td>
@@ -773,6 +851,123 @@ export function TeamManagement() {
                 <span>Send Workspace Invitation</span>
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Change Plan / Quota Modal */}
+      {updatingPlanMember && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl relative space-y-4">
+            <button
+              type="button"
+              onClick={() => setUpdatingPlanMember(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center space-x-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Shield className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                  Change Plan &amp; Quota
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {updatingPlanMember.full_name || updatingPlanMember.email}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNewPlan("starter");
+                    setCustomLimit(5);
+                  }}
+                  className={`p-3 rounded-xl border text-center transition ${
+                    selectedNewPlan === "starter"
+                      ? "border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/60 text-indigo-900 dark:text-white font-bold ring-2 ring-indigo-500/20"
+                      : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  <div className="text-xs font-bold">Starter</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">5 sites</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNewPlan("agency");
+                    setCustomLimit(30);
+                  }}
+                  className={`p-3 rounded-xl border text-center transition ${
+                    selectedNewPlan === "agency"
+                      ? "border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/60 text-indigo-900 dark:text-white font-bold ring-2 ring-indigo-500/20"
+                      : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  <div className="text-xs font-bold">Agency</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">30 sites</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedNewPlan("unlimited");
+                    setCustomLimit(999999);
+                  }}
+                  className={`p-3 rounded-xl border text-center transition ${
+                    selectedNewPlan === "unlimited"
+                      ? "border-indigo-600 bg-indigo-50/60 dark:bg-indigo-950/60 text-indigo-900 dark:text-white font-bold ring-2 ring-indigo-500/20"
+                      : "border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                  }`}
+                >
+                  <div className="text-xs font-bold">Unlimited</div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">∞ sites</div>
+                </button>
+              </div>
+
+              {selectedNewPlan !== "unlimited" && (
+                <div className="space-y-1 pt-1">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Custom Website Quota Limit
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10000}
+                    value={customLimit}
+                    onChange={(e) => setCustomLimit(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Maximum number of active websites this account can generate and save.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setUpdatingPlanMember(null)}
+                  className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={savingPlan}
+                  onClick={handleSavePlan}
+                  className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {savingPlan && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>Save Plan</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

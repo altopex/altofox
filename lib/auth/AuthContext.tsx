@@ -10,6 +10,7 @@ interface SignUpParams {
   password: string;
   fullName: string;
   companyName?: string;
+  plan?: "starter" | "agency";
 }
 
 interface AuthContextValue {
@@ -67,6 +68,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ...data,
           email: userEmail,
           status: (data.status as UserStatus) || "pending",
+          plan: data.plan || "starter",
+          website_limit: data.website_limit ?? (data.plan === "agency" ? 30 : 5),
         };
         setProfile(loadedProfile);
         setAuthCookies(currentToken || session?.access_token || null, loadedProfile.status);
@@ -87,6 +90,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           role: isOwnerEmail ? "owner" : "editor",
           status: isOwnerEmail ? "approved" : "pending",
           company_name: null,
+          plan: isOwnerEmail ? "unlimited" : "starter",
+          website_limit: isOwnerEmail ? 999999 : 5,
           last_active_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -179,9 +184,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password,
     fullName,
     companyName,
+    plan = "starter",
   }: SignUpParams) => {
     try {
       const supabase = getSupabaseBrowserClient();
+      const chosenPlan = plan || "starter";
+      const websiteLimit = chosenPlan === "agency" ? 30 : 5;
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -189,6 +198,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           data: {
             full_name: fullName.trim(),
             company_name: companyName?.trim() || null,
+            plan: chosenPlan,
+            website_limit: websiteLimit,
           },
           emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
         },

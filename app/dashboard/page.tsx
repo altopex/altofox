@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { TopBar } from "@/components/TopBar";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { LivePreview, ProjectData } from "@/components/LivePreview";
@@ -252,6 +253,7 @@ export default function DashboardPage() {
   const [keywordMapOpen, setKeywordMapOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
   const [blogManagerOpen, setBlogManagerOpen] = useState(false);
+  const [isLimitModalOpen, setIsLimitModalOpen] = useState(false);
 
   // Service Areas State (Step 3)
   const [serviceAreaCities, setServiceAreaCities] = useState<SelectedServiceCity[]>([]);
@@ -854,6 +856,21 @@ export default function DashboardPage() {
 
   // Execute Website Generation
   const handleGenerateWebsite = async () => {
+    // Check website plan limits
+    const userPlan = profile?.plan || "starter";
+    const isUnlimited = isOwner || userPlan === "unlimited";
+    const websiteLimit = isUnlimited ? 999999 : (profile?.website_limit ?? (userPlan === "agency" ? 30 : 5));
+
+    if (!isUnlimited && savedProjectsList.length >= websiteLimit) {
+      addToast({
+        type: "error",
+        title: "Website Limit Reached",
+        message: `You have reached your ${userPlan.toUpperCase()} plan limit of ${websiteLimit} websites. Please upgrade to generate more sites.`,
+      });
+      setIsLimitModalOpen(true);
+      return;
+    }
+
     const localKey = localStorage.getItem(`altofox_key_${activeProvider}`);
     if (!hasKey && !localKey) {
       handleOpenSettings("models", "Connect an AI model to generate your website.");
@@ -1360,6 +1377,51 @@ export default function DashboardPage() {
                 }
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Website Plan Limit Reached Modal */}
+      {isLimitModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-sm">
+              <Layers className="w-7 h-7" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                Website Limit Reached
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                You have created <span className="font-bold text-slate-900 dark:text-white">{savedProjectsList.length}</span> of{" "}
+                <span className="font-bold text-slate-900 dark:text-white">
+                  {profile?.role === "owner" ? "Unlimited" : (profile?.website_limit ?? (profile?.plan === "agency" ? 30 : 5))}
+                </span>{" "}
+                websites allowed on your <strong className="capitalize">{profile?.plan || "Starter"}</strong> plan.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs text-slate-600 dark:text-slate-300">
+              Upgrade to the <strong>Agency Plan (up to 30 websites)</strong> or contact your workspace owner to expand your quota.
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsLimitModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition"
+              >
+                Close
+              </button>
+              <Link
+                href="/pricing"
+                onClick={() => setIsLimitModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-xs font-bold text-white transition shadow-md shadow-indigo-600/25 flex items-center justify-center gap-1.5"
+              >
+                <span>Upgrade Plan</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
         </div>
       )}
@@ -2813,6 +2875,7 @@ export default function DashboardPage() {
   return (
     <AppShell
       currentTab={navTab}
+      projectsCount={savedProjectsList.length}
       onNavigate={(tab) => {
         if (tab === "settings") {
           handleOpenSettings("models");
