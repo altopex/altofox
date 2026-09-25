@@ -157,33 +157,30 @@ export function LivePreview({
       domain: project.websiteDomain,
     });
     return res.report;
-  }, [project]);
+  }, [project.qualityReport, project.files, project.name, project.websiteDomain]);
 
-  // Run automated hidden iframe mobile audit at 360px, 390px, 768px, 1280px
+  // Run automated hidden iframe mobile audit at 360px, 390px, 768px, 1280px (debounced)
   useEffect(() => {
     let isMounted = true;
     setIsMobileAuditing(true);
 
-    runClientMobileCheck(inlinedPreviewHtml, activePage, [360, 390, 768, 1280])
-      .then((auditResult) => {
-        if (isMounted) {
-          setMobileAudit(auditResult);
-          setIsMobileAuditing(false);
-          if (auditResult.hasAnyOverflow) {
-            const overflow = auditResult.breakpoints.find((b) => b.hasOverflow);
-            console.warn(`[Mobile Audit] Overflow on ${activePage} at ${overflow?.width}px:`, overflow?.overflowElement);
-          } else {
-            console.log(`[Mobile Audit] Zero horizontal scrolling on ${activePage} across 360, 390, 768, 1280px.`);
+    const timer = setTimeout(() => {
+      runClientMobileCheck(inlinedPreviewHtml, activePage, [360, 390, 768, 1280])
+        .then((auditResult) => {
+          if (isMounted) {
+            setMobileAudit(auditResult);
+            setIsMobileAuditing(false);
           }
-        }
-      })
-      .catch((err) => {
-        console.warn("[Mobile Audit] Audit error:", err);
-        if (isMounted) setIsMobileAuditing(false);
-      });
+        })
+        .catch((err) => {
+          console.warn("[Mobile Audit] Audit error:", err);
+          if (isMounted) setIsMobileAuditing(false);
+        });
+    }, 350);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
   }, [inlinedPreviewHtml, activePage]);
 

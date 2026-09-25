@@ -556,43 +556,47 @@ export default function DashboardPage() {
     loadAllSavedProjects();
   }, [loadAllSavedProjects]);
 
-  // Auto-save form progress to localStorage
+  // Auto-save form progress to localStorage (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
-      const state = {
-        businessName,
-        businessType,
-        customBusinessType,
-        businessDescription,
-        services,
-        logoUrl,
-        yearsInBusiness,
-        uniqueSellingPoints,
-        streetAddress,
-        city,
-        stateRegion,
-        zipPostalCode,
-        country,
-        serviceAreas,
-        phone,
-        email,
-        businessHours,
-        websiteDomain,
-        keywords,
-        googleMaps,
-        socialLinks,
-        selectedPages,
-        separateServicePages,
-        separateAreaPages,
-        serviceAreaCities,
-        createSeparateServiceLocationPages,
-        confirmedServesAreas,
-        selectedThemeId,
-        customThemeColors,
-        maxCompletedStep,
-      };
-      localStorage.setItem("altofox_builder_state", JSON.stringify(state));
-    }, 400);
+      try {
+        const state = {
+          businessName,
+          businessType,
+          customBusinessType,
+          businessDescription,
+          services,
+          logoUrl,
+          yearsInBusiness,
+          uniqueSellingPoints,
+          streetAddress,
+          city,
+          stateRegion,
+          zipPostalCode,
+          country,
+          serviceAreas,
+          phone,
+          email,
+          businessHours,
+          websiteDomain,
+          keywords,
+          googleMaps,
+          socialLinks,
+          selectedPages,
+          separateServicePages,
+          separateAreaPages,
+          serviceAreaCities,
+          createSeparateServiceLocationPages,
+          confirmedServesAreas,
+          selectedThemeId,
+          customThemeColors,
+          maxCompletedStep,
+        };
+        localStorage.setItem("altofox_builder_state", JSON.stringify(state));
+      } catch (err) {
+        console.warn("[Dashboard] Could not auto-save builder state:", err);
+      }
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [

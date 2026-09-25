@@ -35,6 +35,11 @@ export function LeafletRadiusMap({
   const layerGroupRef = useRef<any>(null);
   const [leafletLoaded, setLeafletLoaded] = useState(false);
 
+  const onSelectCityRef = useRef(onSelectCity);
+  useEffect(() => {
+    onSelectCityRef.current = onSelectCity;
+  }, [onSelectCity]);
+
   // Load Leaflet dynamically via CDN link & script to avoid SSR issues
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -127,8 +132,9 @@ export function LeafletRadiusMap({
       dashArray: "4, 6",
     }).addTo(layerGroup);
 
-    // 3. Selected and Available Cities Markers
-    cities.forEach((c) => {
+    // 3. Selected and Available Cities Markers (capped at 50 to avoid DOM bloating)
+    const markersToRender = cities.slice(0, 50);
+    markersToRender.forEach((c) => {
       const isSelected = c.selected !== false;
       const markerColor = isSelected ? "#10B981" : "#94A3B8";
 
@@ -153,22 +159,27 @@ export function LeafletRadiusMap({
         </div>
       `;
 
-      if (onSelectCity) {
-        popupContent.querySelector("button")?.addEventListener("click", () => {
-          onSelectCity(c.city, c.stateId);
-        });
-      }
+      popupContent.querySelector("button")?.addEventListener("click", () => {
+        if (onSelectCityRef.current) {
+          onSelectCityRef.current(c.city, c.stateId);
+        }
+      });
 
       marker.bindPopup(popupContent);
     });
-  }, [leafletLoaded, centerLat, centerLng, radiusMiles, businessName, cities, onSelectCity]);
+  }, [leafletLoaded, centerLat, centerLng, radiusMiles, businessName, cities]);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch {
+          // ignore cleanup errors if unmounted abruptly
+        }
         mapInstanceRef.current = null;
+        layerGroupRef.current = null;
       }
     };
   }, []);

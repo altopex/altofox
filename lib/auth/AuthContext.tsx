@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Profile, UserRole, UserStatus } from "@/lib/supabase/types";
@@ -58,6 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const lastActiveUpdateRef = useRef<number>(0);
+
   const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
     try {
       const supabase = getSupabaseBrowserClient();
@@ -76,14 +78,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           website_limit: data.website_limit ?? (data.plan === "agency" ? 30 : 5),
         };
         setProfile(loadedProfile);
-        setAuthCookies(currentToken || session?.access_token || null, loadedProfile.status);
+        setAuthCookies(currentToken || null, loadedProfile.status);
 
-        // Touch last_active_at in background
-        supabase
-          .from("profiles")
-          .update({ last_active_at: new Date().toISOString() })
-          .eq("id", userId)
-          .then();
+        // Touch last_active_at in background at most once every 15 minutes
+        const now = Date.now();
+        if (now - lastActiveUpdateRef.current > 15 * 60 * 1000) {
+          lastActiveUpdateRef.current = now;
+          supabase
+            .from("profiles")
+            .update({ last_active_at: new Date().toISOString() })
+            .eq("id", userId)
+            .then();
+        }
       } else {
         // Fallback default profile if trigger hasn't completed yet
         const isOwnerEmail = userEmail?.toLowerCase() === "russ@altopex.com";
@@ -102,12 +108,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: userEmail,
         };
         setProfile(fallbackProfile);
-        setAuthCookies(currentToken || session?.access_token || null, fallbackProfile.status);
+        setAuthCookies(currentToken || null, fallbackProfile.status);
       }
     } catch (err) {
       console.warn("[Auth] Profile load exception:", err);
     }
-  }, [session]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;

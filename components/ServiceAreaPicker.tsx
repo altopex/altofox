@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   findCityByName,
   findCitiesWithinRadius,
@@ -70,7 +70,16 @@ export function ServiceAreaPicker({
   onConfirmedServesAreasChange,
 }: ServiceAreaPickerProps) {
   const [activeTab, setActiveTab] = useState<"radius" | "county" | "manual">("radius");
+  const [sliderRadius, setSliderRadius] = useState<number>(25);
   const [radiusMiles, setRadiusMiles] = useState<number>(25);
+
+  // Debounce radius recalculations so dragging slider is 60fps smooth
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setRadiusMiles(sliderRadius);
+    }, 150);
+    return () => clearTimeout(handler);
+  }, [sliderRadius]);
 
   // County selection state
   const availableStates = useMemo(() => getAvailableStates(), []);
@@ -104,14 +113,14 @@ export function ServiceAreaPicker({
   }, [selectedState, selectedCounty]);
 
   // Check if a city is currently selected
-  const isCitySelected = (city: string, stateId: string) => {
+  const isCitySelected = useCallback((city: string, stateId: string) => {
     return selectedCities.some(
       (c) => c.city.toLowerCase() === city.toLowerCase() && c.stateId.toUpperCase() === stateId.toUpperCase()
     );
-  };
+  }, [selectedCities]);
 
   // Toggle selection of a city
-  const toggleCity = (cityData: CityData, distanceMiles?: number, distanceOffset?: string) => {
+  const toggleCity = useCallback((cityData: CityData, distanceMiles?: number, distanceOffset?: string) => {
     const exists = isCitySelected(cityData.city, cityData.stateId);
     if (exists) {
       onSelectedCitiesChange(
@@ -142,10 +151,10 @@ export function ServiceAreaPicker({
       };
       onSelectedCitiesChange([...selectedCities, newCity]);
     }
-  };
+  }, [isCitySelected, onSelectedCitiesChange, selectedCities, mainService]);
 
   // Bulk actions
-  const selectAllCurrent = (citiesToSelect: CityData[]) => {
+  const selectAllCurrent = useCallback((citiesToSelect: CityData[]) => {
     const toAdd: SelectedServiceCity[] = [];
     const tradeSlug = mainService.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
@@ -166,16 +175,21 @@ export function ServiceAreaPicker({
       }
     }
     onSelectedCitiesChange([...selectedCities, ...toAdd]);
-  };
+  }, [isCitySelected, onSelectedCitiesChange, selectedCities, mainService]);
 
-  const selectTop10Population = (citiesToPick: CityData[]) => {
+  const selectTop10Population = useCallback((citiesToPick: CityData[]) => {
     const sorted = [...citiesToPick].sort((a, b) => b.population - a.population).slice(0, 10);
     selectAllCurrent(sorted);
-  };
+  }, [selectAllCurrent]);
 
-  const clearAllSelected = () => {
+  const clearAllSelected = useCallback(() => {
     onSelectedCitiesChange([]);
-  };
+  }, [onSelectedCitiesChange]);
+
+  const handleMapSelectCity = useCallback((c: string, s: string) => {
+    const found = findCityByName(c, s);
+    if (found) toggleCity(found);
+  }, [toggleCity]);
 
   // Map Points
   const mapPoints: MapCityPoint[] = useMemo(() => {
@@ -250,7 +264,7 @@ export function ServiceAreaPicker({
           }`}
         >
           <Compass className="w-3.5 h-3.5" />
-          <span>1. By Radius ({radiusMiles} mi)</span>
+          <span>1. By Radius ({sliderRadius} mi)</span>
         </button>
 
         <button
@@ -300,10 +314,7 @@ export function ServiceAreaPicker({
           radiusMiles={radiusMiles}
           businessName={businessName || "My Business"}
           cities={mapPoints}
-          onSelectCity={(c, s) => {
-            const found = findCityByName(c, s);
-            if (found) toggleCity(found);
-          }}
+          onSelectCity={handleMapSelectCity}
         />
       </div>
 
@@ -313,10 +324,10 @@ export function ServiceAreaPicker({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-900">
-                Service Radius: <span className="text-indigo-600 font-extrabold">{radiusMiles} Miles</span>
+                Service Radius: <span className="text-indigo-600 font-extrabold">{sliderRadius} Miles</span>
               </label>
               <p className="text-[11px] text-slate-500">
-                Shows all incorporated cities and suburbs within {radiusMiles} miles of {originCity.city}.
+                Shows all incorporated cities and suburbs within {sliderRadius} miles of {originCity.city}.
               </p>
             </div>
             <div className="w-full sm:w-64">
@@ -325,8 +336,8 @@ export function ServiceAreaPicker({
                 min={5}
                 max={100}
                 step={5}
-                value={radiusMiles}
-                onChange={(e) => setRadiusMiles(Number(e.target.value))}
+                value={sliderRadius}
+                onChange={(e) => setSliderRadius(Number(e.target.value))}
                 className="w-full accent-indigo-600 cursor-pointer"
               />
               <div className="flex justify-between text-[10px] text-slate-400 font-mono">
