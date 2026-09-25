@@ -1,3 +1,5 @@
+import { BRAND } from "@/config/brand";
+
 export interface GenerateWebsiteParams {
   provider: "openai" | "gemini" | "openrouter" | "custom" | string;
   apiKey: string;
@@ -109,8 +111,8 @@ export async function generateWebsite(params: GenerateWebsiteParams): Promise<st
 
   if (provider === "openrouter") {
     endpoint = "https://openrouter.ai/api/v1/chat/completions";
-    extraHeaders["HTTP-Referer"] = "https://altofox.app";
-    extraHeaders["X-Title"] = "AltoFox Website Builder";
+    extraHeaders["HTTP-Referer"] = BRAND.siteUrl;
+    extraHeaders["X-Title"] = `${BRAND.name} Website Builder`;
   } else if (provider === "custom" && baseUrl) {
     endpoint = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
   }
@@ -219,8 +221,8 @@ export async function testConnection(params: TestConnectionParams): Promise<{ su
 
     if (provider === "openrouter") {
       endpoint = "https://openrouter.ai/api/v1/chat/completions";
-      extraHeaders["HTTP-Referer"] = "https://altofox.app";
-      extraHeaders["X-Title"] = "AltoFox";
+      extraHeaders["HTTP-Referer"] = BRAND.siteUrl;
+      extraHeaders["X-Title"] = BRAND.name;
     } else if (provider === "custom" && baseUrl) {
       endpoint = baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
     }

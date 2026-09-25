@@ -1,3 +1,5 @@
+import { BRAND } from "@/config/brand";
+
 export interface PricingPlan {
   id: "starter" | "agency" | "unlimited";
   name: string;
@@ -185,7 +187,7 @@ export const PRICING_FAQS: PricingFAQ[] = [
   {
     question: "What is your refund policy?",
     answer:
-      "We want you to be completely satisfied with AltoFox. We offer a 14-day money-back guarantee if the platform does not meet your website generation needs. Please review our Terms of Service for complete details on claim procedures.",
+      `We want you to be completely satisfied with ${BRAND.name}. We offer a 14-day money-back guarantee if the platform does not meet your website generation needs. Please review our Terms of Service for complete details on claim procedures.`,
   },
 ];
 

@@ -3,8 +3,8 @@ import crypto from "crypto";
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // Standard recommended length for GCM
 
-function getSecretKey(): Buffer {
-  const secret = process.env.ENCRYPTION_SECRET || "altofox-development-secret-key-32b!";
+function getSecretKey(customFallback?: string): Buffer {
+  const secret = process.env.ENCRYPTION_SECRET || customFallback || "ranklocal-development-secret-key-32b!";
   // Hash the secret to ensure it is exactly 32 bytes for aes-256
   return crypto.createHash("sha256").update(secret).digest();
 }
@@ -40,18 +40,36 @@ export function decryptApiKey(data: { encryptedKey: string; iv: string; tag: str
     throw new Error("Invalid encrypted payload");
   }
 
-  const decipher = crypto.createDecipheriv(
-    ALGORITHM,
-    getSecretKey(),
-    Buffer.from(data.iv, "hex")
-  );
+  try {
+    const decipher = crypto.createDecipheriv(
+      ALGORITHM,
+      getSecretKey(),
+      Buffer.from(data.iv, "hex")
+    );
 
-  decipher.setAuthTag(Buffer.from(data.tag, "hex"));
+    decipher.setAuthTag(Buffer.from(data.tag, "hex"));
 
-  let decrypted = decipher.update(data.encryptedKey, "hex", "utf8");
-  decrypted += decipher.final("utf8");
+    let decrypted = decipher.update(data.encryptedKey, "hex", "utf8");
+    decrypted += decipher.final("utf8");
 
-  return decrypted;
+    return decrypted;
+  } catch (err) {
+    // If ENCRYPTION_SECRET is not set, try legacy fallback key
+    if (!process.env.ENCRYPTION_SECRET) {
+      try {
+        const legacyDecipher = crypto.createDecipheriv(
+          ALGORITHM,
+          getSecretKey("altofox-development-secret-key-32b!"),
+          Buffer.from(data.iv, "hex")
+        );
+        legacyDecipher.setAuthTag(Buffer.from(data.tag, "hex"));
+        let decrypted = legacyDecipher.update(data.encryptedKey, "hex", "utf8");
+        decrypted += legacyDecipher.final("utf8");
+        return decrypted;
+      } catch {}
+    }
+    throw err;
+  }
 }
 
 export function maskApiKey(key: string): string {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient, authenticateServerRequest } from "@/lib/supabase/server";
+import { BRAND } from "@/config/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       keys: maskedKeys,
       isOwner: auth.isOwner,
-      teamName: settings?.team_name || "AltoFox Team",
+      teamName: settings?.team_name || `${BRAND.name} Team`,
       defaultPreferences: settings?.default_preferences || {},
     });
   } catch (err: any) {

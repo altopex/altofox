@@ -1,28 +1,26 @@
-# 🦊 AltoFox — Local Home Service Static Website Builder
+# 📍 RankLocal — AI Static Website Builder for Local SEO
 
-> Build high-converting, SEO-optimized static websites for local home services & contractors using ChatGPT, Google Gemini, Claude, Groq, or any Custom API model — preview instantly & download in 1 click (.ZIP).
+> Build high-converting, SEO-optimized static websites for local home services & contractors using Google Gemini, OpenAI, Claude, Groq, or OpenRouter — with 20 trade niche packs, multi-suburb location pages, Schema.org JSON-LD, and zero WordPress bloat.
+
+**Official Domain:** [https://ranklocal.site](https://ranklocal.site)
 
 ![Next.js 14](https://img.shields.io/badge/Next.js-14-black?style=flat-square&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)
 ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=flat-square&logo=tailwind-css)
-![Prisma](https://img.shields.io/badge/Prisma-SQLite-2D3748?style=flat-square&logo=prisma)
+![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20DB-3ECF8E?style=flat-square&logo=supabase)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 ---
 
 ## 🌟 Key Features
 
-- **Local Home Service & Geo-Targeting**: Generate websites tailored to local trade niches (Plumbing, Electrical, HVAC, Roofing, Landscaping, Pest Control) in any city or state.
+- **20 Trade Niche Packs**: Generate websites tailored to local trade niches (Plumbing, Electrical, HVAC, Roofing, Landscaping, Pest Control, and more) in any city or state.
+- **Multi-Suburb Location Pages**: Automated service-area expansion with unique contextual content and neighborhood landmark references to prevent duplicate content penalties.
 - **Local SEO & Schema.org**: Every generated website automatically embeds **Schema.org `LocalBusiness` JSON-LD** markup, click-to-call mobile buttons, service areas list, and localized reviews for Google Maps & search ranking.
-- **Multi-Model & Custom API Engine**:
-  - Google Gemini (Gemini 1.5 Pro & Flash)
-  - OpenAI ChatGPT (GPT-4o & GPT-4o-mini)
-  - Anthropic Claude (Sonnet 3.5 & Haiku)
-  - Groq (Llama 3.3 70B & 3.1 8B)
-  - **Custom API**: Connect any model via OpenAI-compatible Base URL (Ollama, OpenRouter, Together AI, LM Studio, DeepSeek, vLLM).
+- **Multi-Model AI Engine**: Google Gemini (1.5 Pro & Flash), OpenAI (GPT-4o), Anthropic Claude (Sonnet 3.5), Groq, and OpenRouter.
 - **Zero-Build Static Output**: Outputs 100% pure static files (`index.html`, `styles.css`, `script.js`) with responsive layouts, working mobile drawer, FAQ accordion, and interactive quote forms.
 - **Live Preview & 1-Click ZIP Download**: Test desktop and mobile viewport previews immediately and download the complete folder in a single `.zip` file ready to double-click and run or deploy for free.
-- **AES-256-GCM Key Encryption**: Your API keys are encrypted at rest in local SQLite and never leave your machine.
+- **Private Team Workspace & Access Control**: Owner/Editor role permissions, real-time presence indicators, audit activity feed, and user approval workflows.
 
 ---
 
@@ -44,12 +42,12 @@ Create your local `.env` file:
 cp .env.example .env
 ```
 
+Ensure `NEXT_PUBLIC_SITE_URL="https://ranklocal.site"` is set.
+
 Generate Prisma client & initialize SQLite database:
 
 ```bash
 npm run prisma:generate
-npm run prisma:push
-npm run prisma:seed
 ```
 
 ### 3. Run Development Server
@@ -58,22 +56,12 @@ npm run prisma:seed
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) to access the landing page and dashboard.
 
 ---
 
-## 🛠️ Tech Stack
+## 🌐 Production Domain & Deployment
 
-- **Framework**: Next.js 14 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Database & ORM**: SQLite + Prisma Client
-- **Packaging**: JSZip
-- **Icons**: Lucide React
-- **Cryptography**: AES-256-GCM (Node.js crypto)
-
----
-
-## 📄 License
-
-MIT License. Free to use for personal and commercial projects.
+- **Custom Domain:** `ranklocal.site`
+- **Support:** `support@ranklocal.site`
+- **Hosting:** Vercel (Edge-optimized Next.js App Router)

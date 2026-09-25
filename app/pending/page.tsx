@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { BRAND } from "@/config/brand";
 import {
   Clock,
   LogOut,
@@ -98,7 +99,7 @@ export default function PendingApprovalPage() {
           </h1>
 
           <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed max-w-sm mx-auto">
-            Your AltoFox account has been created and is waiting for workspace owner approval. We&apos;ll email you at <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.email}</span> when you&apos;re in.
+            Your {BRAND.name} account has been created and is waiting for workspace owner approval. We&apos;ll email you at <span className="font-semibold text-slate-800 dark:text-slate-200">{user?.email}</span> when you&apos;re in.
           </p>
         </div>
 

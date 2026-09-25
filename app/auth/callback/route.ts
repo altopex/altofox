@@ -40,7 +40,17 @@ export async function GET(req: NextRequest) {
       const targetPath = status === "approved" ? next : "/pending";
       const response = NextResponse.redirect(new URL(targetPath, req.url));
 
+      response.cookies.set("ranklocal_token", token, {
+        path: "/",
+        maxAge: 604800,
+        sameSite: "lax",
+      });
       response.cookies.set("altofox_token", token, {
+        path: "/",
+        maxAge: 604800,
+        sameSite: "lax",
+      });
+      response.cookies.set("ranklocal_status", status, {
         path: "/",
         maxAge: 604800,
         sameSite: "lax",

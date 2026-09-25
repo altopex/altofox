@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { BRAND } from "@/config/brand";
 import {
   X,
   Sparkles,
@@ -643,8 +644,28 @@ export function SettingsPanel({
 
   // Clear All Saved Data
   const handleClearAllData = () => {
-    // Clear all localStorage keys belonging to AltoFox
+    // Clear all localStorage keys belonging to RankLocal and legacy AltoFox
     const keysToRemove = [
+      "ranklocal_builder_state",
+      "ranklocal_active_provider",
+      "ranklocal_active_model",
+      "ranklocal_pref_country",
+      "ranklocal_pref_theme",
+      "ranklocal_pref_language",
+      "ranklocal_pref_quality_review",
+      "ranklocal_key_gemini",
+      "ranklocal_key_openai",
+      "ranklocal_key_openrouter",
+      "ranklocal_key_custom",
+      "ranklocal_model_gemini",
+      "ranklocal_model_openai",
+      "ranklocal_model_openrouter",
+      "ranklocal_model_custom",
+      "ranklocal_pexels_key",
+      "ranklocal_pixabay_key",
+      "ranklocal_image_preferred_source",
+      "ranklocal_dark_mode",
+      // Legacy AltoFox keys
       "altofox_builder_state",
       "altofox_active_provider",
       "altofox_active_model",
@@ -663,6 +684,7 @@ export function SettingsPanel({
       "altofox_pexels_key",
       "altofox_pixabay_key",
       "altofox_image_preferred_source",
+      "altofox_dark_mode",
     ];
 
     keysToRemove.forEach((k) => localStorage.removeItem(k));
@@ -1065,7 +1087,7 @@ export function SettingsPanel({
                     <span>Free Royalty-Free Stock Photos</span>
                   </div>
                   <p className="text-[11px] text-[#64748B] leading-relaxed">
-                    AltoFox supports multiple image sources: the built-in <strong>Bing Free Image CDN</strong> (zero API keys required, dynamic keywords) as well as free API keys from <strong>Pexels</strong> and <strong>Pixabay</strong> to automatically search and embed real, license-free commercial photography.
+                    {BRAND.name} supports multiple image sources: the built-in <strong>Bing Free Image CDN</strong> (zero API keys required, dynamic keywords) as well as free API keys from <strong>Pexels</strong> and <strong>Pixabay</strong> to automatically search and embed real, license-free commercial photography.
                   </p>
                 </div>
 
@@ -1083,7 +1105,7 @@ export function SettingsPanel({
                     Preferred Image Source
                   </label>
                   <p className="text-[11px] text-[#64748B]">
-                    AltoFox queries your preferred provider first. If no matching photos are returned, it automatically cascades to alternative sources.
+                    {BRAND.name} queries your preferred provider first. If no matching photos are returned, it automatically cascades to alternative sources.
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                     <button

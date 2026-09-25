@@ -1,5 +1,5 @@
 /**
- * Geo utilities for AltoFox Service Area & Location Engine
+ * Geo utilities for RankLocal Service Area & Location Engine
  * Includes Haversine distance, compass directions, and SimpleMaps attribution.
  *
  * Attribution:

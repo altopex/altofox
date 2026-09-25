@@ -6,7 +6,7 @@ import JSZip from "jszip";
 
 async function runVerification() {
   console.log("==================================================================");
-  console.log("ALTOFOX TEMPLATE LIBRARY + CONTENT JSON ARCHITECTURE VERIFICATION");
+  console.log("RANKLOCAL TEMPLATE LIBRARY + CONTENT JSON ARCHITECTURE VERIFICATION");
   console.log("==================================================================\n");
 
   // -------------------------------------------------------------------------

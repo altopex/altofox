@@ -73,11 +73,13 @@ export async function authenticateServerRequest(
     token = authHeader.replace("Bearer ", "").trim();
   }
 
-  // 2. Fallback to cookies (altofox_token)
+  // 2. Fallback to cookies (ranklocal_token or altofox_token)
   if (!token) {
     const cookieHeader = req.headers.get("cookie");
     if (cookieHeader) {
-      const match = cookieHeader.match(/altofox_token=([^;]+)/);
+      const match =
+        cookieHeader.match(/ranklocal_token=([^;]+)/) ||
+        cookieHeader.match(/altofox_token=([^;]+)/);
       if (match && match[1]) {
         token = decodeURIComponent(match[1]).trim();
       }

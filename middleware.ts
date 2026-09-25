@@ -32,8 +32,8 @@ export function middleware(req: NextRequest) {
   }
 
   // Extract token from cookie OR Authorization header
-  let token = req.cookies.get("altofox_token")?.value;
-  let status = req.cookies.get("altofox_status")?.value;
+  let token = req.cookies.get("ranklocal_token")?.value || req.cookies.get("altofox_token")?.value;
+  let status = req.cookies.get("ranklocal_status")?.value || req.cookies.get("altofox_status")?.value;
 
   const authHeader = req.headers.get("authorization");
   if (!token && authHeader && authHeader.startsWith("Bearer ")) {

@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 50" fill="none" width="100%" height="100%">
+  <defs>
+    <linearGradient id="rankPinGradDark" x1="6" y1="5" x2="34" y2="45" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4F46E5"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="rankArrowGradDark" x1="14" y1="30" x2="26" y2="16" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#10B981"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <filter id="rankShadowDark" x="2" y="2" width="38" height="46" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#4F46E5" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Location Pin Icon -->
+  <g transform="translate(4, 5)">
+    <path d="M20 4C12.82 4 7 9.82 7 17C7 26.2 18.5 35.2 19.35 35.85C19.74 36.15 20.26 36.15 20.65 35.85C21.5 35.2 33 26.2 33 17C33 9.82 27.18 4 20 4Z" fill="url(#rankPinGradDark)" filter="url(#rankShadowDark)"/>
+    <circle cx="20" cy="17" r="9" fill="#0B0F19" fill-opacity="0.45"/>
+    <rect x="14" y="19" width="3" height="4" rx="1" fill="#FFFFFF" fill-opacity="0.75"/>
+    <rect x="18.5" y="15.5" width="3" height="7.5" rx="1" fill="#FFFFFF" fill-opacity="0.9"/>
+    <path d="M23 12H27V16M26.5 12.5L18.5 20.5" stroke="url(#rankArrowGradDark)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- Wordmark Text (Dark Theme: White + Indigo) -->
+  <text x="52" y="32" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="900" letter-spacing="-0.03em" fill="#FFFFFF">Rank<tspan fill="#818CF8">Local</tspan></text>
+  <circle cx="178" cy="31" r="2.5" fill="#10B981" />
+  
+  <text x="53" y="44" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="700" letter-spacing="0.12em" fill="#94A3B8">LOCAL SEO STATIC BUILDER</text>
+</svg>

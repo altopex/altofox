@@ -15,6 +15,8 @@ import {
   HelpCircle,
   X,
 } from "lucide-react";
+import { BRAND } from "@/config/brand";
+import { RankLocalIcon } from "@/components/brand/RankLocalLogo";
 
 export interface LoginCardProps {
   asModal?: boolean;
@@ -110,12 +112,12 @@ export function LoginCard({
 
       {/* Header / Logo */}
       <div className="text-center space-y-2.5">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-500/25 mb-1">
-          <Sparkles className="w-6 h-6" />
+        <div className="inline-flex items-center justify-center mb-1">
+          <RankLocalIcon className="w-12 h-12" />
         </div>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            {customTitle || "AltoFox Studio"}
+            {customTitle || `${BRAND.name} Studio`}
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-indigo-500" />
@@ -161,7 +163,7 @@ export function LoginCard({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="e.g. russ@altopex.com"
+              placeholder={`e.g. alex@${BRAND.domain}`}
               className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 transition"
             />
           </div>

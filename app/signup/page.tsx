@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { AuthBrandedPanel } from "@/components/auth/AuthBrandedPanel";
+import { BRAND } from "@/config/brand";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 import {
   Sparkles,
   Lock,
@@ -48,7 +50,7 @@ function SignUpForm() {
 
   // Settings
   const [signupMode, setSignupMode] = useState<"approval_required" | "invite_only" | "open">("approval_required");
-  const [contactEmail, setContactEmail] = useState("support@altopex.com");
+  const [contactEmail, setContactEmail] = useState(BRAND.supportEmail);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
   useEffect(() => {
@@ -118,7 +120,7 @@ function SignUpForm() {
     setErrorMessage(null);
 
     if (signupMode === "invite_only") {
-      setErrorMessage(`AltoFox is currently invite-only. Please contact ${contactEmail} for access.`);
+      setErrorMessage(`${BRAND.name} is currently invite-only. Please contact ${contactEmail} for access.`);
       return;
     }
 
@@ -204,14 +206,7 @@ function SignUpForm() {
           <div>
             {/* Top Brand Logo */}
             <div className="flex items-center space-x-3 mb-8">
-              <Link href="/" className="flex items-center space-x-2.5 group">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  Alto<span className="text-indigo-600">Fox</span>
-                </span>
-              </Link>
+              <RankLocalLogo size="sm" showTagline />
             </div>
 
             {requiresConfirmation ? (
@@ -259,7 +254,7 @@ function SignUpForm() {
               <>
                 <div className="mb-6">
                   <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-                    Create your AltoFox account
+                    Create your {BRAND.name} account
                   </h1>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
                     {signupMode === "open"
@@ -273,13 +268,13 @@ function SignUpForm() {
                   <div className="mb-5 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 rounded-xl text-amber-800 dark:text-amber-200 text-xs space-y-2">
                     <div className="flex items-center space-x-2 font-bold">
                       <Shield className="w-4 h-4 text-amber-600" />
-                      <span>AltoFox is currently invite-only</span>
+                      <span>{BRAND.name} is currently invite-only</span>
                     </div>
                     <p>
                       Public registration is closed. To request an invitation for your business or agency, please contact our team at:
                     </p>
                     <a
-                      href={`mailto:${contactEmail}?subject=AltoFox%20Access%20Request`}
+                      href={`mailto:${contactEmail}?subject=${encodeURIComponent(`${BRAND.name} Access Request`)}`}
                       className="inline-block font-semibold underline text-amber-900 dark:text-amber-100"
                     >
                       {contactEmail}

@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Sparkles, CheckCircle2, ShieldCheck, Zap, Globe, Layers } from "lucide-react";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 
 export function AuthBrandedPanel() {
   return (
@@ -12,17 +13,7 @@ export function AuthBrandedPanel() {
 
       {/* Top Brand Header */}
       <div className="relative z-10 flex items-center space-x-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-400 flex items-center justify-center text-white shadow-lg shadow-indigo-500/30">
-          <Sparkles className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <span className="text-2xl font-black tracking-tight text-white">
-            Alto<span className="text-indigo-400">Fox</span>
-          </span>
-          <p className="text-[11px] font-medium text-indigo-200/70 tracking-wide uppercase">
-            Local Website Builder
-          </p>
-        </div>
+        <RankLocalLogo mode="dark" size="md" showTagline />
       </div>
 
       {/* Center Value Proposition & Showcase Card */}
@@ -47,7 +38,7 @@ export function AuthBrandedPanel() {
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
-              <span className="text-[11px] font-mono text-slate-400 ml-1">altofox-builder.html</span>
+              <span className="text-[11px] font-mono text-slate-400 ml-1">ranklocal-builder.html</span>
             </div>
             <span className="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
               SEO 98/100

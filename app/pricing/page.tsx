@@ -6,6 +6,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { PLANS, PLAN_COMPARISON, PRICING_FAQS } from "@/config/plans";
+import { BRAND } from "@/config/brand";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 import {
   Sparkles,
   Check,
@@ -35,12 +37,12 @@ export default function PricingPage() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: "AltoFox AI Static Website Builder",
+    name: `${BRAND.name} AI Static Website Builder`,
     description:
       "AI-powered static website builder with local SEO, multi-city location pages, and automated Schema.org markup.",
     brand: {
       "@type": "Brand",
-      name: "AltoFox",
+      name: BRAND.name,
     },
     offers: [
       {
@@ -50,7 +52,7 @@ export default function PricingPage() {
         priceCurrency: "USD",
         priceValidUntil: "2027-12-31",
         availability: "https://schema.org/InStock",
-        url: "https://altofox.com/pricing",
+        url: `${BRAND.siteUrl}/pricing`,
         description: "Up to 5 static websites, one-time payment ($19.80 per website)",
       },
       {
@@ -60,7 +62,7 @@ export default function PricingPage() {
         priceCurrency: "USD",
         priceValidUntil: "2027-12-31",
         availability: "https://schema.org/InStock",
-        url: "https://altofox.com/pricing",
+        url: `${BRAND.siteUrl}/pricing`,
         description: "Up to 30 static websites, one-time payment ($16.63 per website)",
       },
     ],
@@ -78,19 +80,7 @@ export default function PricingPage() {
       <header className="sticky top-0 z-50 w-full bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 transition">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex items-baseline space-x-1.5">
-              <span className="text-xl font-bold tracking-tight text-white">
-                Alto<span className="text-indigo-400">Fox</span>
-              </span>
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                SEO Studio
-              </span>
-            </div>
-          </Link>
+          <RankLocalLogo mode="dark" size="sm" showTagline />
 
           {/* Desktop Nav Links */}
           <nav className="hidden md:flex items-center space-x-8 text-xs font-semibold text-slate-300">
@@ -458,7 +448,7 @@ export default function PricingPage() {
             Frequently Asked Questions
           </h2>
           <p className="text-xs sm:text-sm text-slate-400">
-            Everything you need to know about AltoFox plans, limits, and ownership.
+            Everything you need to know about {BRAND.name} plans, limits, and ownership.
           </p>
         </div>
 
@@ -534,14 +524,7 @@ export default function PricingPage() {
       {/* 7. FOOTER */}
       <footer className="py-12 bg-slate-950 border-t border-slate-800 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <span className="font-bold text-white tracking-tight">
-              AltoFox Website Builder
-            </span>
-          </div>
+          <RankLocalLogo mode="dark" size="xs" showTagline />
 
           <div className="flex items-center space-x-6 text-slate-400">
             <Link href="/pricing" className="text-indigo-400 font-bold hover:text-white transition">Pricing</Link>
@@ -552,7 +535,7 @@ export default function PricingPage() {
           </div>
 
           <div className="text-slate-500 text-[11px]">
-            &copy; {new Date().getFullYear()} AltoFox. All rights reserved.
+            &copy; {new Date().getFullYear()} {BRAND.name}. All rights reserved.
           </div>
         </div>
       </footer>

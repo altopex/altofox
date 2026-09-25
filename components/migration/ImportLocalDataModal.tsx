@@ -43,24 +43,33 @@ export function ImportLocalDataModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    // Scan localStorage / IndexedDB for legacy AltoFox projects
+    // Scan localStorage for local RankLocal or legacy AltoFox projects
     setLoadingScan(true);
     try {
       const found: any[] = [];
 
-      // 1. Check localStorage for altofox_saved_projects
-      const rawStored = localStorage.getItem("altofox_saved_projects");
-      if (rawStored) {
-        try {
-          const parsed = JSON.parse(rawStored);
-          if (Array.isArray(parsed)) found.push(...parsed);
-        } catch {}
+      // 1. Check localStorage for saved projects arrays
+      const storageKeys = ["ranklocal_saved_projects", "altofox_saved_projects"];
+      for (const storageKey of storageKeys) {
+        const rawStored = localStorage.getItem(storageKey);
+        if (rawStored) {
+          try {
+            const parsed = JSON.parse(rawStored);
+            if (Array.isArray(parsed)) {
+              for (const item of parsed) {
+                if (item && item.id && !found.some((p) => p.id === item.id)) {
+                  found.push(item);
+                }
+              }
+            }
+          } catch {}
+        }
       }
 
       // 2. Check individual project keys
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith("altofox_project_")) {
+        if (key && (key.startsWith("ranklocal_project_") || key.startsWith("altofox_project_"))) {
           try {
             const item = JSON.parse(localStorage.getItem(key) || "{}");
             if (item && item.id && !found.some((p) => p.id === item.id)) {

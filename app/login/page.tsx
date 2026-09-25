@@ -7,6 +7,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { AuthBrandedPanel } from "@/components/auth/AuthBrandedPanel";
+import { BRAND } from "@/config/brand";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 import {
   Sparkles,
   Lock,
@@ -134,14 +136,7 @@ function LoginForm() {
           <div>
             {/* Top Brand Logo */}
             <div className="flex items-center space-x-3 mb-8">
-              <Link href="/" className="flex items-center space-x-2.5 group">
-                <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30 group-hover:scale-105 transition">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                  Alto<span className="text-indigo-600">Fox</span>
-                </span>
-              </Link>
+              <RankLocalLogo size="sm" showTagline />
             </div>
 
             <div className="mb-6">

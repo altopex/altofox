@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdminClient, requireApprovedServerRequest } from "@/lib/supabase/server";
+import { BRAND } from "@/config/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       signup_mode: data?.signup_mode || "approval_required",
-      contact_email: data?.contact_email || "support@altopex.com",
+      contact_email: data?.contact_email || BRAND.supportEmail,
       google_auth_enabled: Boolean(data?.google_auth_enabled),
     });
   } catch (err: any) {

@@ -2,7 +2,9 @@
 
 import React from "react";
 import Link from "next/link";
-import { Sparkles, ArrowLeft, ShieldCheck, Lock, Database } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
+import { BRAND } from "@/config/brand";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 
 export default function PrivacyPage() {
   return (
@@ -10,14 +12,7 @@ export default function PrivacyPage() {
       {/* Top Nav */}
       <header className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-600/30">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">
-              Alto<span className="text-indigo-600">Fox</span>
-            </span>
-          </Link>
+          <RankLocalLogo size="sm" showTagline />
           <Link
             href="/"
             className="inline-flex items-center space-x-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
@@ -30,7 +25,7 @@ export default function PrivacyPage() {
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 py-12 sm:py-16">
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 shadow-sm space-y-8">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 sm:p-12 shadow-xs space-y-8">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-6">
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400">
               Legal Documentation
@@ -46,7 +41,7 @@ export default function PrivacyPage() {
               1. Overview &amp; Commitment
             </h2>
             <p>
-              AltoFox (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) provides a static website generation and local search optimization platform. We respect the confidentiality and privacy of our users, contractors, agencies, and business clients. This Privacy Policy describes how we collect, store, and protect your information.
+              {BRAND.name} (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) provides a static website generation and local search optimization platform. We respect the confidentiality and privacy of our users, contractors, agencies, and business clients. This Privacy Policy describes how we collect, store, and protect your information.
             </p>
           </section>
 
@@ -84,7 +79,7 @@ export default function PrivacyPage() {
               4. Third-Party AI Services &amp; API Keys
             </h2>
             <p>
-              When generating website copy, metadata, and blog content, prompts are sent to your configured AI provider (Google Gemini, OpenAI, or Anthropic). You retain ownership of your generated static code and content. Third-party providers do not use your private API submissions to train foundation models according to their enterprise terms.
+              When generating website copy, metadata, and blog content, prompts are sent to your configured AI provider (Google Gemini, OpenAI, Groq, or OpenRouter). You retain complete ownership of your generated static code and content. Third-party providers do not use your private API submissions to train foundation models according to their enterprise terms.
             </p>
           </section>
 
@@ -95,10 +90,10 @@ export default function PrivacyPage() {
             <p>
               If you have any questions or data deletion inquiries regarding this policy, please reach out to our team at{" "}
               <a
-                href="mailto:support@altopex.com"
+                href={`mailto:${BRAND.supportEmail}`}
                 className="text-indigo-600 dark:text-indigo-400 font-semibold underline"
               >
-                support@altopex.com
+                {BRAND.supportEmail}
               </a>
               .
             </p>

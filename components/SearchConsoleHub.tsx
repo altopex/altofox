@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Check,
 } from "lucide-react";
+import { BRAND } from "@/config/brand";
 
 interface SearchConsoleHubProps {
   files: { path: string; content: string }[];
@@ -159,7 +160,7 @@ export function SearchConsoleHub({
             <span>Search Console Optimization Helper</span>
           </h2>
           <p className="text-xs text-slate-600 mt-0.5">
-            Upload CSV/TSV performance exports from Google Search Console. AltoFox finds ranking opportunities and crafts data-driven optimizations.
+            Upload CSV/TSV performance exports from Google Search Console. {BRAND.name} finds ranking opportunities and crafts data-driven optimizations.
           </p>
         </div>
       </div>

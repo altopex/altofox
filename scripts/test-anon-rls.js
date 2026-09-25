@@ -11,7 +11,7 @@ async function main() {
 
   const supabase = createClient(url, anonKey);
   console.log("==================================================================");
-  console.log(" AltoFox Security Test: Anonymous Access & Row Level Security");
+  console.log(" RankLocal Security Test: Anonymous Access & Row Level Security");
   console.log(" Target:", url);
   console.log("==================================================================\n");
 

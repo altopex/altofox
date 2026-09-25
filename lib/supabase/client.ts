@@ -34,12 +34,22 @@ export function getSupabaseBrowserClient(): SupabaseClient {
 
   clientInitializedWithDummyKey = !hasRealKey;
 
+  if (isBrowser) {
+    try {
+      const oldAuth = localStorage.getItem("altofox_team_auth");
+      const newAuth = localStorage.getItem("ranklocal_team_auth");
+      if (oldAuth && !newAuth) {
+        localStorage.setItem("ranklocal_team_auth", oldAuth);
+      }
+    } catch {}
+  }
+
   browserClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: isBrowser,
       autoRefreshToken: isBrowser,
       detectSessionInUrl: isBrowser,
-      storageKey: "altofox_team_auth",
+      storageKey: "ranklocal_team_auth",
     },
     realtime: {
       params: {

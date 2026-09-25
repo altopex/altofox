@@ -26,6 +26,8 @@ import {
   Layers,
 } from "lucide-react";
 import Link from "next/link";
+import { BRAND } from "@/config/brand";
+import { RankLocalIcon } from "@/components/brand/RankLocalLogo";
 
 export type NavTab = "dashboard" | "projects" | "activity" | "team" | "settings";
 
@@ -62,7 +64,7 @@ export function AppShell({
 
   // Load / toggle dark mode
   useEffect(() => {
-    const savedTheme = localStorage.getItem("altofox_dark_mode") === "true";
+    const savedTheme = (localStorage.getItem("ranklocal_dark_mode") ?? localStorage.getItem("altofox_dark_mode")) === "true";
     setIsDarkMode(savedTheme);
     if (savedTheme) {
       document.documentElement.classList.add("dark");
@@ -74,7 +76,7 @@ export function AppShell({
   const toggleDarkMode = () => {
     const next = !isDarkMode;
     setIsDarkMode(next);
-    localStorage.setItem("altofox_dark_mode", String(next));
+    localStorage.setItem("ranklocal_dark_mode", String(next));
     if (next) {
       document.documentElement.classList.add("dark");
     } else {
@@ -128,13 +130,11 @@ export function AppShell({
         {/* Sidebar Header */}
         <div className="h-16 flex items-center justify-between px-3.5 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white flex items-center justify-center shadow-sm shrink-0">
-              <Sparkles className="w-5 h-5" />
-            </div>
+            <RankLocalIcon className="w-8 h-8 shrink-0" />
             {!sidebarCollapsed && (
               <div className="leading-tight">
                 <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
-                  AltoFox Studio
+                  {BRAND.name} Studio
                 </span>
                 <span className="block text-[10px] text-slate-400 font-medium">
                   Private Team

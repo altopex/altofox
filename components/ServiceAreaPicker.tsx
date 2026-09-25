@@ -27,6 +27,7 @@ import {
   ShieldCheck,
   Edit3,
 } from "lucide-react";
+import { BRAND } from "@/config/brand";
 
 export interface SelectedServiceCity {
   city: string;
@@ -232,7 +233,7 @@ export function ServiceAreaPicker({
             </span>
           </h2>
           <p className="text-xs text-slate-600 mt-0.5">
-            Select regions and neighboring cities where your technicians travel. AltoFox generates unique local pages with regional context.
+            Select regions and neighboring cities where your technicians travel. {BRAND.name} generates unique local pages with regional context.
           </p>
         </div>
       </div>

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AltoFox Shared Client Script (templates/base.js)
+   RankLocal Shared Client Script (templates/base.js)
    Vanilla JS only - Zero frameworks
    ========================================================================== */
 

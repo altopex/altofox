@@ -18,7 +18,7 @@ async function main() {
     console.error("Usage: node scripts/create-user.js <email> [password] [role] [full_name]");
     process.exit(1);
   }
-  const password = process.argv[3] || ("Altofox@" + Math.random().toString(36).slice(-8) + "!9A");
+  const password = process.argv[3] || ("Ranklocal@" + Math.random().toString(36).slice(-8) + "!9A");
   const role = process.argv[4] || "editor";
   const fullName = process.argv[5] || email.split("@")[0];
 

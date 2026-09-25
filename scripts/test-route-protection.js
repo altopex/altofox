@@ -6,7 +6,7 @@ const BASE_URL = "http://127.0.0.1:3000";
 
 async function runTests() {
   console.log("=================================================");
-  console.log("ALTOFOX ACCESS CONTROL & ROUTE PROTECTION TEST SUITE");
+  console.log("RANKLOCAL ACCESS CONTROL & ROUTE PROTECTION TEST SUITE");
   console.log("=================================================\n");
 
   let passed = 0;
@@ -121,7 +121,7 @@ async function runTests() {
     // Check /dashboard access with approved cookies
     const dashRes = await fetch(`${BASE_URL}/dashboard`, {
       headers: {
-        Cookie: `altofox_token=${token}; altofox_status=approved`,
+        Cookie: `ranklocal_token=${token}; ranklocal_status=approved`,
       },
       redirect: "manual",
     });
@@ -130,7 +130,7 @@ async function runTests() {
     // Check /login redirects to /dashboard when approved
     const loginRes = await fetch(`${BASE_URL}/login`, {
       headers: {
-        Cookie: `altofox_token=${token}; altofox_status=approved`,
+        Cookie: `ranklocal_token=${token}; ranklocal_status=approved`,
       },
       redirect: "manual",
     });
@@ -186,7 +186,7 @@ async function runTests() {
       // Access /dashboard -> Must redirect to /pending
       const dashPendingRes = await fetch(`${BASE_URL}/dashboard`, {
         headers: {
-          Cookie: `altofox_token=${pendingToken}; altofox_status=pending`,
+          Cookie: `ranklocal_token=${pendingToken}; ranklocal_status=pending`,
         },
         redirect: "manual",
       });
@@ -202,7 +202,7 @@ async function runTests() {
       const apiPendingRes = await fetch(`${BASE_URL}/api/projects`, {
         headers: {
           Authorization: `Bearer ${pendingToken}`,
-          Cookie: `altofox_token=${pendingToken}; altofox_status=pending`,
+          Cookie: `ranklocal_token=${pendingToken}; ranklocal_status=pending`,
         },
       });
       assert(

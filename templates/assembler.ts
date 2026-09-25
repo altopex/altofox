@@ -237,7 +237,7 @@ export async function assembleWebsite(
 
   // Fallback CSS & JS if file read failed in serverless bundle
   if (!baseCss) {
-    baseCss = `/* AltoFox Fallback CSS */
+    baseCss = `/* RankLocal Fallback CSS */
 body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
 .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
 .btn { display: inline-flex; padding: 12px 24px; border-radius: 8px; font-weight: bold; }

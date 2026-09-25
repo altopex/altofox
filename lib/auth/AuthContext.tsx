@@ -37,13 +37,17 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 function setAuthCookies(token: string | null, status: string | null) {
   if (typeof document === "undefined") return;
   if (token) {
+    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800`;
     document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800`;
   } else {
+    document.cookie = "ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
     document.cookie = "altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
   }
   if (status) {
+    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800`;
     document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800`;
   } else {
+    document.cookie = "ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
     document.cookie = "altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
   }
 }

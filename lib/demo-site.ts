@@ -4,7 +4,7 @@ export const SAMPLE_DEMO_PROJECT: ProjectData = {
   projectId: "demo-carolina-plumbing",
   name: "Carolina Pro Plumbing & Drain",
   notes: "Full-featured interactive demo static website with Schema.org LocalBusiness JSON-LD, emergency call buttons, and working quote form.",
-  provider: "altofox",
+  provider: "ranklocal",
   model: "static-architect-v1",
   downloadUrl: "#",
   files: [

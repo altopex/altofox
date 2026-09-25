@@ -19,6 +19,7 @@ import {
 } from "../lib/search-console/search-console-analyzer";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { generateWebsiteZIP, exportProjectBackup, saveProjectToDB } from "../lib/storage/db";
+import { BRAND } from "@/config/brand";
 import {
   Sparkles,
   Upload,
@@ -854,7 +855,7 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
                 </div>
               ) : (
                 <div className="border border-dashed border-slate-300 rounded-xl p-4 text-center text-xs text-slate-500">
-                  This is your first recorded optimization cycle. AltoFox will record this upload as your baseline to compare against next month!
+                  This is your first recorded optimization cycle. {BRAND.name} will record this upload as your baseline to compare against next month!
                 </div>
               )}
             </div>

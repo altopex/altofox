@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { TeamMember, SignupMode } from "@/lib/supabase/types";
+import { BRAND } from "@/config/brand";
 import {
   Users,
   UserPlus,
@@ -45,7 +46,7 @@ export function TeamManagement() {
 
   // Sign-up mode settings (Owner only)
   const [signupMode, setSignupMode] = useState<SignupMode>("approval_required");
-  const [contactEmail, setContactEmail] = useState("support@altopex.com");
+  const [contactEmail, setContactEmail] = useState<string>(BRAND.supportEmail);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsFeedback, setSettingsFeedback] = useState<string | null>(null);
 

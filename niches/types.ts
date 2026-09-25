@@ -1,5 +1,5 @@
 /**
- * Niche Pack Type Definitions for AltoFox.
+ * Niche Pack Type Definitions for RankLocal.
  * Each niche pack provides expert, industry-specific content, real services,
  * trust signals, pain points, FAQs, process steps, photo search queries,
  * and SEO keyword patterns.

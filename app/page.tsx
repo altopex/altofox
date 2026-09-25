@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { BRAND } from "@/config/brand";
+import { RankLocalLogo } from "@/components/brand/RankLocalLogo";
 import {
   Sparkles,
   ArrowRight,
@@ -79,12 +81,12 @@ const HERO_NICHES = [
 
 const FAQS = [
   {
-    q: "Why does AltoFox generate static HTML instead of WordPress or Webflow?",
+    q: `Why does ${BRAND.name} generate static HTML instead of WordPress or Webflow?`,
     a: "Static HTML pages load in under 200 milliseconds, require zero database queries, and cannot be hacked through vulnerable plugins. Google rewards high Core Web Vitals and lightning-fast mobile speeds with higher local map and organic rankings.",
   },
   {
-    q: "How does AltoFox prevent duplicate content penalties across multiple service areas?",
-    a: "AltoFox avoids spammy keyword stuffing. Each location and service-location page generates unique, contextual local copy—including specific local neighborhood landmarks, regional climate factors, tailored service descriptions, and localized Schema.org data.",
+    q: `How does ${BRAND.name} prevent duplicate content penalties across multiple service areas?`,
+    a: `${BRAND.name} avoids spammy keyword stuffing. Each location and service-location page generates unique, contextual local copy—including specific local neighborhood landmarks, regional climate factors, tailored service descriptions, and localized Schema.org data.`,
   },
   {
     q: "Where can I host the generated static websites?",
@@ -92,11 +94,11 @@ const FAQS = [
   },
   {
     q: "Can I optimize existing websites month after month?",
-    a: "Yes. AltoFox includes a Search Console Optimization helper. Simply drop your Google Search Console performance export into the project dashboard, and AltoFox will identify low-CTR queries and high-impression pages, giving you actionable 1-click SEO refinements.",
+    a: `Yes. ${BRAND.name} includes a Search Console Optimization helper. Simply drop your Google Search Console performance export into the project dashboard, and ${BRAND.name} will identify low-CTR queries and high-impression pages, giving you actionable 1-click SEO refinements.`,
   },
   {
     q: "Can my team collaborate on client websites?",
-    a: "Yes. AltoFox has built-in team workspace management with role-based access control (Owner, Editor), real-time presence indicators, an audit activity feed, and approval controls.",
+    a: `Yes. ${BRAND.name} has built-in team workspace management with role-based access control (Owner, Editor), real-time presence indicators, an audit activity feed, and approval controls.`,
   },
 ];
 
@@ -114,26 +116,14 @@ export default function MarketingLandingPage() {
       <header className="sticky top-0 z-50 w-full bg-slate-900/90 backdrop-blur-md border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center space-x-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 group-hover:scale-105 transition">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex items-baseline space-x-1.5">
-              <span className="text-xl font-bold tracking-tight text-white">
-                Alto<span className="text-indigo-400">Fox</span>
-              </span>
-              <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                SEO Studio
-              </span>
-            </div>
-          </Link>
+          <RankLocalLogo mode="dark" size="sm" showTagline />
 
           {/* Desktop Nav Links */}
           <nav className="hidden md:flex items-center space-x-8 text-xs font-semibold text-slate-300">
             <a href="#features" className="hover:text-white transition">Features</a>
             <a href="#niches" className="hover:text-white transition">20 Niche Packs</a>
             <a href="#how-it-works" className="hover:text-white transition">How It Works</a>
-            <a href="#comparison" className="hover:text-white transition">Why AltoFox</a>
+            <a href="#comparison" className="hover:text-white transition">Why {BRAND.name}</a>
             <Link href="/pricing" className="text-indigo-400 font-bold hover:text-indigo-300 transition">Pricing</Link>
             <a href="#faq" className="hover:text-white transition">FAQ</a>
           </nav>
@@ -216,7 +206,7 @@ export default function MarketingLandingPage() {
               onClick={() => setMobileMenuOpen(false)}
               className="block text-sm font-semibold text-slate-300 hover:text-white py-2"
             >
-              Why AltoFox
+              Why {BRAND.name}
             </a>
             <Link
               href="/pricing"
@@ -288,7 +278,7 @@ export default function MarketingLandingPage() {
 
           {/* Subtitle */}
           <p className="text-base sm:text-lg text-slate-400 max-w-2xl mx-auto mt-6 leading-relaxed">
-            AltoFox creates blazing-fast, 100% static HTML websites engineered to dominate local search. Complete with 20 trade niche packs, multi-suburb location pages, Schema.org markup, and Search Console optimization cycles.
+            {BRAND.name} creates blazing-fast, 100% static HTML websites engineered to dominate local search. Complete with 20 trade niche packs, multi-suburb location pages, Schema.org markup, and Search Console optimization cycles.
           </p>
 
           {/* CTAs */}
@@ -340,7 +330,7 @@ export default function MarketingLandingPage() {
                 <span className="w-3 h-3 rounded-full bg-rose-500" />
                 <span className="w-3 h-3 rounded-full bg-amber-500" />
                 <span className="w-3 h-3 rounded-full bg-emerald-500" />
-                <span className="text-xs font-mono text-slate-400 ml-2">altofox-preview.local</span>
+                <span className="text-xs font-mono text-slate-400 ml-2">ranklocal-preview.local</span>
               </div>
 
               {/* Trade Switcher Tabs */}
@@ -431,7 +421,7 @@ export default function MarketingLandingPage() {
             Everything your business needs to own local search.
           </h2>
           <p className="text-sm text-slate-400 mt-3">
-            Generic website builders generate bloated code that ignores local search signals. AltoFox is built specifically to address Google&apos;s local search ranking factors.
+            Generic website builders generate bloated code that ignores local search signals. {BRAND.name} is built specifically to address Google&apos;s local search ranking factors.
           </p>
         </div>
 
@@ -542,10 +532,10 @@ export default function MarketingLandingPage() {
             The Smart Local Choice
           </span>
           <h2 className="text-3xl font-black text-white tracking-tight mt-2">
-            AltoFox vs. Traditional Builders
+            {BRAND.name} vs. Traditional Builders
           </h2>
           <p className="text-sm text-slate-400 mt-2">
-            Why local contractors and agencies choose AltoFox over slow, vulnerable WordPress stacks.
+            Why local contractors and agencies choose {BRAND.name} over slow, vulnerable WordPress stacks.
           </p>
         </div>
 
@@ -555,7 +545,7 @@ export default function MarketingLandingPage() {
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-900 text-slate-400 font-bold uppercase tracking-wider">
                   <th className="py-4 px-6">Capability</th>
-                  <th className="py-4 px-6 text-indigo-400 bg-indigo-950/40">AltoFox</th>
+                  <th className="py-4 px-6 text-indigo-400 bg-indigo-950/40">{BRAND.name}</th>
                   <th className="py-4 px-6">WordPress + Elementor</th>
                   <th className="py-4 px-6">Generic AI Builders</th>
                 </tr>
@@ -632,7 +622,7 @@ export default function MarketingLandingPage() {
               </div>
               <h3 className="text-base font-bold text-white mb-2">AI Generates Local Architecture</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                AltoFox generates static pages for each service and suburb with Schema.org markup, localized FAQs, and responsive themes.
+                {BRAND.name} generates static pages for each service and suburb with Schema.org markup, localized FAQs, and responsive themes.
               </p>
             </div>
 
@@ -716,14 +706,7 @@ export default function MarketingLandingPage() {
       {/* 10. FOOTER */}
       <footer className="py-12 bg-slate-950 border-t border-slate-800 text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2.5">
-            <div className="w-6 h-6 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-              <Sparkles className="w-3.5 h-3.5" />
-            </div>
-            <span className="font-bold text-white tracking-tight">
-              AltoFox Website Builder
-            </span>
-          </div>
+          <RankLocalLogo mode="dark" size="xs" showTagline />
 
           <div className="flex items-center space-x-6 text-slate-400">
             <Link href="/pricing" className="text-indigo-400 font-semibold hover:text-white transition">Pricing</Link>
@@ -734,7 +717,7 @@ export default function MarketingLandingPage() {
           </div>
 
           <div className="text-slate-500 text-[11px]">
-            &copy; {new Date().getFullYear()} AltoFox. All rights reserved.
+            &copy; {new Date().getFullYear()} {BRAND.name}. All rights reserved.
           </div>
         </div>
       </footer>

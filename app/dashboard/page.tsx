@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { BRAND } from "@/config/brand";
 import { TopBar } from "@/components/TopBar";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { LivePreview, ProjectData } from "@/components/LivePreview";
@@ -1527,7 +1528,7 @@ export default function DashboardPage() {
             {/* Quick Actions Bar (Start over & Fill example) */}
             <div className="flex items-center justify-between text-xs text-[#64748B] px-1">
               <div className="flex items-center space-x-2">
-                <span className="font-medium">AltoFox Static Builder</span>
+                <span className="font-medium">{BRAND.name} Static Builder</span>
               </div>
               <div className="flex items-center space-x-3">
                 <button
@@ -2852,7 +2853,7 @@ export default function DashboardPage() {
         <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
           <Sparkles className="w-6 h-6 text-white" />
         </div>
-        <p className="text-sm font-medium text-slate-400">Loading AltoFox workspace…</p>
+        <p className="text-sm font-medium text-slate-400">Loading {BRAND.name} workspace…</p>
       </div>
     );
   }
