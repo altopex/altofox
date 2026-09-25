@@ -1,4 +1,10 @@
 import { PrismaClient } from "@prisma/client";
+import path from "path";
+
+// Ensure DATABASE_URL has a safe default for local SQLite if not configured
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = "file:./dev.db";
+}
 
 declare global {
   // eslint-disable-next-line no-var

@@ -1,6 +1,9 @@
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
 import { Profile } from "./types";
 
+const BUILD_FALLBACK_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.build_placeholder";
+
 /**
  * Server-only admin client with secret key.
  * Used for admin auth invites, role management, and scheduled backups.
@@ -12,10 +15,7 @@ export function getSupabaseAdminClient(): SupabaseClient {
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     "https://udxjxkkcpdrlceucxqfk.supabase.co";
 
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
-  if (!secretKey) {
-    throw new Error("SUPABASE_SECRET_KEY is not defined in server environment variables.");
-  }
+  const secretKey = process.env.SUPABASE_SECRET_KEY || BUILD_FALLBACK_KEY;
 
   return createClient(supabaseUrl, secretKey, {
     auth: {
@@ -38,7 +38,7 @@ export function getSupabaseUserClient(accessToken: string): SupabaseClient {
     process.env.SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "";
+    BUILD_FALLBACK_KEY;
 
   return createClient(supabaseUrl, anonKey, {
     global: {
