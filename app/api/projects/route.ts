@@ -1,10 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { requireApprovedServerRequest } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const authCheck = await requireApprovedServerRequest(req);
+    if (!authCheck.authorized) {
+      return authCheck.response;
+    }
+
     const projects = await db.project.findMany({
       orderBy: { createdAt: "desc" },
       take: 20,

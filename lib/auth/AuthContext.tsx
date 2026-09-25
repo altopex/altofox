@@ -3,16 +3,26 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { Profile, UserRole } from "@/lib/supabase/types";
+import { Profile, UserRole, UserStatus } from "@/lib/supabase/types";
+
+interface SignUpParams {
+  email: string;
+  password: string;
+  fullName: string;
+  companyName?: string;
+}
 
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   role: UserRole;
+  status: UserStatus;
   isOwner: boolean;
+  isApproved: boolean;
   loading: boolean;
   session: Session | null;
   signInWithPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUp: (params: SignUpParams) => Promise<{ success: boolean; requiresEmailConfirmation?: boolean; error?: string }>;
   signInWithOtp: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
@@ -23,6 +33,20 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function setAuthCookies(token: string | null, status: string | null) {
+  if (typeof document === "undefined") return;
+  if (token) {
+    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800`;
+  } else {
+    document.cookie = "altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  }
+  if (status) {
+    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800`;
+  } else {
+    document.cookie = "altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  }
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -31,7 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const supabase = getSupabaseBrowserClient();
 
-  const loadUserProfile = useCallback(async (userId: string, userEmail?: string) => {
+  const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -40,7 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (data && !error) {
-        setProfile({ ...data, email: userEmail });
+        const loadedProfile: Profile = {
+          ...data,
+          email: userEmail,
+          status: (data.status as UserStatus) || "pending",
+        };
+        setProfile(loadedProfile);
+        setAuthCookies(currentToken || session?.access_token || null, loadedProfile.status);
+
         // Touch last_active_at in background
         supabase
           .from("profiles")
@@ -48,22 +79,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq("id", userId)
           .then();
       } else {
-        // Fallback default profile if trigger hasn't fired yet
-        setProfile({
+        // Fallback default profile if trigger hasn't completed yet
+        const isOwnerEmail = userEmail?.toLowerCase() === "russ@altopex.com";
+        const fallbackProfile: Profile = {
           id: userId,
           full_name: userEmail?.split("@")[0] || "Team Member",
           avatar_url: null,
-          role: "owner", // default owner if sole user
+          role: isOwnerEmail ? "owner" : "editor",
+          status: isOwnerEmail ? "approved" : "pending",
+          company_name: null,
           last_active_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           email: userEmail,
-        });
+        };
+        setProfile(fallbackProfile);
+        setAuthCookies(currentToken || session?.access_token || null, fallbackProfile.status);
       }
     } catch (err) {
       console.warn("[Auth] Profile load exception:", err);
     }
-  }, [supabase]);
+  }, [supabase, session]);
 
   useEffect(() => {
     let mounted = true;
@@ -76,11 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (initialSession?.user) {
           setSession(initialSession);
           setUser(initialSession.user);
-          await loadUserProfile(initialSession.user.id, initialSession.user.email);
+          await loadUserProfile(initialSession.user.id, initialSession.user.email, initialSession.access_token);
         } else {
           setSession(null);
           setUser(null);
           setProfile(null);
+          setAuthCookies(null, null);
         }
       } catch (err) {
         console.error("[Auth] Init error:", err);
@@ -99,9 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentSession?.user || null);
 
         if (currentSession?.user) {
-          await loadUserProfile(currentSession.user.id, currentSession.user.email);
+          await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
         } else {
           setProfile(null);
+          setAuthCookies(null, null);
         }
         setLoading(false);
       }
@@ -124,14 +162,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { success: false, error: error.message };
       }
 
-      if (data.user) {
+      if (data.user && data.session) {
         setUser(data.user);
         setSession(data.session);
-        await loadUserProfile(data.user.id, data.user.email);
+        await loadUserProfile(data.user.id, data.user.email, data.session.access_token);
       }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || "Failed to sign in" };
+    }
+  };
+
+  const signUp = async ({
+    email,
+    password,
+    fullName,
+    companyName,
+  }: SignUpParams) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+            company_name: companyName?.trim() || null,
+          },
+          emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+        },
+      });
+
+      if (error) {
+        return { success: false, error: error.message };
+      }
+
+      if (data.user) {
+        if (data.session) {
+          setUser(data.user);
+          setSession(data.session);
+          await loadUserProfile(data.user.id, data.user.email, data.session.access_token);
+        }
+        return {
+          success: true,
+          requiresEmailConfirmation: !data.session,
+        };
+      }
+      return { success: false, error: "Failed to create account" };
+    } catch (err: any) {
+      return { success: false, error: err.message || "Failed to create account" };
     }
   };
 
@@ -140,8 +218,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          shouldCreateUser: false, // strictly invite-only! No auto-signup
-          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+          shouldCreateUser: false,
+          emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
         },
       });
 
@@ -217,17 +295,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setSession(null);
       setProfile(null);
+      setAuthCookies(null, null);
     }
   };
 
   const refreshProfile = async () => {
     if (user) {
-      await loadUserProfile(user.id, user.email);
+      await loadUserProfile(user.id, user.email, session?.access_token);
     }
   };
 
   const role: UserRole = profile?.role || "editor";
-  const isOwner = role === "owner";
+  const status: UserStatus = profile?.status || "pending";
+  const isApproved = status === "approved";
+  const isOwner = role === "owner" && isApproved;
 
   return (
     <AuthContext.Provider
@@ -235,10 +316,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         role,
+        status,
         isOwner,
+        isApproved,
         loading,
         session,
         signInWithPassword,
+        signUp,
         signInWithOtp,
         resetPasswordForEmail,
         updatePassword,

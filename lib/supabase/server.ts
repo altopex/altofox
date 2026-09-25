@@ -54,7 +54,7 @@ export function getSupabaseUserClient(accessToken: string): SupabaseClient {
 }
 
 /**
- * Authenticates an incoming API request by extracting and verifying the Bearer token or session.
+ * Authenticates an incoming API request by extracting and verifying the Bearer token or cookie session.
  */
 export async function authenticateServerRequest(
   req: Request
@@ -62,14 +62,28 @@ export async function authenticateServerRequest(
   user: User;
   profile: Profile;
   isOwner: boolean;
+  isApproved: boolean;
   accessToken: string;
 } | null> {
+  let token: string | null = null;
+
+  // 1. Check Authorization header
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return null;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.replace("Bearer ", "").trim();
   }
 
-  const token = authHeader.replace("Bearer ", "").trim();
+  // 2. Fallback to cookies (altofox_token)
+  if (!token) {
+    const cookieHeader = req.headers.get("cookie");
+    if (cookieHeader) {
+      const match = cookieHeader.match(/altofox_token=([^;]+)/);
+      if (match && match[1]) {
+        token = decodeURIComponent(match[1]).trim();
+      }
+    }
+  }
+
   if (!token) return null;
 
   try {
@@ -93,20 +107,61 @@ export async function authenticateServerRequest(
       full_name: (user.user_metadata?.full_name as string) || user.email?.split("@")[0] || "User",
       avatar_url: (user.user_metadata?.avatar_url as string) || null,
       role: (user.user_metadata?.role as any) || "editor",
+      status: (user.user_metadata?.status as any) || "pending",
+      company_name: (user.user_metadata?.company_name as string) || null,
       last_active_at: new Date().toISOString(),
       created_at: user.created_at,
       updated_at: user.updated_at || user.created_at,
       email: user.email,
     };
 
+    const isApproved = profile.status === "approved";
+    const isOwner = profile.role === "owner" && isApproved;
+
     return {
       user,
       profile,
-      isOwner: profile.role === "owner",
+      isOwner,
+      isApproved,
       accessToken: token,
     };
   } catch (err) {
     console.error("[Auth] Server verification error:", err);
     return null;
   }
+}
+
+/**
+ * Enforces that the request comes from an authenticated AND approved user.
+ * Returns either the authorized context or an immediate NextResponse error.
+ */
+export async function requireApprovedServerRequest(req: Request) {
+  const auth = await authenticateServerRequest(req);
+  if (!auth) {
+    return {
+      authorized: false as const,
+      response: Response.json({ error: "Unauthorized. Please sign in." }, { status: 401 }),
+      auth: null,
+    };
+  }
+
+  if (!auth.isApproved) {
+    return {
+      authorized: false as const,
+      response: Response.json(
+        {
+          error: "Account awaiting approval or disabled.",
+          status: auth.profile.status,
+        },
+        { status: 403 }
+      ),
+      auth,
+    };
+  }
+
+  return {
+    authorized: true as const,
+    response: null,
+    auth,
+  };
 }

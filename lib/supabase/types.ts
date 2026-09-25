@@ -1,10 +1,14 @@
 export type UserRole = "owner" | "editor";
+export type UserStatus = "pending" | "approved" | "disabled";
+export type SignupMode = "approval_required" | "invite_only" | "open";
 
 export interface Profile {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
   role: UserRole;
+  status: UserStatus;
+  company_name?: string | null;
   last_active_at: string;
   created_at: string;
   updated_at: string;
@@ -184,6 +188,8 @@ export interface TeamMember {
   full_name: string;
   avatar_url: string;
   role: UserRole;
+  status?: UserStatus;
+  company_name?: string | null;
   last_active_at: string;
   created_at: string;
 }
