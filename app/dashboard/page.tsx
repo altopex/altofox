@@ -1525,38 +1525,40 @@ export default function DashboardPage() {
 
       {currentProject ? (
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-              <LivePreview
-                project={currentProject}
-                onNewWebsite={() => {
-                  setCurrentProject(null);
-                  setCurrentStep(1);
-                }}
-                onGenerateAgain={handleGenerateWebsite}
-                onTryAnotherTheme={() => {
-                  setCurrentProject(null);
-                  setCurrentStep(5);
-                  window.scrollTo({ top: 0, behavior: "smooth" });
-                }}
-                onOpenManager={() => {
-                  if (!user) {
-                    setLoginModalReason("Sign in to your team account to access the Website Manager and Dashboard.");
-                    setLoginModalOpen(true);
-                    return;
-                  }
-                  if (activeSavedProject) {
-                    setViewMode("manager");
-                    setNavTab("projects");
-                  } else {
-                    loadAllSavedProjects().then(() => {
-                      setViewMode("dashboard");
+              <ErrorBoundary fallbackTitle="Live Preview Encountered an Issue">
+                <LivePreview
+                  project={currentProject}
+                  onNewWebsite={() => {
+                    setCurrentProject(null);
+                    setCurrentStep(1);
+                  }}
+                  onGenerateAgain={handleGenerateWebsite}
+                  onTryAnotherTheme={() => {
+                    setCurrentProject(null);
+                    setCurrentStep(5);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  onOpenManager={() => {
+                    if (!user) {
+                      setLoginModalReason("Sign in to your team account to access the Website Manager and Dashboard.");
+                      setLoginModalOpen(true);
+                      return;
+                    }
+                    if (activeSavedProject) {
+                      setViewMode("manager");
                       setNavTab("projects");
-                    });
-                  }
-                }}
-                onOpenKeywordMap={() => setKeywordMapOpen(true)}
-                onOpenFindReplace={() => setFindReplaceOpen(true)}
-                onOpenBlogManager={() => setBlogManagerOpen(true)}
-              />
+                    } else {
+                      loadAllSavedProjects().then(() => {
+                        setViewMode("dashboard");
+                        setNavTab("projects");
+                      });
+                    }
+                  }}
+                  onOpenKeywordMap={() => setKeywordMapOpen(true)}
+                  onOpenFindReplace={() => setFindReplaceOpen(true)}
+                  onOpenBlogManager={() => setBlogManagerOpen(true)}
+                />
+              </ErrorBoundary>
             </div>
           ) : (
             <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
@@ -3130,7 +3132,9 @@ export default function DashboardPage() {
       )}
 
             {/* Advanced Modals */}
-      {renderModals()}
+      <ErrorBoundary fallbackTitle="Modal Encountered an Issue">
+        {renderModals()}
+      </ErrorBoundary>
     
     </AppShell>
   );

@@ -9,6 +9,7 @@ import { SearchConsoleHub } from "./SearchConsoleHub";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { Theme, THEMES } from "../lib/themes";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
+import { ErrorBoundary } from "./ErrorBoundary";
 import {
   FolderKanban,
   FileText,
@@ -174,9 +175,14 @@ export function WebsiteManager({
   const [pageH1, setPageH1] = useState("");
   const [activeHtmlContent, setActiveHtmlContent] = useState("");
 
+  const isDirtyRef = React.useRef(false);
+  const isSavingRef = React.useRef(false);
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
   // Sync state when page changes
   useEffect(() => {
     if (currentPageFile) {
+      isDirtyRef.current = false;
       setActiveHtmlContent(currentPageFile.content);
 
       const titleMatch = currentPageFile.content.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
@@ -191,6 +197,61 @@ export function WebsiteManager({
       setPageH1(h1Match ? h1Match[1].replace(/<[^>]+>/g, "").trim() : "");
     }
   }, [currentPageFile, selectedPagePath]);
+
+  // Debounced auto-save (800ms) with isSavingRef lock to avoid race conditions
+  useEffect(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+
+    if (isDirtyRef.current) {
+      setSaveStatus("saving");
+      saveTimeoutRef.current = setTimeout(async () => {
+        if (isSavingRef.current) return;
+        isSavingRef.current = true;
+        try {
+          await executeSave();
+          isDirtyRef.current = false;
+        } catch (err) {
+          console.error("Auto-save failed:", err);
+        } finally {
+          isSavingRef.current = false;
+        }
+      }, 800);
+    }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageTitle, metaDescription, pageH1]);
+
+  const handleSelectPage = async (newPath: string) => {
+    if (newPath === selectedPagePath) return;
+
+    if (isDirtyRef.current) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (!isSavingRef.current) {
+        isSavingRef.current = true;
+        try {
+          await executeSave();
+        } catch (err) {
+          console.error("Flush save on page switch failed:", err);
+        } finally {
+          isSavingRef.current = false;
+          isDirtyRef.current = false;
+        }
+      }
+    }
+
+    setSelectedPagePath(newPath);
+  };
 
   // Current page primary keyword & SEO audit
   const currentKeywordEntry = useMemo(() => {
@@ -411,6 +472,7 @@ export function WebsiteManager({
       setSaveStatus("offline");
     }
 
+    isDirtyRef.current = false;
     setProject(updatedProject);
     onProjectUpdated(updatedProject);
     setPageOpenedAt(Date.now());
@@ -762,7 +824,7 @@ export function WebsiteManager({
                       <button
                         key={path}
                         type="button"
-                        onClick={() => setSelectedPagePath(path)}
+                        onClick={() => handleSelectPage(path)}
                         className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition ${
                           selectedPagePath === path
                             ? "bg-indigo-50 text-indigo-700 font-bold"
@@ -785,7 +847,7 @@ export function WebsiteManager({
                         <button
                           key={path}
                           type="button"
-                          onClick={() => setSelectedPagePath(path)}
+                          onClick={() => handleSelectPage(path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition ${
                             selectedPagePath === path
                               ? "bg-indigo-50 text-indigo-700 font-bold"
@@ -809,7 +871,7 @@ export function WebsiteManager({
                         <button
                           key={path}
                           type="button"
-                          onClick={() => setSelectedPagePath(path)}
+                          onClick={() => handleSelectPage(path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition ${
                             selectedPagePath === path
                               ? "bg-indigo-50 text-indigo-700 font-bold"
@@ -833,7 +895,7 @@ export function WebsiteManager({
                         <button
                           key={path}
                           type="button"
-                          onClick={() => setSelectedPagePath(path)}
+                          onClick={() => handleSelectPage(path)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between transition ${
                             selectedPagePath === path
                               ? "bg-indigo-50 text-indigo-700 font-bold"
@@ -857,6 +919,18 @@ export function WebsiteManager({
                     <span className="text-xs font-bold text-slate-900 font-mono">
                       Editing: {selectedPagePath}
                     </span>
+                    {saveStatus === "saving" && (
+                      <span className="flex items-center space-x-1 text-[10px] text-indigo-600 font-medium">
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Auto-saving…</span>
+                      </span>
+                    )}
+                    {saveStatus === "saved" && !isDirtyRef.current && (
+                      <span className="flex items-center space-x-1 text-[10px] text-emerald-600 font-medium">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Saved</span>
+                      </span>
+                    )}
                     {currentSeoAudit && (
                       <span
                         className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
@@ -935,7 +1009,10 @@ export function WebsiteManager({
                       <input
                         type="text"
                         value={pageTitle}
-                        onChange={(e) => setPageTitle(e.target.value)}
+                        onChange={(e) => {
+                          isDirtyRef.current = true;
+                          setPageTitle(e.target.value);
+                        }}
                         className="input-base text-xs bg-white"
                       />
                     </div>
@@ -958,7 +1035,10 @@ export function WebsiteManager({
                       <textarea
                         rows={2}
                         value={metaDescription}
-                        onChange={(e) => setMetaDescription(e.target.value)}
+                        onChange={(e) => {
+                          isDirtyRef.current = true;
+                          setMetaDescription(e.target.value);
+                        }}
                         className="w-full text-xs p-2.5 rounded-lg border border-slate-300 bg-white"
                       />
                     </div>
@@ -970,7 +1050,10 @@ export function WebsiteManager({
                       <input
                         type="text"
                         value={pageH1}
-                        onChange={(e) => setPageH1(e.target.value)}
+                        onChange={(e) => {
+                          isDirtyRef.current = true;
+                          setPageH1(e.target.value);
+                        }}
                         className="input-base text-xs bg-white"
                       />
                     </div>
@@ -1031,12 +1114,14 @@ export function WebsiteManager({
                       previewDevice === "mobile" ? "w-[375px] h-[640px]" : "w-full h-full"
                     }`}
                   >
-                    <iframe
-                      title="Page Preview"
-                      srcDoc={activeHtmlContent || currentPageFile?.content}
-                      className="w-full h-full border-0"
-                      sandbox="allow-scripts allow-same-origin"
-                    />
+                    <ErrorBoundary fallbackTitle="Page Preview Encountered an Issue">
+                      <iframe
+                        title="Page Preview"
+                        srcDoc={activeHtmlContent || currentPageFile?.content}
+                        className="w-full h-full border-0"
+                        sandbox="allow-scripts allow-same-origin"
+                      />
+                    </ErrorBoundary>
                   </div>
                 </div>
               </div>
@@ -1070,66 +1155,70 @@ export function WebsiteManager({
                 </button>
               </div>
 
-              <SearchConsoleHub
-                files={project.files || []}
-                keywordMap={project.keywordMap || []}
-                serviceAreas={(project.serviceAreaCities || []).map((c: any) => typeof c === "string" ? c : c?.city || "").filter(Boolean)}
-                businessType={project.formData?.businessType || "Contractor"}
-                city={project.formData?.city || "Local"}
-                changeLog={project.changeLog}
-                onApplyOptimization={(path, newHtml, logSummary) => {
-                  const updatedFiles = project.files.map((f) =>
-                    f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
-                  );
-                  const logEntry: ProjectChangeLogEntry = {
-                    id: `log-${Date.now()}`,
-                    timestamp: Date.now(),
-                    dateStr: new Date().toLocaleDateString(),
-                    summary: logSummary,
-                    affectedPages: [path],
-                  };
-                  const updated = {
-                    ...project,
-                    files: updatedFiles,
-                    lastEditedAt: Date.now(),
-                    changeLog: [logEntry, ...(project.changeLog || [])],
-                  };
-                  saveProjectToDB(updated);
-                  setProject(updated);
-                  onProjectUpdated(updated);
-                }}
-              />
+              <ErrorBoundary fallbackTitle="Search Console Hub Encountered an Issue">
+                <SearchConsoleHub
+                  files={project.files || []}
+                  keywordMap={project.keywordMap || []}
+                  serviceAreas={(project.serviceAreaCities || []).map((c: any) => typeof c === "string" ? c : c?.city || "").filter(Boolean)}
+                  businessType={project.formData?.businessType || "Contractor"}
+                  city={project.formData?.city || "Local"}
+                  changeLog={project.changeLog}
+                  onApplyOptimization={(path, newHtml, logSummary) => {
+                    const updatedFiles = project.files.map((f) =>
+                      f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
+                    );
+                    const logEntry: ProjectChangeLogEntry = {
+                      id: `log-${Date.now()}`,
+                      timestamp: Date.now(),
+                      dateStr: new Date().toLocaleDateString(),
+                      summary: logSummary,
+                      affectedPages: [path],
+                    };
+                    const updated = {
+                      ...project,
+                      files: updatedFiles,
+                      lastEditedAt: Date.now(),
+                      changeLog: [logEntry, ...(project.changeLog || [])],
+                    };
+                    saveProjectToDB(updated);
+                    setProject(updated);
+                    onProjectUpdated(updated);
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           )}
 
           {/* TAB 3: KEYWORDS TAB */}
           {activeTab === "keywords" && (
             <div className="flex-1 p-6">
-              <KeywordMapModal
-                isOpen={true}
-                onClose={() => setActiveTab("pages")}
-                files={project.files}
-                businessType={project.formData?.businessType || "Contractor"}
-                city={project.formData?.city || "Local"}
-                state={project.formData?.stateRegion || "TX"}
-                services={project.formData?.services || []}
-                keywordMap={project.keywordMap}
-                onUpdateKeywordMap={(updated) => {
-                  const up = { ...project, keywordMap: updated };
-                  saveProjectToDB(up);
-                  setProject(up);
-                  onProjectUpdated(up);
-                }}
-                onApplyOptimizedHtml={(path, newHtml) => {
-                  const updatedFiles = project.files.map((f) =>
-                    f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
-                  );
-                  const up = { ...project, files: updatedFiles, lastEditedAt: Date.now() };
-                  saveProjectToDB(up);
-                  setProject(up);
-                  onProjectUpdated(up);
-                }}
-              />
+              <ErrorBoundary fallbackTitle="Keyword Map Encountered an Issue">
+                <KeywordMapModal
+                  isOpen={true}
+                  onClose={() => setActiveTab("pages")}
+                  files={project.files}
+                  businessType={project.formData?.businessType || "Contractor"}
+                  city={project.formData?.city || "Local"}
+                  state={project.formData?.stateRegion || "TX"}
+                  services={project.formData?.services || []}
+                  keywordMap={project.keywordMap}
+                  onUpdateKeywordMap={(updated) => {
+                    const up = { ...project, keywordMap: updated };
+                    saveProjectToDB(up);
+                    setProject(up);
+                    onProjectUpdated(up);
+                  }}
+                  onApplyOptimizedHtml={(path, newHtml) => {
+                    const updatedFiles = project.files.map((f) =>
+                      f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
+                    );
+                    const up = { ...project, files: updatedFiles, lastEditedAt: Date.now() };
+                    saveProjectToDB(up);
+                    setProject(up);
+                    onProjectUpdated(up);
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           )}
 
@@ -1377,17 +1466,19 @@ export function WebsiteManager({
           {/* TAB 8: RANK & RENT COMMAND CENTER */}
           {activeTab === "rank-rent" && (
             <div className="flex-1 overflow-y-auto bg-slate-50">
-              <RankRentManager
-                project={project}
-                onProjectUpdated={(updated) => {
-                  setProject(updated);
-                  onProjectUpdated(updated);
-                }}
-                onShowToast={(msg) => {
-                  // Instant alert / confirmation
-                  console.log("[Rank & Rent]", msg);
-                }}
-              />
+              <ErrorBoundary fallbackTitle="Rank & Rent Manager Encountered an Issue">
+                <RankRentManager
+                  project={project}
+                  onProjectUpdated={(updated) => {
+                    setProject(updated);
+                    onProjectUpdated(updated);
+                  }}
+                  onShowToast={(msg) => {
+                    // Instant alert / confirmation
+                    console.log("[Rank & Rent]", msg);
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           )}
         </main>
@@ -1395,94 +1486,100 @@ export function WebsiteManager({
 
       {/* Monthly Optimization Cycle Modal */}
       {isCycleModalOpen && (
-        <MonthlyOptimizationCycleModal
-          isOpen={true}
-          onClose={() => setIsCycleModalOpen(false)}
-          project={project}
-          onCycleSaved={(updated) => {
-            setProject(updated);
-            onProjectUpdated(updated);
-            setIsCycleModalOpen(false);
-          }}
-        />
+        <ErrorBoundary fallbackTitle="Optimization Cycle Modal Encountered an Issue">
+          <MonthlyOptimizationCycleModal
+            isOpen={true}
+            onClose={() => setIsCycleModalOpen(false)}
+            project={project}
+            onCycleSaved={(updated) => {
+              setProject(updated);
+              onProjectUpdated(updated);
+              setIsCycleModalOpen(false);
+            }}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Find & Replace Modal */}
-      <FindReplaceModal
-        isOpen={isFindReplaceModalOpen}
-        onClose={() => setIsFindReplaceModalOpen(false)}
-        files={project.files}
-        onUpdateFiles={(newFiles, summary) => {
-          const log: ProjectChangeLogEntry = {
-            id: `log-${Date.now()}`,
-            timestamp: Date.now(),
-            dateStr: new Date().toLocaleDateString(),
-            summary,
-            affectedPages: [],
-          };
-          const up = {
-            ...project,
-            files: newFiles,
-            lastEditedAt: Date.now(),
-            changeLog: [log, ...(project.changeLog || [])],
-          };
-          saveProjectToDB(up);
-          setProject(up);
-          onProjectUpdated(up);
-        }}
-        businessDetails={project.businessDetails}
-        onUpdateBusinessDetails={(details) => {
-          const up = { ...project, businessDetails: details };
-          saveProjectToDB(up);
-          setProject(up);
-          onProjectUpdated(up);
-        }}
-        customBlocks={project.customBlocks || []}
-        onUpdateCustomBlocks={(blocks) => {
-          const up = { ...project, customBlocks: blocks };
-          saveProjectToDB(up);
-          setProject(up);
-          onProjectUpdated(up);
-        }}
-        mustIncludeText={project.mustIncludeText || ""}
-        onUpdateMustIncludeText={(text) => {
-          const up = { ...project, mustIncludeText: text };
-          saveProjectToDB(up);
-          setProject(up);
-          onProjectUpdated(up);
-        }}
-        canUndo={false}
-        onUndo={() => {}}
-      />
+      <ErrorBoundary fallbackTitle="Find & Replace Modal Encountered an Issue">
+        <FindReplaceModal
+          isOpen={isFindReplaceModalOpen}
+          onClose={() => setIsFindReplaceModalOpen(false)}
+          files={project.files}
+          onUpdateFiles={(newFiles, summary) => {
+            const log: ProjectChangeLogEntry = {
+              id: `log-${Date.now()}`,
+              timestamp: Date.now(),
+              dateStr: new Date().toLocaleDateString(),
+              summary,
+              affectedPages: [],
+            };
+            const up = {
+              ...project,
+              files: newFiles,
+              lastEditedAt: Date.now(),
+              changeLog: [log, ...(project.changeLog || [])],
+            };
+            saveProjectToDB(up);
+            setProject(up);
+            onProjectUpdated(up);
+          }}
+          businessDetails={project.businessDetails}
+          onUpdateBusinessDetails={(details) => {
+            const up = { ...project, businessDetails: details };
+            saveProjectToDB(up);
+            setProject(up);
+            onProjectUpdated(up);
+          }}
+          customBlocks={project.customBlocks || []}
+          onUpdateCustomBlocks={(blocks) => {
+            const up = { ...project, customBlocks: blocks };
+            saveProjectToDB(up);
+            setProject(up);
+            onProjectUpdated(up);
+          }}
+          mustIncludeText={project.mustIncludeText || ""}
+          onUpdateMustIncludeText={(text) => {
+            const up = { ...project, mustIncludeText: text };
+            saveProjectToDB(up);
+            setProject(up);
+            onProjectUpdated(up);
+          }}
+          canUndo={false}
+          onUndo={() => {}}
+        />
+      </ErrorBoundary>
 
       {/* Conflict Modal */}
       {conflictData && (
-        <ConflictModal
-          isOpen={conflictData.isOpen}
-          onClose={() => setConflictData(null)}
-          pageTitle={pageTitle || selectedPagePath}
-          changerName={conflictData.changerName}
-          changerUpdatedAt={conflictData.changerUpdatedAt}
-          localContent={{
-            title: pageTitle,
-            metaDescription,
-            h1: pageH1,
-          }}
-          remoteContent={conflictData.remoteContent}
-          onReloadRemote={() => {
-            const r = conflictData.remoteContent;
-            if (r?.content?.html) setActiveHtmlContent(r.content.html);
-            if (r?.title) setPageTitle(r.title);
-            if (r?.seo?.metaDescription) setMetaDescription(r.seo.metaDescription);
-            if (r?.content?.h1) setPageH1(r.content.h1);
-            setPageOpenedAt(Date.now());
-            setConflictData(null);
-          }}
-          onOverwriteKeepMine={async () => {
-            setConflictData(null);
-            await executeSave();
-          }}
-        />
+        <ErrorBoundary fallbackTitle="Conflict Resolution Encountered an Issue">
+          <ConflictModal
+            isOpen={conflictData.isOpen}
+            onClose={() => setConflictData(null)}
+            pageTitle={pageTitle || selectedPagePath}
+            changerName={conflictData.changerName}
+            changerUpdatedAt={conflictData.changerUpdatedAt}
+            localContent={{
+              title: pageTitle,
+              metaDescription,
+              h1: pageH1,
+            }}
+            remoteContent={conflictData.remoteContent}
+            onReloadRemote={() => {
+              const r = conflictData.remoteContent;
+              if (r?.content?.html) setActiveHtmlContent(r.content.html);
+              if (r?.title) setPageTitle(r.title);
+              if (r?.seo?.metaDescription) setMetaDescription(r.seo.metaDescription);
+              if (r?.content?.h1) setPageH1(r.content.h1);
+              setPageOpenedAt(Date.now());
+              setConflictData(null);
+            }}
+            onOverwriteKeepMine={async () => {
+              setConflictData(null);
+              await executeSave();
+            }}
+          />
+        </ErrorBoundary>
       )}
     </div>
   );

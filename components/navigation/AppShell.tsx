@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { authFetch } from "@/lib/auth/client-token";
 import { useProjectPresence } from "@/lib/supabase/presence";
 import { GlobalSearchModal } from "./GlobalSearchModal";
 import { ProfileModal } from "../team/ProfileModal";
@@ -108,7 +109,7 @@ export function AppShell({
 
   useEffect(() => {
     if (isOwner) {
-      fetch("/api/team/members")
+      authFetch("/api/team/members")
         .then((res) => res.json())
         .then((data) => {
           if (typeof data.pendingCount === "number") {

@@ -174,6 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentSession?.user || null);
 
         if (currentSession?.user) {
+          if (currentSession.access_token) {
+            setAuthCookies(currentSession.access_token, profile?.status || "approved");
+          }
           await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
         } else {
           setProfile(null);
@@ -187,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [loadUserProfile]);
+  }, [loadUserProfile, profile?.status]);
 
   const signInWithPassword = async (email: string, password: string) => {
     try {

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { authFetch } from "@/lib/auth/client-token";
 import { TeamMember, SignupMode } from "@/lib/supabase/types";
 import { BRAND } from "@/config/brand";
 import {
@@ -60,11 +61,10 @@ export function TeamManagement() {
     if (!updatingPlanMember) return;
     try {
       setSavingPlan(true);
-      const res = await fetch("/api/team/plan", {
+      const res = await authFetch("/api/team/plan", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({
           userId: updatingPlanMember.id,
@@ -95,11 +95,7 @@ export function TeamManagement() {
   const fetchMembers = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/team/members", {
-        headers: {
-          Authorization: `Bearer ${session?.access_token || ""}`,
-        },
-      });
+      const res = await authFetch("/api/team/members");
       const data = await res.json();
       if (Array.isArray(data.members)) {
         setMembers(data.approvedMembers || data.members.filter((m: TeamMember) => m.status === "approved"));
@@ -110,15 +106,11 @@ export function TeamManagement() {
     } finally {
       setLoading(false);
     }
-  }, [session?.access_token]);
+  }, []);
 
   const fetchSignupSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/team/signup-mode", {
-        headers: {
-          Authorization: `Bearer ${session?.access_token || ""}`,
-        },
-      });
+      const res = await authFetch("/api/team/signup-mode");
       if (res.ok) {
         const data = await res.json();
         if (data.signup_mode) setSignupMode(data.signup_mode);
@@ -127,7 +119,7 @@ export function TeamManagement() {
     } catch {
       // Ignore
     }
-  }, [session?.access_token]);
+  }, []);
 
   useEffect(() => {
     fetchMembers();
@@ -139,11 +131,10 @@ export function TeamManagement() {
   const handleApproveRequest = async (userId: string, role: "editor" | "owner" = "editor") => {
     setProcessingPendingId(userId);
     try {
-      const res = await fetch("/api/team/approve", {
+      const res = await authFetch("/api/team/approve", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({ userId, role }),
       });
@@ -164,11 +155,10 @@ export function TeamManagement() {
     if (!confirm("Are you sure you want to decline this access request?")) return;
     setProcessingPendingId(userId);
     try {
-      const res = await fetch("/api/team/decline", {
+      const res = await authFetch("/api/team/decline", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({ userId, deletePermanently }),
       });
@@ -190,11 +180,10 @@ export function TeamManagement() {
     setSavingSettings(true);
     setSettingsFeedback(null);
     try {
-      const res = await fetch("/api/team/signup-mode", {
+      const res = await authFetch("/api/team/signup-mode", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({ signupMode, contactEmail }),
       });
@@ -220,11 +209,10 @@ export function TeamManagement() {
     setInviteFeedback(null);
 
     try {
-      const res = await fetch("/api/team/invite", {
+      const res = await authFetch("/api/team/invite", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({
           email: inviteEmail.trim(),
@@ -256,11 +244,10 @@ export function TeamManagement() {
   const handleRoleChange = async (memberId: string, newRole: "owner" | "editor") => {
     setUpdatingRoleId(memberId);
     try {
-      const res = await fetch("/api/team/role", {
+      const res = await authFetch("/api/team/role", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({ userId: memberId, role: newRole }),
       });
@@ -289,11 +276,10 @@ export function TeamManagement() {
     }
 
     try {
-      const res = await fetch("/api/team/remove", {
+      const res = await authFetch("/api/team/remove", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token || ""}`,
         },
         body: JSON.stringify({ userId: member.id }),
       });

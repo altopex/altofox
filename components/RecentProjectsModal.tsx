@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { X, FolderArchive, Download, ExternalLink, Calendar, FileCode2, Loader2 } from "lucide-react";
+import { authFetch } from "@/lib/auth/client-token";
 
 interface ProjectItem {
   id: string;
@@ -31,7 +32,7 @@ export function RecentProjectsModal({
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      fetch("/api/projects")
+      authFetch("/api/projects")
         .then((res) => res.json())
         .then((data) => {
           if (data.success) {
