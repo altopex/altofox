@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdminClient, requireApprovedServerRequest } from "@/lib/supabase/server";
+import { requireApprovedServerRequest } from "@/lib/supabase/server";
+import { getDbPool } from "@/lib/supabase/db-pool";
 
 export const dynamic = "force-dynamic";
 
@@ -11,45 +12,41 @@ export async function GET(req: NextRequest) {
     }
 
     const auth = authCheck.auth;
-    const admin = getSupabaseAdminClient();
+    const pool = getDbPool();
 
-    // Fetch auth users
-    const { data: usersData, error: usersError } = await admin.auth.admin.listUsers({
-      perPage: 100,
-    });
+    // Fetch all members with their auth & profile info in a single direct query
+    const res = await pool.query(`
+      SELECT 
+        u.id,
+        u.email,
+        u.created_at,
+        u.last_sign_in_at,
+        p.full_name,
+        p.avatar_url,
+        p.role,
+        p.status,
+        p.company_name,
+        p.plan,
+        p.website_limit,
+        p.last_active_at
+      FROM auth.users u
+      LEFT JOIN public.profiles p ON u.id = p.id
+      ORDER BY u.created_at ASC;
+    `);
 
-    if (usersError) {
-      throw new Error(`Failed to list users: ${usersError.message}`);
-    }
-
-    // Fetch profiles
-    const { data: profiles, error: profilesError } = await admin
-      .from("profiles")
-      .select("*")
-      .order("created_at", { ascending: true });
-
-    if (profilesError) {
-      throw new Error(`Failed to list profiles: ${profilesError.message}`);
-    }
-
-    const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
-
-    const members = (usersData.users || []).map((u) => {
-      const p = profileMap.get(u.id);
-      return {
-        id: u.id,
-        email: u.email || "",
-        full_name: p?.full_name || (u.user_metadata?.full_name as string) || u.email?.split("@")[0] || "Team Member",
-        avatar_url: p?.avatar_url || (u.user_metadata?.avatar_url as string) || "",
-        role: p?.role || (u.user_metadata?.role as string) || "editor",
-        status: p?.status || "pending",
-        company_name: p?.company_name || (u.user_metadata?.company_name as string) || null,
-        plan: p?.plan || (u.user_metadata?.plan as string) || (p?.role === "owner" ? "unlimited" : "starter"),
-        website_limit: p?.website_limit ?? (u.user_metadata?.website_limit as number) ?? (p?.role === "owner" ? 999999 : 5),
-        last_active_at: p?.last_active_at || u.last_sign_in_at || u.created_at,
-        created_at: u.created_at,
-      };
-    });
+    const members = res.rows.map((row) => ({
+      id: row.id,
+      email: row.email || "",
+      full_name: row.full_name || row.email?.split("@")[0] || "Team Member",
+      avatar_url: row.avatar_url || "",
+      role: row.role || "editor",
+      status: row.status || "pending",
+      company_name: row.company_name || null,
+      plan: row.plan || (row.role === "owner" ? "unlimited" : "starter"),
+      website_limit: row.website_limit ?? (row.role === "owner" ? 999999 : 5),
+      last_active_at: row.last_active_at || row.last_sign_in_at || row.created_at,
+      created_at: row.created_at,
+    }));
 
     const pendingRequests = members.filter((m) => m.status === "pending");
     const approvedMembers = members.filter((m) => m.status === "approved");
@@ -63,6 +60,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (err: any) {
     console.error("[Team] Get members error:", err);
-    return NextResponse.json({ error: err.message || "Failed to load team members" }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || "Failed to load team members" },
+      { status: 500 }
+    );
   }
 }

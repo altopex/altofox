@@ -49,6 +49,9 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/supabase/activity";
 import { ActivityFeed } from "./activity/ActivityFeed";
 import { RankRentManager } from "./rankrent/RankRentManager";
+import { analyzeHtmlRecommendations, BuilderRecommendation } from "@/lib/recommendations/recommendation-engine";
+import { applyRecommendationFix, applyAllRecommendations } from "@/lib/recommendations/fix-applier";
+import { RecommendationFixPanel } from "./editor/RecommendationFixPanel";
 
 interface WebsiteManagerProps {
   project: SavedProject;
@@ -139,6 +142,94 @@ export function WebsiteManager({
       currentKeywordEntry.secondaryKeywords
     );
   }, [currentPageFile, activeHtmlContent, selectedPagePath, currentKeywordEntry]);
+
+  // Real-time recommendation engine suggestions
+  const currentRecommendations = useMemo(() => {
+    const html = activeHtmlContent || currentPageFile?.content || "";
+    if (!html) return [];
+    return analyzeHtmlRecommendations(html, {
+      pagePath: selectedPagePath,
+      primaryKeyword: currentKeywordEntry.primaryKeyword,
+      businessName: project.formData?.businessName || project.name,
+      city: project.formData?.city,
+      trade: project.formData?.businessType,
+    });
+  }, [
+    activeHtmlContent,
+    currentPageFile,
+    selectedPagePath,
+    currentKeywordEntry,
+    project.formData,
+    project.name,
+  ]);
+
+  const handleApplyFix = (rec: BuilderRecommendation) => {
+    const currentHtml = activeHtmlContent || currentPageFile?.content || "";
+    const result = applyRecommendationFix(currentHtml, rec);
+    if (result.success) {
+      setActiveHtmlContent(result.updatedHtml);
+
+      // Sync field state
+      const titleMatch = result.updatedHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (titleMatch) setPageTitle(titleMatch[1].trim());
+
+      const metaMatch = result.updatedHtml.match(
+        /<meta[^>]*?name=["']description["'][^>]*?content=["']([^"']*)["']/i
+      );
+      if (metaMatch) setMetaDescription(metaMatch[1].trim());
+
+      const h1Match = result.updatedHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (h1Match) setPageH1(h1Match[1].replace(/<[^>]+>/g, "").trim());
+
+      // Update in project files
+      const updatedFiles = project.files.map((f) =>
+        f.path === selectedPagePath
+          ? { ...f, content: result.updatedHtml, lastModified: Date.now() }
+          : f
+      );
+      const updatedProject: SavedProject = {
+        ...project,
+        files: updatedFiles,
+        lastEditedAt: Date.now(),
+      };
+      setProject(updatedProject);
+      onProjectUpdated(updatedProject);
+      saveProjectToDB(updatedProject).catch(console.error);
+    }
+  };
+
+  const handleApplyAllFixes = (recs: BuilderRecommendation[]) => {
+    const currentHtml = activeHtmlContent || currentPageFile?.content || "";
+    const result = applyAllRecommendations(currentHtml, recs);
+    if (result.appliedCount > 0) {
+      setActiveHtmlContent(result.updatedHtml);
+
+      const titleMatch = result.updatedHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+      if (titleMatch) setPageTitle(titleMatch[1].trim());
+
+      const metaMatch = result.updatedHtml.match(
+        /<meta[^>]*?name=["']description["'][^>]*?content=["']([^"']*)["']/i
+      );
+      if (metaMatch) setMetaDescription(metaMatch[1].trim());
+
+      const h1Match = result.updatedHtml.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      if (h1Match) setPageH1(h1Match[1].replace(/<[^>]+>/g, "").trim());
+
+      const updatedFiles = project.files.map((f) =>
+        f.path === selectedPagePath
+          ? { ...f, content: result.updatedHtml, lastModified: Date.now() }
+          : f
+      );
+      const updatedProject: SavedProject = {
+        ...project,
+        files: updatedFiles,
+        lastEditedAt: Date.now(),
+      };
+      setProject(updatedProject);
+      onProjectUpdated(updatedProject);
+      saveProjectToDB(updatedProject).catch(console.error);
+    }
+  };
 
   // Save Page Edits with conflict check
   const handleSavePageEdits = async () => {
@@ -799,6 +890,13 @@ export function WebsiteManager({
                       />
                     </div>
                   </div>
+
+                  {/* Real-time Recommendations & 1-Click Auto-Fix Engine */}
+                  <RecommendationFixPanel
+                    recommendations={currentRecommendations}
+                    onApplyFix={handleApplyFix}
+                    onApplyAll={() => handleApplyAllFixes(currentRecommendations)}
+                  />
 
                   {/* Sections Overview */}
                   <div className="pt-4 border-t border-slate-200 space-y-3">

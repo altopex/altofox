@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseAdminClient, requireApprovedServerRequest } from "@/lib/supabase/server";
+import { requireApprovedServerRequest } from "@/lib/supabase/server";
+import { getDbPool } from "@/lib/supabase/db-pool";
 
 export const dynamic = "force-dynamic";
 
@@ -21,36 +22,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    const admin = getSupabaseAdminClient();
+    const pool = getDbPool();
 
     if (deletePermanently) {
-      // Delete auth user completely
-      await admin.auth.admin.deleteUser(userId);
-      await admin.from("profiles").delete().eq("id", userId);
+      // Delete user records
+      await pool.query("DELETE FROM auth.identities WHERE user_id = $1::uuid;", [userId]);
+      await pool.query("DELETE FROM public.profiles WHERE id = $1::uuid;", [userId]);
+      await pool.query("DELETE FROM auth.users WHERE id = $1::uuid;", [userId]);
     } else {
       // Mark as disabled
-      await admin
-        .from("profiles")
-        .update({
-          status: "disabled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", userId);
+      await pool.query(
+        "UPDATE public.profiles SET status = 'disabled', updated_at = now() WHERE id = $1::uuid;",
+        [userId]
+      );
     }
 
     // Record activity log
-    await admin.from("activity_log").insert({
-      action: "user_declined",
-      entity_type: "team",
-      entity_id: userId,
-      user_id: authCheck.auth.user.id,
-      user_name: authCheck.auth.profile.full_name,
-      details: {
-        declined_user_id: userId,
-        action_type: deletePermanently ? "deleted" : "disabled",
-        declined_at: new Date().toISOString(),
-      },
-    });
+    await pool.query(
+      `INSERT INTO public.activity_log (action, entity_type, entity_id, user_id, user_name, details)
+       VALUES ('user_declined', 'team', $1, $2::uuid, $3, $4::jsonb);`,
+      [
+        userId,
+        authCheck.auth.user.id,
+        authCheck.auth.profile.full_name,
+        JSON.stringify({
+          declined_user_id: userId,
+          action_type: deletePermanently ? "deleted" : "disabled",
+          declined_at: new Date().toISOString(),
+        }),
+      ]
+    );
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

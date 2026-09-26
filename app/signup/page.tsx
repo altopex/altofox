@@ -171,8 +171,12 @@ function SignUpForm() {
         setResendCooldown(60);
         setLoading(false);
       } else {
-        // Direct session created
-        router.replace("/pending");
+        // Direct session created - redirect according to approval status
+        if (res.status === "approved" || isApproved) {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/pending");
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred.");

@@ -23,7 +23,7 @@ interface AuthContextValue {
   loading: boolean;
   session: Session | null;
   signInWithPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (params: SignUpParams) => Promise<{ success: boolean; requiresEmailConfirmation?: boolean; error?: string }>;
+  signUp: (params: SignUpParams) => Promise<{ success: boolean; status?: string; requiresEmailConfirmation?: boolean; error?: string }>;
   signInWithOtp: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
@@ -218,12 +218,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const apiData = await apiRes.json();
 
         if (apiRes.ok && apiData.success) {
-          // Immediately log the newly created user in
-          const loginRes = await signInWithPassword(cleanEmail, password);
+          if (apiData.session && apiData.user) {
+            setUser(apiData.user);
+            setSession(apiData.session);
+            const supabase = getSupabaseBrowserClient();
+            try {
+              await supabase.auth.setSession({
+                access_token: apiData.session.access_token,
+                refresh_token: apiData.session.refresh_token,
+              });
+            } catch (_) {}
+            await loadUserProfile(apiData.user.id, cleanEmail, apiData.session.access_token);
+          } else {
+            await signInWithPassword(cleanEmail, password);
+          }
           return {
             success: true,
+            status: apiData.status || "pending",
             requiresEmailConfirmation: false,
-            error: loginRes.success ? undefined : loginRes.error,
           };
         } else if (apiRes.status === 409) {
           return {
