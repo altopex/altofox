@@ -8,6 +8,7 @@ import { BRAND } from "@/config/brand";
 import nextDynamic from "next/dynamic";
 import { TopBar } from "@/components/TopBar";
 import { ToastContainer, ToastMessage } from "@/components/Toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import type { ProjectData } from "@/components/LivePreview";
 
 const SettingsPanel = nextDynamic(
@@ -3047,74 +3048,83 @@ export default function DashboardPage() {
         <div className="flex-1 flex flex-col w-full min-h-0">
           {viewMode === "dashboard" ? (
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-              <ProjectsDashboard
-                projects={savedProjectsList}
-                onOpenProject={(proj) => {
-                  setActiveSavedProject(proj);
-                  setViewMode("manager");
-                }}
-                onNewWebsite={() => {
-                  setViewMode("builder");
-                  setCurrentProject(null);
-                  setCurrentStep(1);
-                }}
-                onDuplicateProject={async (id) => {
-                  try {
-                    await duplicateProjectInDB(id);
+              <ErrorBoundary fallbackTitle="Projects Dashboard Encountered an Issue">
+                <ProjectsDashboard
+                  projects={savedProjectsList}
+                  onOpenProject={(proj) => {
+                    setActiveSavedProject(proj);
+                    setViewMode("manager");
+                  }}
+                  onNewWebsite={() => {
+                    setViewMode("builder");
+                    setCurrentProject(null);
+                    setCurrentStep(1);
+                  }}
+                  onDuplicateProject={async (id) => {
+                    try {
+                      await duplicateProjectInDB(id);
+                      await loadAllSavedProjects();
+                      addToast({
+                        type: "success",
+                        title: "Project Duplicated",
+                        message: "A copy of your project has been created.",
+                      });
+                    } catch (err) {
+                      addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
+                    }
+                  }}
+                  onDeleteProject={async (id) => {
+                    try {
+                      await deleteProjectFromDB(id);
+                      await loadAllSavedProjects();
+                      addToast({
+                        type: "info",
+                        title: "Project Deleted",
+                        message: "Project was removed from storage.",
+                      });
+                    } catch (err) {
+                      addToast({ type: "error", title: "Delete Failed", message: String(err) });
+                    }
+                  }}
+                  onProjectImported={async (importedProj) => {
+                    await saveProjectToDB(importedProj);
                     await loadAllSavedProjects();
+                    setActiveSavedProject(importedProj);
+                    setViewMode("manager");
                     addToast({
                       type: "success",
-                      title: "Project Duplicated",
-                      message: "A copy of your project has been created.",
+                      title: "Project Imported",
+                      message: `Imported "${importedProj.name}" successfully.`,
                     });
-                  } catch (err) {
-                    addToast({ type: "error", title: "Duplicate Failed", message: String(err) });
-                  }
-                }}
-                onDeleteProject={async (id) => {
-                  try {
-                    await deleteProjectFromDB(id);
-                    await loadAllSavedProjects();
-                    addToast({
-                      type: "info",
-                      title: "Project Deleted",
-                      message: "Project was removed from storage.",
-                    });
-                  } catch (err) {
-                    addToast({ type: "error", title: "Delete Failed", message: String(err) });
-                  }
-                }}
-                onProjectImported={async (importedProj) => {
-                  await saveProjectToDB(importedProj);
-                  await loadAllSavedProjects();
-                  setActiveSavedProject(importedProj);
-                  setViewMode("manager");
-                  addToast({
-                    type: "success",
-                    title: "Project Imported",
-                    message: `Imported "${importedProj.name}" successfully.`,
-                  });
-                }}
-              />
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           ) : viewMode === "manager" && activeSavedProject ? (
-            <WebsiteManager
-              project={activeSavedProject}
-              onBackToDashboard={() => {
+            <ErrorBoundary
+              fallbackTitle="Project Manager Encountered an Issue"
+              onReset={() => {
                 loadAllSavedProjects();
                 setViewMode("dashboard");
               }}
-              onProjectUpdated={async (updated) => {
-                setActiveSavedProject(updated);
-                await saveProjectToDB(updated);
-                if (currentProject && currentProject.projectId === updated.id) {
-                  setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
-                }
-              }}
-            />
+            >
+              <WebsiteManager
+                project={activeSavedProject}
+                onBackToDashboard={() => {
+                  loadAllSavedProjects();
+                  setViewMode("dashboard");
+                }}
+                onProjectUpdated={async (updated) => {
+                  setActiveSavedProject(updated);
+                  await saveProjectToDB(updated);
+                  if (currentProject && currentProject.projectId === updated.id) {
+                    setCurrentProject((prev) => (prev ? { ...prev, files: updated.files } : null));
+                  }
+                }}
+              />
+            </ErrorBoundary>
           ) : (
             renderBuilderWorkspace()
-          
           )}
         </div>
       )}

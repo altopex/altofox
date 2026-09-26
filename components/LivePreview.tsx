@@ -249,18 +249,20 @@ export function LivePreview({
     try {
       setIsZipping(true);
       setZippingStatus("Gathering website files…");
-      const JSZip = (await import("jszip")).default;
+      const JSZipModule = await import("jszip");
+      const JSZip = (JSZipModule as any).default?.default || (JSZipModule as any).default || JSZipModule;
       const zip = new JSZip();
 
       // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt, CREDITS.txt
-      for (const file of project.files) {
-        zip.file(file.path, file.content);
+      for (const file of project?.files || []) {
+        if (!file?.path) continue;
+        zip.file(file.path, file.content || "");
       }
 
       // Add clean README
       zip.file(
         "README.md",
-        `# ${project.name}\n\nGenerated with ${BRAND.name} Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links, styles, and stock photos in /images are self-contained with zero build step required.\n`
+        `# ${project?.name || "Website"}\n\nGenerated with ${BRAND.name} Static Website Builder.\n\n## How to Open\nDouble-click \`index.html\` to open your website in any browser (Chrome, Safari, Edge, Firefox).\nAll relative page links, styles, and stock photos in /images are self-contained with zero build step required.\n`
       );
 
       // Collect photos to bundle into /images
@@ -329,7 +331,10 @@ export function LivePreview({
         setZippingStatus(`Optimizing photo ${photoCount} of ${photosToFetch.length}…`);
         try {
           const proxyUrl = `/api/images/proxy?url=${encodeURIComponent(item.remoteUrl)}`;
-          const response = await fetch(proxyUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 6000);
+          const response = await fetch(proxyUrl, { signal: controller.signal });
+          clearTimeout(timeoutId);
           if (response.ok) {
             const blob = await response.blob();
             const isHero = item.slot === "hero" || item.localPath.includes("hero");
@@ -358,7 +363,7 @@ export function LivePreview({
 
       // Clean business name for the filename
       const cleanName =
-        project.name
+        (project?.name || "website")
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "-")
           .replace(/-+/g, "-")

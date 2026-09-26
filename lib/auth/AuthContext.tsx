@@ -451,10 +451,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    return {
+      user: null,
+      profile: null,
+      role: "editor",
+      status: "pending",
+      isOwner: false,
+      isApproved: false,
+      loading: false,
+      session: null,
+      signInWithPassword: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      signUp: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      signInWithOtp: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      resetPasswordForEmail: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      updatePassword: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      updateProfile: async () => ({ success: false, error: "AuthProvider not mounted" }),
+      signOut: async () => {},
+      refreshProfile: async () => {},
+    };
   }
   return context;
 }

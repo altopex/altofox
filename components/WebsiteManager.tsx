@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { SavedProject, URLRedirect, ProjectChangeLogEntry } from "../lib/storage/project-types";
 import { saveProjectToDB, exportProjectBackup, generateWebsiteZIP } from "../lib/storage/db";
 import { KeywordMapModal, KeywordMapEntry } from "./KeywordMapModal";
@@ -70,7 +70,58 @@ export function WebsiteManager({
   onBackToDashboard,
   onProjectUpdated,
 }: WebsiteManagerProps) {
-  const [project, setProject] = useState<SavedProject>(initialProject);
+  const normalizeProject = useCallback((p: SavedProject): SavedProject => {
+    const defaultTheme: Theme = THEMES[0] || {
+      id: "modern-pro",
+      name: "Modern Pro",
+      fonts: { body: "Inter", heading: "Plus Jakarta Sans" },
+      colors: {
+        primary: "#1D4ED8",
+        secondary: "#0F172A",
+        accent: "#0EA5E9",
+        background: "#F8FAFC",
+        surface: "#FFFFFF",
+        text: "#0F172A",
+        muted: "#64748B",
+      },
+      heroStyle: "Split hero",
+      buttonStyle: "Rounded 12px",
+      borderRadius: "12px",
+      sectionStyle: "Card-based",
+      description: "Modern professional theme",
+      designNotes: "Clean, trustworthy aesthetic",
+    };
+
+    const files = Array.isArray(p?.files) ? p.files : [];
+    return {
+      ...p,
+      id: p?.id || "default-project-id",
+      name: p?.name || "My Website",
+      createdAt: p?.createdAt || Date.now(),
+      lastEditedAt: p?.lastEditedAt || Date.now(),
+      files,
+      keywordMap: Array.isArray(p?.keywordMap) ? p.keywordMap : [],
+      serviceAreaCities: Array.isArray(p?.serviceAreaCities) ? p.serviceAreaCities : [],
+      customBlocks: Array.isArray(p?.customBlocks) ? p.customBlocks : [],
+      changeLog: Array.isArray(p?.changeLog) ? p.changeLog : [],
+      redirects: Array.isArray(p?.redirects) ? p.redirects : [],
+      optimizationCycles: Array.isArray(p?.optimizationCycles) ? p.optimizationCycles : [],
+      theme: p?.theme?.name ? p.theme : defaultTheme,
+      businessDetails: p?.businessDetails || ({} as any),
+      formData: p?.formData || {},
+      pageContentMap: p?.pageContentMap || {},
+      rankRentConfig: p?.rankRentConfig || undefined,
+    };
+  }, []);
+
+  const [project, setProject] = useState<SavedProject>(() => normalizeProject(initialProject));
+
+  useEffect(() => {
+    if (initialProject) {
+      setProject(normalizeProject(initialProject));
+    }
+  }, [initialProject, normalizeProject]);
+
   const [activeTab, setActiveTab] = useState<
     "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles" | "rank-rent"
   >("pages");
@@ -81,7 +132,12 @@ export function WebsiteManager({
   const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
 
   // Selected Page in Pages Tab
-  const [selectedPagePath, setSelectedPagePath] = useState<string>("index.html");
+  const [selectedPagePath, setSelectedPagePath] = useState<string>(() => {
+    const files = Array.isArray(initialProject?.files) ? initialProject.files : [];
+    const indexFile = files.find((f) => f && f.path === "index.html");
+    if (indexFile) return "index.html";
+    return files[0]?.path || "index.html";
+  });
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "offline">("saved");
@@ -102,7 +158,15 @@ export function WebsiteManager({
 
   // Page Editor Field State for Selected Page
   const currentPageFile = useMemo(() => {
-    return project.files.find((f) => f.path === selectedPagePath) || project.files[0];
+    const files = project.files || [];
+    return (
+      files.find((f) => f && f.path === selectedPagePath) ||
+      files.find((f) => f && f.path.endsWith(".html")) ||
+      files[0] || {
+        path: "index.html",
+        content: "<!DOCTYPE html><html><head><title>Home</title></head><body><h1>Welcome</h1></body></html>",
+      }
+    );
   }, [project.files, selectedPagePath]);
 
   const [pageTitle, setPageTitle] = useState("");
@@ -368,25 +432,33 @@ export function WebsiteManager({
 
   // Download ZIP
   const handleDownloadZip = async (mode: "full" | "changed-only" = "full") => {
-    const { blob, changedFilesCount } = await generateWebsiteZIP(
-      project,
-      mode,
-      project.lastDownloadedAt
-    );
+    try {
+      const { blob } = await generateWebsiteZIP(
+        project,
+        mode,
+        project.lastDownloadedAt
+      );
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${
-      mode === "changed-only" ? "changed-files" : "full-website"
-    }.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeProjectName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${safeProjectName}-${
+        mode === "changed-only" ? "changed-files" : "full-website"
+      }.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-    // Update lastDownloadedAt
-    const updated = { ...project, lastDownloadedAt: Date.now() };
-    await saveProjectToDB(updated);
-    setProject(updated);
+      // Update lastDownloadedAt
+      const updated = { ...project, lastDownloadedAt: Date.now() };
+      await saveProjectToDB(updated);
+      setProject(updated);
+    } catch (err: any) {
+      console.error("Failed to generate or download ZIP:", err);
+      alert(`Could not download ZIP: ${err?.message || "Unknown error"}. Please check browser console.`);
+    }
   };
 
   // Group pages by category
@@ -396,8 +468,8 @@ export function WebsiteManager({
     const locationPages: string[] = [];
     const blogPages: string[] = [];
 
-    project.files
-      .filter((f) => f.path.endsWith(".html"))
+    (project.files || [])
+      .filter((f) => f && f.path && f.path.endsWith(".html"))
       .forEach((f) => {
         if (f.path.startsWith("blog/")) {
           blogPages.push(f.path);
@@ -918,7 +990,7 @@ export function WebsiteManager({
                       <span>Locked Design Template Sections</span>
                     </h3>
                     <p className="text-[11px] text-slate-500">
-                      Sections are assembled using the active theme (&quot;{project.theme.name}&quot;). Content stays fully responsive and compliant across mobile and desktop.
+                      Sections are assembled using the active theme (&quot;{project.theme?.name || "Modern Pro"}&quot;). Content stays fully responsive and compliant across mobile and desktop.
                     </p>
                   </div>
                 </div>
@@ -999,9 +1071,9 @@ export function WebsiteManager({
               </div>
 
               <SearchConsoleHub
-                files={project.files}
-                keywordMap={project.keywordMap}
-                serviceAreas={project.serviceAreaCities.map((c) => c.city)}
+                files={project.files || []}
+                keywordMap={project.keywordMap || []}
+                serviceAreas={(project.serviceAreaCities || []).map((c: any) => typeof c === "string" ? c : c?.city || "").filter(Boolean)}
                 businessType={project.formData?.businessType || "Contractor"}
                 city={project.formData?.city || "Local"}
                 changeLog={project.changeLog}
@@ -1139,42 +1211,45 @@ export function WebsiteManager({
               ) : (
                 <div className="space-y-4">
                   {[...(project.optimizationCycles || [])]
-                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0))
                     .map((cycle, idx, allCycles) => {
                       const prevCycle = allCycles[idx + 1] || null;
-                      const clicksDiff = prevCycle
-                        ? cycle.siteMetrics.clicks - prevCycle.siteMetrics.clicks
+                      const metrics = cycle?.siteMetrics || { clicks: 0, impressions: 0, position: 0, ctr: 0 };
+                      const prevMetrics = prevCycle?.siteMetrics || null;
+
+                      const clicksDiff = prevMetrics
+                        ? (metrics.clicks || 0) - (prevMetrics.clicks || 0)
                         : null;
-                      const impDiff = prevCycle
-                        ? cycle.siteMetrics.impressions - prevCycle.siteMetrics.impressions
+                      const impDiff = prevMetrics
+                        ? (metrics.impressions || 0) - (prevMetrics.impressions || 0)
                         : null;
-                      const posDiff = prevCycle
-                        ? Number((prevCycle.siteMetrics.position - cycle.siteMetrics.position).toFixed(1))
+                      const posDiff = prevMetrics
+                        ? Number(((prevMetrics.position || 0) - (metrics.position || 0)).toFixed(1))
                         : null;
-                      const ctrDiff = prevCycle
-                        ? Number(((cycle.siteMetrics.ctr - prevCycle.siteMetrics.ctr) * 100).toFixed(2))
+                      const ctrDiff = prevMetrics
+                        ? Number((((metrics.ctr || 0) - (prevMetrics.ctr || 0)) * 100).toFixed(2))
                         : null;
 
                       return (
                         <div
-                          key={cycle.id}
+                          key={cycle.id || `cycle-${idx}`}
                           className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4"
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
                             <div className="flex items-center space-x-2.5">
                               <span className="text-xs font-bold bg-indigo-600 text-white px-2.5 py-0.5 rounded-full">
-                                Cycle #{cycle.cycleNumber}
+                                Cycle #{cycle.cycleNumber || idx + 1}
                               </span>
                               <span className="text-xs font-bold text-slate-900">
-                                {cycle.dateStr}
+                                {cycle.dateStr || "Recent"}
                               </span>
                               <span className="text-[11px] text-slate-500 font-mono">
-                                ({cycle.dateRange})
+                                ({cycle.dateRange || "Current"})
                               </span>
                             </div>
 
                             <span className="text-xs text-slate-500">
-                              {cycle.pagesChanged.length} pages optimized
+                              {(cycle.pagesChanged || []).length} pages optimized
                             </span>
                           </div>
 
@@ -1185,7 +1260,7 @@ export function WebsiteManager({
                                 Clicks
                               </span>
                               <div className="text-base font-extrabold text-slate-900">
-                                {cycle.siteMetrics.clicks.toLocaleString()}
+                                {(metrics.clicks || 0).toLocaleString()}
                               </div>
                               {clicksDiff !== null && (
                                 <div
@@ -1204,7 +1279,7 @@ export function WebsiteManager({
                                 Impressions
                               </span>
                               <div className="text-base font-extrabold text-slate-900">
-                                {cycle.siteMetrics.impressions.toLocaleString()}
+                                {(metrics.impressions || 0).toLocaleString()}
                               </div>
                               {impDiff !== null && (
                                 <div
@@ -1223,7 +1298,7 @@ export function WebsiteManager({
                                 Avg Position
                               </span>
                               <div className="text-base font-extrabold text-slate-900">
-                                {cycle.siteMetrics.position.toFixed(1)}
+                                {(metrics.position || 0).toFixed(1)}
                               </div>
                               {posDiff !== null && (
                                 <div
@@ -1242,7 +1317,7 @@ export function WebsiteManager({
                                 Organic CTR
                               </span>
                               <div className="text-base font-extrabold text-slate-900">
-                                {(cycle.siteMetrics.ctr * 100).toFixed(1)}%
+                                {((metrics.ctr || 0) * 100).toFixed(1)}%
                               </div>
                               {ctrDiff !== null && (
                                 <div

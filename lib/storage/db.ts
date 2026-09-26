@@ -190,10 +190,19 @@ export function generateRedirectFiles(redirects: URLRedirect[]): {
   htaccess: string;
   plainList: string;
 } {
-  const netlify = redirects.map((r) => `${r.oldUrl} ${r.newUrl} ${r.code}!`).join("\n");
+  const validRedirects = (Array.isArray(redirects) ? redirects : [])
+    .map((r: any) => {
+      const oldUrl = typeof r?.oldUrl === "string" ? r.oldUrl : typeof r?.from === "string" ? r.from : "";
+      const newUrl = typeof r?.newUrl === "string" ? r.newUrl : typeof r?.to === "string" ? r.to : "/";
+      const code = r?.code || r?.statusCode || 301;
+      return { oldUrl, newUrl, code };
+    })
+    .filter((r) => r.oldUrl.trim() !== "");
+
+  const netlify = validRedirects.map((r) => `${r.oldUrl} ${r.newUrl} ${r.code}!`).join("\n");
   const htaccess = `
 RewriteEngine On
-${redirects
+${validRedirects
   .map((r) => {
     const from = r.oldUrl.replace(/^\//, "");
     return `RewriteRule ^${from}$ ${r.newUrl} [R=${r.code},L]`;
@@ -201,7 +210,7 @@ ${redirects
   .join("\n")}
 `.trim();
 
-  const plainList = redirects.map((r) => `${r.oldUrl} -> ${r.newUrl} (${r.code})`).join("\n");
+  const plainList = validRedirects.map((r) => `${r.oldUrl} -> ${r.newUrl} (${r.code})`).join("\n");
 
   return {
     netlifyRedirects: netlify,
@@ -210,11 +219,16 @@ ${redirects
   };
 }
 
+async function getJSZip() {
+  const mod = await import("jszip");
+  return (mod as any).default?.default || (mod as any).default || mod;
+}
+
 /**
  * Exports a project as a downloadable `.siteproject` ZIP containing project.json.
  */
 export async function exportProjectBackup(project: SavedProject): Promise<Blob> {
-  const JSZip = (await import("jszip")).default;
+  const JSZip = await getJSZip();
   const zip = new JSZip();
   const backupData = {
     version: "1.0",
@@ -240,7 +254,7 @@ export async function exportProjectBackup(project: SavedProject): Promise<Blob> 
  * Imports a project from an uploaded `.siteproject` ZIP file.
  */
 export async function importProjectBackup(file: File): Promise<SavedProject> {
-  const JSZip = (await import("jszip")).default;
+  const JSZip = await getJSZip();
   const zip = await JSZip.loadAsync(file);
   const projFile = zip.file("project.json");
   if (!projFile) {
@@ -271,18 +285,20 @@ export async function generateWebsiteZIP(
   sinceTimestamp?: number,
   optimize: boolean = true
 ): Promise<{ blob: Blob; changedFilesCount: number; changedFilePaths: string[] }> {
-  const JSZip = (await import("jszip")).default;
+  const JSZip = await getJSZip();
   const { optimizeStaticFile, generateRobotsTxt } = await import("../export/optimizer");
   const zip = new JSZip();
-  const redirects = generateRedirectFiles(project.redirects || []);
+  const redirects = generateRedirectFiles(project?.redirects || []);
 
   const changedFilePaths: string[] = [];
-  const referenceTime = sinceTimestamp || project.lastDownloadedAt || 0;
+  const referenceTime = sinceTimestamp || project?.lastDownloadedAt || 0;
+  const files = Array.isArray(project?.files) ? project.files : [];
 
-  for (const f of project.files) {
+  for (const f of files) {
+    if (!f || !f.path) continue;
     const isChanged = !referenceTime || (f.lastModified && f.lastModified > referenceTime);
     if (mode === "full" || isChanged) {
-      const contentToPack = optimize ? optimizeStaticFile(f.path, f.content) : f.content;
+      const contentToPack = optimize ? optimizeStaticFile(f.path, f.content || "") : (f.content || "");
       zip.file(f.path, contentToPack);
       if (isChanged) {
         changedFilePaths.push(f.path);
@@ -291,22 +307,22 @@ export async function generateWebsiteZIP(
   }
 
   // Always include redirects & sitemap in both full and changed ZIPs
-  if (project.redirects && project.redirects.length > 0) {
+  if (project?.redirects && project.redirects.length > 0) {
     zip.file("_redirects", redirects.netlifyRedirects);
     zip.file(".htaccess", redirects.htaccess);
     zip.file("redirects.txt", redirects.plainList);
   }
 
   // Always ensure sitemap is included
-  const sitemap = project.files.find((f) => f.path === "sitemap.xml");
+  const sitemap = files.find((f) => f && f.path === "sitemap.xml");
   if (sitemap && !zip.file("sitemap.xml")) {
-    const sitemapContent = optimize ? optimizeStaticFile("sitemap.xml", sitemap.content) : sitemap.content;
+    const sitemapContent = optimize ? optimizeStaticFile("sitemap.xml", sitemap.content || "") : (sitemap.content || "");
     zip.file("sitemap.xml", sitemapContent);
   }
 
   // Include robots.txt if not explicitly present
   if (!zip.file("robots.txt")) {
-    const domain = project.businessDetails?.websiteDomain || "example.com";
+    const domain = project?.businessDetails?.websiteDomain || project?.formData?.websiteDomain || "example.com";
     zip.file("robots.txt", generateRobotsTxt(domain));
   }
 

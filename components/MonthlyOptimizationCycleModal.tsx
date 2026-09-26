@@ -394,8 +394,11 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-cycle-updates.zip`;
+      const safeName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${safeName}-cycle-updates.zip`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`Export failed: ${err.message}`);
@@ -420,8 +423,11 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-backup.siteproject`;
+      const safeName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${safeName}-backup.siteproject`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: any) {
       alert(`Backup failed: ${err.message}`);

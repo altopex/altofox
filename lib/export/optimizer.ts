@@ -103,7 +103,10 @@ export function minifyHtml(html: string): string {
  * Optimizes a file according to its extension.
  */
 export function optimizeStaticFile(filePath: string, content: string): string {
-  const ext = filePath.toLowerCase().split(".").pop();
+  if (content === null || content === undefined || typeof content !== "string") {
+    return (content as any) || "";
+  }
+  const ext = (filePath || "").toLowerCase().split(".").pop();
   switch (ext) {
     case "html":
     case "htm":

@@ -80,32 +80,44 @@ export function ProjectsDashboard({
           return false;
         }
 
-        const q = searchQuery.toLowerCase();
+        const q = (searchQuery || "").toLowerCase();
+        const pName = (p?.name || "").toLowerCase();
+        const pDomain = (p?.businessDetails?.websiteDomain || "").toLowerCase();
+        const pCity = (p?.formData?.city || "").toLowerCase();
+        const pType = (p?.formData?.businessType || "").toLowerCase();
         return (
-          p.name.toLowerCase().includes(q) ||
-          p.businessDetails?.websiteDomain?.toLowerCase().includes(q) ||
-          p.formData?.city?.toLowerCase().includes(q) ||
-          p.formData?.businessType?.toLowerCase().includes(q)
+          pName.includes(q) ||
+          pDomain.includes(q) ||
+          pCity.includes(q) ||
+          pType.includes(q)
         );
       })
       .sort((a, b) => {
         if (sortBy === "name") {
-          return a.name.localeCompare(b.name);
+          return (a?.name || "").localeCompare(b?.name || "");
         }
-        return b.lastEditedAt - a.lastEditedAt;
+        return (b?.lastEditedAt || 0) - (a?.lastEditedAt || 0);
       });
   }, [projects, searchQuery, sortBy, rentFilter]);
 
   // Handle Export Backup
   const handleExport = async (p: SavedProject, e: React.MouseEvent) => {
     e.stopPropagation();
-    const blob = await exportProjectBackup(p);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${p.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.siteproject`;
-    a.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await exportProjectBackup(p);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const cleanName = (p?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${cleanName}.siteproject`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      console.error("[Export] Backup export error:", err);
+      alert(`Export error: ${err?.message || "Could not export project backup"}`);
+    }
   };
 
   return (
@@ -273,8 +285,8 @@ export function ProjectsDashboard({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredProjects.map((proj) => {
-            const pageCount = proj.files.filter((f) => f.path.endsWith(".html")).length;
-            const lastEditedStr = new Date(proj.lastEditedAt).toLocaleDateString("en-US", {
+            const pageCount = (proj?.files || []).filter((f) => f && f.path && f.path.endsWith(".html")).length;
+            const lastEditedStr = new Date(proj?.lastEditedAt || Date.now()).toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
               year: "numeric",
