@@ -1,8 +1,23 @@
 /**
- * Static HTML Export Optimizer
+ * Static HTML Export Optimizer & SEO Pipeline
  * Minifies and optimizes HTML, CSS, JavaScript, and XML to output
- * clean, lightweight, production-ready static website bundles.
+ * clean, lightweight, production-ready static website bundles conforming
+ * strictly to Google Search ranking guidelines and Core Web Vitals.
  */
+
+import {
+  optimizePageForGoogleSEO,
+  generateProjectSitemapXml,
+  generateProjectRobotsTxt,
+  ExportSeoOptions,
+} from "../seo/export-seo-optimizer";
+
+export {
+  optimizePageForGoogleSEO,
+  generateProjectSitemapXml,
+  generateProjectRobotsTxt,
+};
+export type { ExportSeoOptions };
 
 /**
  * Minifies CSS stylesheet content.
@@ -100,17 +115,26 @@ export function minifyHtml(html: string): string {
 }
 
 /**
- * Optimizes a file according to its extension.
+ * Optimizes a file according to its extension, optionally applying Google SEO optimization on HTML.
  */
-export function optimizeStaticFile(filePath: string, content: string): string {
+export function optimizeStaticFile(
+  filePath: string,
+  content: string,
+  seoOptions?: ExportSeoOptions
+): string {
   if (content === null || content === undefined || typeof content !== "string") {
     return (content as any) || "";
   }
   const ext = (filePath || "").toLowerCase().split(".").pop();
   switch (ext) {
     case "html":
-    case "htm":
-      return minifyHtml(content);
+    case "htm": {
+      let html = content;
+      if (seoOptions) {
+        html = optimizePageForGoogleSEO(html, seoOptions);
+      }
+      return minifyHtml(html);
+    }
     case "css":
       return minifyCss(content);
     case "js":
@@ -132,9 +156,5 @@ export function optimizeStaticFile(filePath: string, content: string): string {
  * Generates default production robots.txt file with sitemap pointer.
  */
 export function generateRobotsTxt(domain: string = "example.com"): string {
-  return `User-agent: *
-Allow: /
-
-Sitemap: https://${domain}/sitemap.xml
-`;
+  return generateProjectRobotsTxt(domain);
 }

@@ -286,13 +286,29 @@ export async function generateWebsiteZIP(
   optimize: boolean = true
 ): Promise<{ blob: Blob; changedFilesCount: number; changedFilePaths: string[] }> {
   const JSZip = await getJSZip();
-  const { optimizeStaticFile, generateRobotsTxt } = await import("../export/optimizer");
+  const {
+    optimizeStaticFile,
+    generateRobotsTxt,
+    generateProjectSitemapXml,
+    generateProjectRobotsTxt,
+    minifyCss,
+  } = await import("../export/optimizer");
   const zip = new JSZip();
   const redirects = generateRedirectFiles(project?.redirects || []);
 
   const changedFilePaths: string[] = [];
   const referenceTime = sinceTimestamp || project?.lastDownloadedAt || 0;
   const files = Array.isArray(project?.files) ? project.files : [];
+
+  const rawDomain =
+    project?.businessDetails?.websiteDomain ||
+    project?.formData?.websiteDomain ||
+    `${(project?.name || "website").toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
+  const domain = rawDomain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+
+  // Extract critical CSS from styles.css to inline into HTML <head>
+  const stylesFile = files.find((f) => f && (f.path === "styles.css" || f.path === "style.css" || f.path === "css/styles.css"));
+  const criticalCss = stylesFile?.content ? minifyCss(stylesFile.content).slice(0, 35000) : undefined;
 
   for (const f of files) {
     if (!f || !f.path) continue;
@@ -302,7 +318,31 @@ export async function generateWebsiteZIP(
       const isText = ["html", "css", "js", "json", "txt", "xml", "svg", "md"].includes(ext);
 
       if (isText) {
-        const contentToPack = optimize ? optimizeStaticFile(f.path, f.content || "") : (f.content || "");
+        let seoOpts: any = undefined;
+        if (ext === "html" || ext === "htm") {
+          seoOpts = {
+            pagePath: f.path,
+            projectName: project?.name || "Website",
+            domain,
+            businessName: project?.businessDetails?.businessName || project?.formData?.businessName || project?.name,
+            businessType: (project?.businessDetails as any)?.businessType || project?.formData?.businessType,
+            phone: project?.businessDetails?.phone || project?.formData?.phone,
+            email: project?.businessDetails?.email || project?.formData?.email,
+            city: project?.businessDetails?.city || project?.formData?.city,
+            state: project?.businessDetails?.stateRegion || project?.formData?.stateRegion,
+            address: project?.businessDetails?.streetAddress || project?.formData?.streetAddress,
+            zipCode: project?.businessDetails?.zipPostalCode || project?.formData?.zipPostalCode,
+            serviceAreaCities: Array.isArray(project?.serviceAreaCities)
+              ? project.serviceAreaCities.map((c: any) => typeof c === "string" ? c : c?.city).filter(Boolean)
+              : [],
+            description: (project?.businessDetails as any)?.description || project?.formData?.description,
+            criticalCss,
+          };
+        }
+
+        const contentToPack = optimize
+          ? optimizeStaticFile(f.path, f.content || "", seoOpts)
+          : (f.content || "");
         zip.file(f.path, contentToPack);
       } else {
         const raw = f.content || "";
@@ -320,24 +360,26 @@ export async function generateWebsiteZIP(
     }
   }
 
-  // Always include redirects & sitemap in both full and changed ZIPs
+  // Always include redirects in full and changed ZIPs
   if (project?.redirects && project.redirects.length > 0) {
     zip.file("_redirects", redirects.netlifyRedirects);
     zip.file(".htaccess", redirects.htaccess);
     zip.file("redirects.txt", redirects.plainList);
   }
 
-  // Always ensure sitemap is included
-  const sitemap = files.find((f) => f && f.path === "sitemap.xml");
-  if (sitemap && !zip.file("sitemap.xml")) {
-    const sitemapContent = optimize ? optimizeStaticFile("sitemap.xml", sitemap.content || "") : (sitemap.content || "");
-    zip.file("sitemap.xml", sitemapContent);
+  // Always ensure sitemap.xml is included
+  if (!zip.file("sitemap.xml")) {
+    const sitemapFile = files.find((f) => f && f.path === "sitemap.xml");
+    if (sitemapFile && sitemapFile.content) {
+      zip.file("sitemap.xml", optimize ? optimizeStaticFile("sitemap.xml", sitemapFile.content) : sitemapFile.content);
+    } else {
+      zip.file("sitemap.xml", generateProjectSitemapXml(files, domain));
+    }
   }
 
-  // Include robots.txt if not explicitly present
+  // Always ensure robots.txt is included
   if (!zip.file("robots.txt")) {
-    const domain = project?.businessDetails?.websiteDomain || project?.formData?.websiteDomain || "example.com";
-    zip.file("robots.txt", generateRobotsTxt(domain));
+    zip.file("robots.txt", generateProjectRobotsTxt(domain));
   }
 
   const blob = await zip.generateAsync({

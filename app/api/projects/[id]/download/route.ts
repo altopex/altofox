@@ -90,7 +90,7 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { name, files, photos, provider, model } = body || {};
+    const { name, files, photos, provider, model, domain, businessDetails, formData } = body || {};
 
     if (!Array.isArray(files) || files.length === 0) {
       return NextResponse.json(
@@ -106,6 +106,9 @@ export async function POST(
       photos,
       provider,
       model,
+      domain,
+      businessDetails,
+      formData,
     });
 
     console.log(`[ZIP Export API] Streaming direct client payload "${safeFilename}" (${stats.totalFiles} files)`);

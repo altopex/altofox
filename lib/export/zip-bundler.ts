@@ -1,7 +1,14 @@
 import JSZip from "jszip";
 import { Readable } from "stream";
 import { BRAND } from "@/config/brand";
-import { optimizeStaticFile, generateRobotsTxt } from "@/lib/export/optimizer";
+import {
+  optimizeStaticFile,
+  generateRobotsTxt,
+  generateProjectSitemapXml,
+  generateProjectRobotsTxt,
+  minifyCss,
+  ExportSeoOptions,
+} from "@/lib/export/optimizer";
 
 export interface BundlerFile {
   path: string;
@@ -26,6 +33,9 @@ export interface ZipBundlerOptions {
   provider?: string;
   model?: string;
   createdAt?: Date | string;
+  domain?: string;
+  businessDetails?: any;
+  formData?: any;
 }
 
 /**
@@ -48,8 +58,21 @@ export async function bundleProjectToZipStream(options: ZipBundlerOptions): Prom
   // Track existing paths to avoid duplicates
   const addedPaths = new Set<string>();
 
-  // 1. Process and append all project files (HTML, CSS, JS, JSON, etc.)
+  // Determine canonical domain
+  const rawDomain =
+    options.domain ||
+    options.businessDetails?.websiteDomain ||
+    options.formData?.websiteDomain ||
+    `${options.projectName.toLowerCase().replace(/[^a-z0-9]/g, "") || "website"}.com`;
+  const domain = rawDomain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+
   const files = Array.isArray(options.files) ? options.files : [];
+
+  // Extract critical CSS from styles.css if present to inline into HTML <head>
+  const stylesFile = files.find((f) => f && (f.path === "styles.css" || f.path === "style.css" || f.path === "css/styles.css"));
+  const criticalCss = stylesFile?.content ? minifyCss(stylesFile.content).slice(0, 35000) : undefined;
+
+  // 1. Process and append all project files (HTML, CSS, JS, JSON, etc.)
   for (const file of files) {
     if (!file || !file.path) continue;
 
@@ -59,8 +82,31 @@ export async function bundleProjectToZipStream(options: ZipBundlerOptions): Prom
       const isTextFile = ["html", "css", "js", "json", "txt", "xml", "svg", "md"].includes(ext);
 
       if (isTextFile) {
-        // Optimize text files (HTML, CSS, JS minification)
-        const optimizedContent = optimizeStaticFile(normalizedPath, file.content || "");
+        // Build Google SEO options for HTML files
+        let seoOpts: ExportSeoOptions | undefined = undefined;
+        if (ext === "html" || ext === "htm") {
+          seoOpts = {
+            pagePath: normalizedPath,
+            projectName: options.projectName,
+            domain,
+            businessName: options.businessDetails?.businessName || options.formData?.businessName || options.projectName,
+            businessType: options.businessDetails?.businessType || options.formData?.businessType,
+            phone: options.businessDetails?.phone || options.formData?.phone,
+            email: options.businessDetails?.email || options.formData?.email,
+            city: options.businessDetails?.city || options.formData?.city,
+            state: options.businessDetails?.stateRegion || options.formData?.stateRegion,
+            address: options.businessDetails?.streetAddress || options.formData?.streetAddress,
+            zipCode: options.businessDetails?.zipPostalCode || options.formData?.zipPostalCode,
+            serviceAreaCities: Array.isArray(options.businessDetails?.serviceAreaCities)
+              ? options.businessDetails.serviceAreaCities
+              : (options.formData?.cities || []),
+            description: options.businessDetails?.description || options.formData?.description,
+            criticalCss,
+          };
+        }
+
+        // Optimize text files (HTML SEO & minification, CSS/JS minification)
+        const optimizedContent = optimizeStaticFile(normalizedPath, file.content || "", seoOpts);
         const buffer = Buffer.from(optimizedContent, "utf-8");
         zip.file(normalizedPath, buffer);
       } else {
@@ -89,11 +135,22 @@ export async function bundleProjectToZipStream(options: ZipBundlerOptions): Prom
     }
   }
 
-  // 2. Automatically generate robots.txt if missing
+  // 2. Automatically generate sitemap.xml if missing
+  if (!addedPaths.has("sitemap.xml")) {
+    try {
+      const sitemapContent = generateProjectSitemapXml(files, domain);
+      zip.file("sitemap.xml", Buffer.from(sitemapContent, "utf-8"));
+      addedPaths.add("sitemap.xml");
+      fileCount++;
+    } catch (sitemapErr) {
+      console.warn("[ZIP Export] Could not generate sitemap.xml:", sitemapErr);
+    }
+  }
+
+  // 3. Automatically generate robots.txt if missing
   if (!addedPaths.has("robots.txt")) {
     try {
-      const domain = `${options.projectName.toLowerCase().replace(/[^a-z0-9]/g, "") || "website"}.com`;
-      const robotsContent = generateRobotsTxt(domain);
+      const robotsContent = generateProjectRobotsTxt(domain);
       zip.file("robots.txt", Buffer.from(robotsContent, "utf-8"));
       addedPaths.add("robots.txt");
       fileCount++;
