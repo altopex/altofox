@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { applyImprovementAction, ImprovementActionType } from "@/lib/quality/website-improver";
 import { SiteFile, SiteMetaInfo } from "@/lib/quality/website-quality-auditor";
 import { db } from "@/lib/db";
-import { getProviderCredentials } from "@/lib/ai/keys";
+import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
+import { ProviderType } from "@/lib/ai/types";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -15,8 +16,10 @@ export async function POST(req: NextRequest) {
       files: directFiles,
       meta = { businessName: "Local Business" },
       projectId,
-      provider = "gemini",
+      provider,
       model,
+      apiKey,
+      baseUrl,
     } = body;
 
     let files: SiteFile[] = directFiles || [];
@@ -44,17 +47,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const creds = await getProviderCredentials(provider);
+    // Resolve credentials across direct client key, requested provider, and configured DB/env keys
+    let resolvedProvider: ProviderType = (provider as ProviderType) || "gemini";
+    let resolvedApiKey: string | undefined = apiKey?.trim() || undefined;
+    let resolvedBaseUrl: string | undefined = baseUrl?.trim() || undefined;
+    let resolvedModel: string | undefined = model?.trim() || undefined;
+
+    try {
+      const creds = await getAnyConfiguredProviderCredentials(
+        resolvedProvider,
+        resolvedApiKey,
+        resolvedBaseUrl,
+        resolvedModel
+      );
+      resolvedProvider = creds.provider;
+      resolvedApiKey = creds.apiKey;
+      resolvedBaseUrl = creds.baseUrl;
+      resolvedModel = creds.defaultModel || resolvedModel;
+    } catch {
+      // Safe fallback: If no AI key configured anywhere, continue with 100% programmatic quality improvement
+      console.warn("[Improve API] No active AI provider key configured. Executing programmatic quality improvements.");
+    }
 
     const result = await applyImprovementAction(
       action as ImprovementActionType,
       files,
       meta as SiteMetaInfo,
       {
-        provider,
-        model,
-        apiKey: creds?.apiKey,
-        baseUrl: creds?.baseUrl,
+        provider: resolvedProvider,
+        model: resolvedModel,
+        apiKey: resolvedApiKey,
+        baseUrl: resolvedBaseUrl,
       }
     );
 

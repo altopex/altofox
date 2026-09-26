@@ -12,7 +12,7 @@ import {
 
 export interface BundlerFile {
   path: string;
-  content: string;
+  content: string | Buffer;
   mimeType?: string | null;
 }
 
@@ -63,14 +63,15 @@ export async function bundleProjectToZipStream(options: ZipBundlerOptions): Prom
     options.domain ||
     options.businessDetails?.websiteDomain ||
     options.formData?.websiteDomain ||
-    `${options.projectName.toLowerCase().replace(/[^a-z0-9]/g, "") || "website"}.com`;
+    `${(options.projectName || "website").toLowerCase().replace(/[^a-z0-9]/g, "") || "website"}.com`;
   const domain = rawDomain.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 
   const files = Array.isArray(options.files) ? options.files : [];
 
   // Extract critical CSS from styles.css if present to inline into HTML <head>
   const stylesFile = files.find((f) => f && (f.path === "styles.css" || f.path === "style.css" || f.path === "css/styles.css"));
-  const criticalCss = stylesFile?.content ? minifyCss(stylesFile.content).slice(0, 35000) : undefined;
+  const rawCss = stylesFile?.content ? (typeof stylesFile.content === "string" ? stylesFile.content : stylesFile.content.toString("utf-8")) : "";
+  const criticalCss = rawCss ? minifyCss(rawCss).slice(0, 35000) : undefined;
 
   // 1. Process and append all project files (HTML, CSS, JS, JSON, etc.)
   for (const file of files) {
@@ -106,24 +107,29 @@ export async function bundleProjectToZipStream(options: ZipBundlerOptions): Prom
         }
 
         // Optimize text files (HTML SEO & minification, CSS/JS minification)
-        const optimizedContent = optimizeStaticFile(normalizedPath, file.content || "", seoOpts);
+        const textContent = typeof file.content === "string" ? file.content : (file.content?.toString("utf-8") || "");
+        const optimizedContent = optimizeStaticFile(normalizedPath, textContent, seoOpts);
         const buffer = Buffer.from(optimizedContent, "utf-8");
         zip.file(normalizedPath, buffer);
       } else {
-        // Handle binary assets (e.g. data URI or base64)
-        const rawContent = file.content || "";
-        if (rawContent.startsWith("data:") && rawContent.includes(";base64,")) {
-          const base64Data = rawContent.split(";base64,")[1];
-          const buffer = Buffer.from(base64Data, "base64");
-          zip.file(normalizedPath, buffer);
-        } else if (/^[A-Za-z0-9+/=]+$/.test(rawContent) && rawContent.length > 100) {
-          // Plain base64 string
-          const buffer = Buffer.from(rawContent, "base64");
-          zip.file(normalizedPath, buffer);
+        // Handle binary assets (e.g. Buffer, data URI or base64)
+        if (Buffer.isBuffer(file.content)) {
+          zip.file(normalizedPath, file.content);
         } else {
-          // Standard buffer or string fallback
-          const buffer = Buffer.from(rawContent, "utf-8");
-          zip.file(normalizedPath, buffer);
+          const rawContent = typeof file.content === "string" ? file.content : "";
+          if (rawContent.startsWith("data:") && rawContent.includes(";base64,")) {
+            const base64Data = rawContent.split(";base64,")[1];
+            const buffer = Buffer.from(base64Data, "base64");
+            zip.file(normalizedPath, buffer);
+          } else if (/^[A-Za-z0-9+/=]+$/.test(rawContent) && rawContent.length > 100) {
+            // Plain base64 string
+            const buffer = Buffer.from(rawContent, "base64");
+            zip.file(normalizedPath, buffer);
+          } else {
+            // Standard buffer or string fallback
+            const buffer = Buffer.from(rawContent, "utf-8");
+            zip.file(normalizedPath, buffer);
+          }
         }
       }
 
@@ -208,7 +214,7 @@ No build tools, Node.js, or complex servers are required!
   // B. Scan HTML files for unbundled images with data-remote-src or data-bg-remote
   for (const file of files) {
     if (!file || !file.path || !file.path.endsWith(".html")) continue;
-    const content = file.content || "";
+    const content = typeof file.content === "string" ? file.content : (file.content?.toString("utf-8") || "");
 
     const imgRegex = /<img[^>]*?src=["'](images\/[^"']+)["'][^>]*?data-remote-src=["']([^"']+)["'][^>]*?>/gi;
     let match;

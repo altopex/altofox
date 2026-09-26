@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProvider, ProviderType } from "@/lib/ai";
+import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +17,7 @@ export async function POST(req: NextRequest) {
       provider = "gemini",
       model = "gemini-1.5-pro",
       apiKey,
+      baseUrl,
     } = body;
 
     const systemPrompt = `You are an expert technical SEO analyst optimizing a local business website based on Google Search Console performance data.
@@ -53,12 +55,32 @@ ${(currentHtml || "").slice(0, 16000)}`;
     let optimizedHtml = currentHtml;
 
     try {
-      const aiProvider = getProvider((provider as ProviderType) || "gemini");
+      let resolvedCreds;
+      try {
+        resolvedCreds = await getAnyConfiguredProviderCredentials(
+          provider as ProviderType,
+          apiKey,
+          baseUrl,
+          model
+        );
+      } catch {
+        // Fallback to direct key or env
+      }
+
+      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "gemini";
+      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+
+      if (!activeKey) {
+        throw new Error("No active AI key found for search console optimization.");
+      }
+
+      const aiProvider = getProvider(activeProviderType);
       const resp = await aiProvider.generate({
-        model: model || "gemini-1.5-pro",
+        model: resolvedCreds?.defaultModel || model || "gemini-1.5-pro",
         prompt: userPrompt,
         systemPrompt,
-        apiKey: apiKey || process.env.GEMINI_API_KEY,
+        apiKey: activeKey,
+        baseUrl: resolvedCreds?.baseUrl || baseUrl,
         jsonMode: true,
       });
 

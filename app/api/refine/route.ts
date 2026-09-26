@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { createAIProvider } from "@/lib/ai/factory";
-import { getProviderCredentials } from "@/lib/ai/keys";
+import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
 import { SYSTEM_PROMPT } from "@/lib/generator/prompt";
 import { extractAndParseJSON, validateGeneratedWebsite } from "@/lib/generator/validator";
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     }
 
     let filesToRefine: { path: string; content: string }[] = [];
-    let providerType: ProviderType = (provider || "openai") as ProviderType;
+    let providerType: ProviderType = (provider || "gemini") as ProviderType;
     let targetModel = model;
 
     // 1. Resolve files to edit (prefer directly provided files from client state)
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
         });
         if (project) {
           filesToRefine = project.files;
-          if (!provider) providerType = project.provider as ProviderType;
+          if (!provider && project.provider) providerType = project.provider as ProviderType;
           if (!targetModel) targetModel = project.model;
         }
       } catch {
@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
 
     let creds;
     try {
-      creds = await getProviderCredentials(providerType, apiKey);
+      creds = await getAnyConfiguredProviderCredentials(providerType, apiKey);
+      providerType = creds.provider;
     } catch (err) {
       return NextResponse.json(
         {
@@ -61,7 +62,7 @@ export async function POST(req: NextRequest) {
           error:
             err instanceof Error
               ? err.message
-              : `No API key configured for ${PROVIDER_PRESETS[providerType]?.name || providerType}.`,
+              : `No API key configured for ${PROVIDER_PRESETS[providerType]?.name || providerType}. Please add your API key in Settings.`,
         },
         { status: 401 }
       );

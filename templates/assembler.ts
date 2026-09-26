@@ -99,7 +99,8 @@ function buildHead(
 ): string {
   const headingFont = encodeURIComponent(theme.fonts.heading);
   const bodyFont = encodeURIComponent(theme.fonts.body);
-  const title = seo.title.includes("|") ? seo.title : `${seo.title} | ${site.businessName}`;
+  const title = (seo.title || "Local Services").includes("|") ? (seo.title || "Local Services") : `${seo.title || "Local Services"} | ${site.businessName}`;
+  const description = seo.description || (seo as any).metaDescription || `Professional local services by ${site.businessName}.`;
   const canonicalUrl = `https://${domain}/${currentPage.outputFilePath === "index.html" ? "" : currentPage.outputFilePath}`;
   const cssHref = assetPath(currentPage, "css/style.css");
   const jsHref = assetPath(currentPage, "js/main.js");
@@ -108,17 +109,17 @@ function buildHead(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
-  <meta name="description" content="${seo.description.slice(0, 160)}">
+  <meta name="description" content="${description.slice(0, 160)}">
   <link rel="canonical" href="${canonicalUrl}">
 
   <!-- Open Graph / Social Media -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="${canonicalUrl}">
   <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${(seo.ogDescription || seo.description).slice(0, 200)}">
+  <meta property="og:description" content="${((seo as any).ogDescription || description).slice(0, 200)}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${title}">
-  <meta name="twitter:description" content="${(seo.ogDescription || seo.description).slice(0, 200)}">
+  <meta name="twitter:description" content="${((seo as any).ogDescription || description).slice(0, 200)}">
 
   <!-- Google Fonts: ${theme.fonts.heading} & ${theme.fonts.body} -->
   <link rel="preconnect" href="https://fonts.googleapis.com">

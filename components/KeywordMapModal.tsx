@@ -196,6 +196,26 @@ export function KeywordMapModal({
     setOptimizingPage(pagePath);
 
     try {
+      const storedProvider = (typeof window !== "undefined"
+        ? localStorage.getItem("altofox_active_provider") ||
+          localStorage.getItem("ranklocal_active_provider") ||
+          "gemini"
+        : "gemini");
+
+      const storedKey = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_key_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_key_${storedProvider}`) ||
+          localStorage.getItem("altofox_key_gemini") ||
+          localStorage.getItem("altofox_key_openai") ||
+          ""
+        : "";
+
+      const storedModel = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_model_${storedProvider}`) ||
+          localStorage.getItem("altofox_active_model") ||
+          undefined
+        : undefined;
+
       const res = await fetch("/api/seo/optimize-page", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -208,6 +228,9 @@ export function KeywordMapModal({
           businessType,
           city,
           state,
+          provider: storedProvider,
+          apiKey: storedKey || undefined,
+          model: storedModel,
         }),
       });
 

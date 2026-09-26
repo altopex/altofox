@@ -32,6 +32,7 @@ import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobi
 import { WebsiteQualityAuditReport, auditWebsiteQuality } from "../lib/quality/website-quality-auditor";
 import { ImprovementActionType } from "../lib/quality/website-improver";
 import { QualityScorecard } from "./QualityScorecard";
+import { ProviderType } from "@/lib/ai/types";
 
 export interface ProjectFileItem {
   path: string;
@@ -124,7 +125,27 @@ export function LivePreview({
   // List of all HTML pages generated
   const htmlFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".html"));
 
-  // Inlined preview HTML for the currently selected page
+  // Listen for iframe link clicks to navigate smoothly between pages in preview mode
+  useEffect(() => {
+    const handleMsg = (e: MessageEvent) => {
+      if (e.data && e.data.type === "PREVIEW_NAVIGATE" && typeof e.data.path === "string") {
+        const targetPath = e.data.path.replace(/^\.?\//, "").toLowerCase();
+        const found = currentFiles.find(
+          (f) =>
+            f.path.toLowerCase() === targetPath ||
+            f.path.toLowerCase().endsWith("/" + targetPath) ||
+            f.path.toLowerCase() === targetPath + ".html"
+        );
+        if (found) {
+          setActivePage(found.path);
+        }
+      }
+    };
+    window.addEventListener("message", handleMsg);
+    return () => window.removeEventListener("message", handleMsg);
+  }, [currentFiles]);
+
+  // Inlined preview HTML for the currently selected page with complete asset resolution
   const inlinedPreviewHtml = useMemo(() => {
     let html =
       currentFiles.find((f) => f.path.toLowerCase() === activePage.toLowerCase())?.content ||
@@ -132,45 +153,120 @@ export function LivePreview({
       currentFiles.find((f) => f.path.toLowerCase().endsWith(".html"))?.content ||
       "<!DOCTYPE html><html><body><h1>No HTML content found</h1></body></html>";
 
-    const css =
-      currentFiles.find((f) => f.path.toLowerCase() === "css/style.css" || f.path.toLowerCase() === "styles.css")?.content ||
-      currentFiles.find((f) => f.path.toLowerCase().endsWith(".css"))?.content || "";
-    const js =
-      currentFiles.find((f) => f.path.toLowerCase() === "js/main.js" || f.path.toLowerCase() === "script.js")?.content ||
-      currentFiles.find((f) => f.path.toLowerCase().endsWith(".js"))?.content || "";
+    if (typeof html !== "string") {
+      html = String(html);
+    }
 
-    if (css) {
-      const styleTag = `<style>\n/* Inlined styles.css */\n${css}\n</style>`;
+    // Combine all CSS files into one master style block so custom classes & themes always render
+    const cssFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".css"));
+    if (cssFiles.length > 0) {
+      const combinedCss = cssFiles
+        .map((f) => `/* Inlined: ${f.path} */\n${f.content}`)
+        .join("\n\n");
+      const styleTag = `<style>\n${combinedCss}\n</style>`;
       html = html.includes("</head>")
         ? html.replace("</head>", `${styleTag}\n</head>`)
         : `${styleTag}\n${html}`;
     }
 
-    if (js) {
-      const scriptTag = `<script>\n// Inlined script.js\ndocument.addEventListener("DOMContentLoaded", function() {\n${js}\n});\n</script>`;
+    // Combine all JS files into a single DOMContentLoaded execution wrapper
+    const jsFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".js"));
+    if (jsFiles.length > 0) {
+      const combinedJs = jsFiles
+        .map((f) => `// Inlined: ${f.path}\n${f.content}`)
+        .join("\n\n");
+      const scriptTag = `<script>\ndocument.addEventListener("DOMContentLoaded", function() {\n${combinedJs}\n});\n</script>`;
       html = html.includes("</body>")
         ? html.replace("</body>", `${scriptTag}\n</body>`)
         : `${html}\n${scriptTag}`;
     }
 
-    // Replace local image paths with their high-res remote CDN URLs for live preview
+    // Build photo lookup map from project.photos to resolve any local image paths
+    const photoMap = new Map<string, string>();
+    if (Array.isArray(project.photos)) {
+      for (const p of project.photos) {
+        const remote = p.url || (p as any).remoteUrl;
+        if (remote) {
+          if (p.localPath) {
+            const clean = p.localPath.replace(/^\.?\/?/, "").toLowerCase();
+            photoMap.set(clean, remote);
+            photoMap.set(clean.replace(/^images\//, ""), remote);
+          }
+        }
+      }
+    }
+
+    // 1. Replace local image paths with their high-res remote CDN URLs if data-remote-src is present
     html = html.replace(
-      /<img([^>]*?)src=["']images\/[^"']+["']([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)>/gi,
-      '<img$1src="$3"$2data-remote-src="$3"$4>'
+      /<img([^>]*?)src=["']([^"']+)["']([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)>/gi,
+      '<img$1src="$4"$3data-remote-src="$4"$5>'
     );
     html = html.replace(
-      /<img([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)src=["']images\/[^"']+["']([^>]*?)>/gi,
-      '<img$1data-remote-src="$2"$3src="$2"$4>'
+      /<img([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi,
+      '<img$1data-remote-src="$2"$3src="$2"$5>'
+    );
+
+    // 2. Map relative image sources to remote photo URLs
+    html = html.replace(
+      /<img([^>]*?)src=["'](\.?\/?images\/[^"']+)["']([^>]*?)>/gi,
+      (match, prefix, imgPath, suffix) => {
+        if (match.includes("data-remote-src")) return match;
+        const clean = imgPath.replace(/^\.?\/?/, "").toLowerCase();
+        const fileName = clean.replace(/^images\//, "");
+        const remote = photoMap.get(clean) || photoMap.get(fileName);
+        if (remote) {
+          return `<img${prefix}src="${remote}" data-remote-src="${remote}"${suffix}>`;
+        }
+        return match;
+      }
+    );
+
+    // 3. Map background images
+    html = html.replace(
+      /style=["']([^"']*?)background-image:\s*url\(['"](\.?\/?images\/[^'"]+)['"]\);?([^"']*?)["']/gi,
+      (match, pre, imgPath, post) => {
+        const clean = imgPath.replace(/^\.?\/?/, "").toLowerCase();
+        const fileName = clean.replace(/^images\//, "");
+        const remote = photoMap.get(clean) || photoMap.get(fileName);
+        if (remote) {
+          return `style="${pre}background-image: url('${remote}');${post}"`;
+        }
+        return match;
+      }
     );
     html = html.replace(
       /style=["']background-image:\s*url\(['"]images\/[^'"]+['"]\);["']([^>]*?)data-bg-remote=["']([^"']+)["']/gi,
       'style="background-image: url(\'$2\');"$1data-bg-remote="$2"'
     );
-    // Strip <source srcset="images/..." type="image/webp"> in preview so preview loads remote <img> src
-    html = html.replace(/<source[^>]*?srcset=["']images\/[^"']+["'][^>]*?>/gi, "");
+
+    // 4. Strip <source srcset="images/..." type="image/webp"> in preview so preview loads remote <img> src
+    html = html.replace(/<source[^>]*?srcset=["'](\.?\/?images\/[^"']+)["'][^>]*?>/gi, "");
+
+    // 5. Inject smooth client navigation interceptor for multi-page previews (preserves tel: and mailto:)
+    const navInterceptor = `<script>
+(function() {
+  document.addEventListener("click", function(e) {
+    var a = e.target && e.target.closest ? e.target.closest("a") : null;
+    if (!a) return;
+    var href = a.getAttribute("href");
+    if (!href) return;
+    if (href.startsWith("tel:") || href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("http://") || href.startsWith("https://")) {
+      return; // Do not intercept phone calls, email, or external links
+    }
+    e.preventDefault();
+    window.parent.postMessage({ type: "PREVIEW_NAVIGATE", path: href }, "*");
+  });
+})();
+</script>`;
+
+    if (html.includes("</body>")) {
+      html = html.replace("</body>", `${navInterceptor}\n</body>`);
+    } else {
+      html += navInterceptor;
+    }
 
     return html;
-  }, [currentFiles, activePage]);
+  }, [currentFiles, activePage, project.photos]);
 
   // Comprehensive Quality & SEO Audit Report (calculated from real checks)
   const qualityReport: WebsiteQualityAuditReport = useMemo(() => {
@@ -196,6 +292,30 @@ export function LivePreview({
         setOriginalFiles([...currentFiles]);
       }
 
+      // Read active provider and API key directly from localStorage so improvement reuses the generator's connected key
+      const storedProvider = (typeof window !== "undefined"
+        ? localStorage.getItem("altofox_active_provider") ||
+          localStorage.getItem("ranklocal_active_provider") ||
+          project.provider ||
+          "gemini"
+        : project.provider || "gemini") as ProviderType;
+
+      const storedKey = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_key_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_key_${storedProvider}`) ||
+          localStorage.getItem("altofox_key_gemini") ||
+          localStorage.getItem("altofox_key_openai") ||
+          localStorage.getItem("altofox_key_openrouter") ||
+          ""
+        : "";
+
+      const storedModel = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_model_${storedProvider}`) ||
+          localStorage.getItem("altofox_active_model") ||
+          project.model ||
+          undefined
+        : project.model;
+
       const res = await fetch("/api/projects/improve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -207,8 +327,9 @@ export function LivePreview({
             domain: project.websiteDomain,
           },
           projectId: project.projectId,
-          provider: project.provider,
-          model: project.model,
+          provider: storedProvider,
+          apiKey: storedKey || undefined,
+          model: storedModel,
         }),
       });
 

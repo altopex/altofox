@@ -1953,45 +1953,37 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    {/* Optional Details (Years in business & USP) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Years in Business (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={yearsInBusiness}
-                          onChange={(e) => setYearsInBusiness(e.target.value)}
-                          placeholder="e.g. 20+ Years"
-                          className="input-base"
-                        />
+                    {/* Key Differentiators & Trust Signals */}
+                    <div className="pt-2 border-t border-[#E2E8F0]">
+                      <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
+                        Key Differentiators &amp; Trust Signals
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                            Years in Business (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={yearsInBusiness}
+                            onChange={(e) => setYearsInBusiness(e.target.value)}
+                            placeholder="e.g. 20+ Years"
+                            className="input-base"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                            Unique Selling Points (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={uniqueSellingPoints}
+                            onChange={(e) => setUniqueSellingPoints(e.target.value)}
+                            placeholder="e.g. 45-min arrival, upfront pricing, licensed masters"
+                            className="input-base"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Logo Image URL (Optional)
-                        </label>
-                        <input
-                          type="url"
-                          value={logoUrl}
-                          onChange={(e) => setLogoUrl(e.target.value)}
-                          placeholder="https://example.com/logo.png"
-                          className="input-base"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                        Unique Selling Points (Optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={uniqueSellingPoints}
-                        onChange={(e) => setUniqueSellingPoints(e.target.value)}
-                        placeholder="e.g. 45-min arrival, upfront pricing, licensed master plumbers"
-                        className="input-base"
-                      />
                     </div>
                   </div>
                 </div>
@@ -2271,14 +2263,17 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    {/* Collapsible Maps & Social Links */}
+                    {/* Collapsible Advanced SEO & Integrations */}
                     <div className="border border-[#E2E8F0] rounded-[10px] overflow-hidden">
                       <button
                         type="button"
                         onClick={() => setShowCollapsibleSeo(!showCollapsibleSeo)}
                         className="w-full p-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-[#0F172A] hover:bg-slate-100 transition"
                       >
-                        <span>Google Maps &amp; Social Links (Optional)</span>
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
+                          <span>Advanced SEO &amp; Integrations (Optional)</span>
+                        </div>
                         {showCollapsibleSeo ? (
                           <ChevronUp className="w-4 h-4 text-[#64748B]" />
                         ) : (
@@ -2298,6 +2293,9 @@ export default function DashboardPage() {
                               placeholder="https://maps.google.com/?q=Dallas+TX"
                               className="input-base"
                             />
+                            <p className="text-[11px] text-[#64748B] mt-0.5">
+                              Enables one-click Google Maps directions button in the contact section.
+                            </p>
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -2310,6 +2308,21 @@ export default function DashboardPage() {
                               placeholder="Facebook: fb.com/mybiz, Yelp: yelp.com/biz/mybiz"
                               className="input-base"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                              Logo Image URL (Optional)
+                            </label>
+                            <input
+                              type="url"
+                              value={logoUrl}
+                              onChange={(e) => setLogoUrl(e.target.value)}
+                              placeholder="https://example.com/logo.png"
+                              className="input-base"
+                            />
+                            <p className="text-[11px] text-[#64748B] mt-0.5">
+                              Replaces standard brand typography in header with your custom logo file.
+                            </p>
                           </div>
                         </div>
                       )}

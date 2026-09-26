@@ -48,6 +48,55 @@ function truncateAtWord(text: string, maxLen: number): string {
 }
 
 /**
+ * Helper to extract and preserve accurate business facts from HTML files if missing in meta
+ */
+export function resolveMetaInfo(files: SiteFile[], meta: SiteMetaInfo): SiteMetaInfo {
+  let phone = meta.phone;
+  let city = meta.city;
+  let state = meta.state;
+  let trade = meta.trade;
+  let businessName = meta.businessName;
+
+  for (const f of files) {
+    if (typeof f.content === "string") {
+      if (!phone || phone.includes("123-4567") || phone.includes("555")) {
+        const telMatch = f.content.match(/href=["']tel:([^"']+)["']/i);
+        if (telMatch && telMatch[1] && !telMatch[1].includes("1234567")) {
+          phone = telMatch[1];
+        }
+      }
+      if (!city || city === "Local") {
+        const geoMatch = f.content.match(/<meta\s+name=["']geo\.placename["']\s+content=["']([^"']+)["']/i);
+        if (geoMatch && geoMatch[1]) {
+          city = geoMatch[1];
+        }
+      }
+      if (!state) {
+        const regMatch = f.content.match(/<meta\s+name=["']geo\.region["']\s+content=["']([^"']+)["']/i);
+        if (regMatch && regMatch[1]) {
+          state = regMatch[1].replace(/^[A-Z]{2}-/i, "");
+        }
+      }
+      if (!businessName || businessName === "Local Business") {
+        const schemaMatch = f.content.match(/"name"\s*:\s*"([^"]+)"/);
+        if (schemaMatch && schemaMatch[1]) {
+          businessName = schemaMatch[1];
+        }
+      }
+    }
+  }
+
+  return {
+    ...meta,
+    phone: phone || meta.phone,
+    city: city || meta.city,
+    state: state || meta.state,
+    trade: trade || meta.trade,
+    businessName: businessName || meta.businessName,
+  };
+}
+
+/**
  * 1. Improve Meta: Optimizes SEO <title> and <meta name="description"> with phone CTAs & OpenGraph
  */
 export function improveMetaDescriptionsAndTitles(
@@ -668,7 +717,8 @@ export async function applyImprovementAction(
   meta: SiteMetaInfo,
   options?: ImproveOptions
 ): Promise<ImprovementResult> {
-  const initialAudit = auditWebsiteQuality(files, meta);
+  const effectiveMeta = resolveMetaInfo(files, meta);
+  const initialAudit = auditWebsiteQuality(files, effectiveMeta);
   const previousScore = initialAudit.overallScore;
 
   let workingFiles = [...files];
@@ -686,49 +736,49 @@ export async function applyImprovementAction(
 
     switch (act) {
       case "improve_meta": {
-        const res = improveMetaDescriptionsAndTitles(workingFiles, meta);
+        const res = improveMetaDescriptionsAndTitles(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_content": {
-        const res = await improvePageContentDepth(workingFiles, meta, options);
+        const res = await improvePageContentDepth(workingFiles, effectiveMeta, options);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_links": {
-        const res = improveInternalLinks(workingFiles, meta);
+        const res = improveInternalLinks(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_alt_text": {
-        const res = improveImageAltAttributes(workingFiles, meta);
+        const res = improveImageAltAttributes(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_cta": {
-        const res = improveConversionCtas(workingFiles, meta);
+        const res = improveConversionCtas(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_faqs": {
-        const res = improveMissingFaqContent(workingFiles, meta);
+        const res = improveMissingFaqContent(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_schema": {
-        const res = improveStructuredData(workingFiles, meta);
+        const res = improveStructuredData(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
       }
       case "improve_technical": {
-        const res = improveTechnicalSeo(workingFiles, meta);
+        const res = improveTechnicalSeo(workingFiles, effectiveMeta);
         workingFiles = res.files;
         allChanges.push(...res.changes);
         break;
@@ -757,7 +807,7 @@ export async function applyImprovementAction(
   }
 
   // Re-run real audit on improved files
-  const newReport = auditWebsiteQuality(workingFiles, meta);
+  const newReport = auditWebsiteQuality(workingFiles, effectiveMeta);
   const newScore = newReport.overallScore;
 
   return {
