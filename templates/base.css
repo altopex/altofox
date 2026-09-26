@@ -1336,3 +1336,192 @@ input:focus, select:focus, textarea:focus {
     transition: none !important;
   }
 }
+
+
+/* ==========================================================================
+   24. Master Page Registry, Breadcrumbs & Location Page Layouts
+   ========================================================================== */
+
+/* Breadcrumbs Component */
+.breadcrumbs-container {
+  padding-top: 1rem;
+  padding-bottom: 0.5rem;
+}
+.breadcrumb-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+.breadcrumb-item a {
+  color: var(--color-muted);
+  font-weight: 500;
+}
+.breadcrumb-item a:hover {
+  color: var(--color-primary);
+}
+.breadcrumb-item.active {
+  color: var(--color-secondary);
+  font-weight: 700;
+}
+.breadcrumb-separator {
+  color: var(--color-border);
+}
+
+/* Location Page Layout System */
+.location-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+  align-items: center;
+}
+@media (min-width: 1024px) {
+  .location-hero-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+}
+.location-hero-actions {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+.location-media-card {
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.5rem;
+}
+.angle-card {
+  padding: 2.5rem;
+}
+.angle-content {
+  margin-top: 1rem;
+  font-size: 1.05rem;
+  line-height: 1.7;
+  color: var(--color-text);
+}
+.local-note-box {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-sm);
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  font-size: 0.9rem;
+  color: #92400E;
+}
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+.service-location-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.75rem;
+}
+.service-location-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+.process-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+.process-step-card {
+  padding: 2rem;
+  position: relative;
+}
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #FFFFFF;
+  font-weight: 800;
+  margin-bottom: 1rem;
+}
+.nearby-card {
+  padding: 2rem;
+}
+.nearby-links-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+.nearby-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+.nearby-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.nearby-chip.chip-highlight {
+  background: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+}
+.cta-banner-box {
+  background: var(--color-secondary);
+  color: #FFFFFF;
+  border-radius: var(--radius-lg);
+  padding: 3rem 2rem;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+}
+.cta-banner-box h2 {
+  color: #FFFFFF;
+}
+.cta-banner-box p {
+  color: #CBD5E1;
+  max-width: 600px;
+  margin: 0 auto 2rem auto;
+}
+.cta-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* CSS-only Mobile Menu Fallback */
+.nav-toggle-check {
+  display: none;
+}
+@media (max-width: 1023px) {
+  .nav-toggle-check:checked ~ .mobile-drawer {
+    transform: translateX(0);
+  }
+  .nav-toggle-check:checked ~ .header-container .hamburger-bar:nth-child(1) {
+    transform: translateY(8px) rotate(45deg);
+  }
+  .nav-toggle-check:checked ~ .header-container .hamburger-bar:nth-child(2) {
+    opacity: 0;
+  }
+  .nav-toggle-check:checked ~ .header-container .hamburger-bar:nth-child(3) {
+    transform: translateY(-8px) rotate(-45deg);
+  }
+}

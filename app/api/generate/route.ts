@@ -330,7 +330,7 @@ export async function POST(req: NextRequest) {
           files: {
             create: assembled.files.map((f) => ({
               path: f.path,
-              content: f.content,
+              content: typeof f.content === "string" ? f.content : f.content.toString("base64"),
               mimeType: f.mimeType || "text/plain",
             })),
           },

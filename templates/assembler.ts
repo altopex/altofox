@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { SiteContentJSON, PageContentJSON, SectionJSON, ImageSlotJSON } from "../lib/generator/content-schema";
+import { SiteContentJSON, PageContentJSON, SectionJSON } from "../lib/generator/content-schema";
 import { Theme } from "../lib/themes";
-import { detectTradeCategory, resolvePhoto, ResolvedImage } from "../lib/photos/photo-service";
+import { detectTradeCategory } from "../lib/photos/photo-service";
 import { resolveStockPhoto, buildCreditsTxt, StockPhoto } from "../lib/photos/stock-service";
 import { findNicheByIndustry } from "../niches";
 import { PAGE_LAYOUTS, detectPageLayoutType } from "./layouts";
@@ -11,6 +11,26 @@ import { renderServiceAreasHub, ServiceAreaCityItem } from "./sections/serviceAr
 import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "./sections/locationPage";
 import { getNearestSelectedCities } from "../lib/data/us-cities";
 import { runQualityChecksAndAutoFix, QualityReport, AssembleFile } from "../lib/quality/quality-checker";
+import {
+  PageRegistry,
+  RegistryPage,
+  LinkStyle,
+  buildMasterPageRegistry,
+  linkTo,
+  assetPath,
+  resolveInternalLinks,
+  renderBreadcrumbs,
+} from "../lib/registry/page-registry";
+import {
+  createImagePlan,
+  bundleImagesFromPlan,
+  ImagePlanSlot,
+} from "../lib/photos/image-bundler";
+import {
+  validateAndRepairSection,
+  scanHtmlForForbiddenTokens,
+  GenerationAuditEntry,
+} from "../lib/generator/strict-section-schemas";
 
 export interface AssembleOptions {
   domain?: string;
@@ -18,6 +38,8 @@ export interface AssembleOptions {
   pexelsKey?: string;
   pixabayKey?: string;
   preferredSource?: "bing" | "pexels" | "pixabay";
+  linkStyle?: LinkStyle;
+  useFolderStructure?: boolean;
   serviceAreaCities?: {
     city: string;
     stateId: string;
@@ -35,6 +57,8 @@ export interface AssembledWebsite {
   files: AssembleFile[];
   photos?: StockPhoto[];
   qualityReport?: QualityReport;
+  registry?: PageRegistry;
+  generationLog?: GenerationAuditEntry[];
 }
 
 /**
@@ -63,19 +87,22 @@ export function buildThemeVariables(theme: Theme): string {
 }
 
 /**
- * Generates SEO meta tags, Google Fonts, and Open Graph tags for <head>
+ * Generates SEO meta tags, Google Fonts, and Open Graph tags for <head> using exact relative asset paths
  */
 function buildHead(
   seo: PageContentJSON["seo"],
   site: SiteContentJSON["site"],
   theme: Theme,
   domain: string,
-  slug: string
+  currentPage: RegistryPage,
+  linkStyle: LinkStyle = "web"
 ): string {
   const headingFont = encodeURIComponent(theme.fonts.heading);
   const bodyFont = encodeURIComponent(theme.fonts.body);
   const title = seo.title.includes("|") ? seo.title : `${seo.title} | ${site.businessName}`;
-  const canonicalUrl = `https://${domain}/${slug === "index" ? "" : `${slug}.html`}`;
+  const canonicalUrl = `https://${domain}/${currentPage.outputFilePath === "index.html" ? "" : currentPage.outputFilePath}`;
+  const cssHref = assetPath(currentPage, "css/style.css");
+  const jsHref = assetPath(currentPage, "js/main.js");
 
   return `
   <meta charset="UTF-8">
@@ -99,12 +126,10 @@ function buildHead(
   <link href="https://fonts.googleapis.com/css2?family=${headingFont}:wght@500;600;700;800&family=${bodyFont}:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Design System CSS -->
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="${cssHref}">
 
-  <!-- Shared App Scripts -->
-  <script src="js/main.js" defer></script>
-  <script src="script.js" defer></script>`;
+  <!-- Shared App Script (Single source of truth) -->
+  <script src="${jsHref}" defer></script>`;
 }
 
 /**
@@ -114,14 +139,14 @@ function buildSchemaOrg(
   site: SiteContentJSON["site"],
   page: PageContentJSON,
   schemaType: string,
-  domain: string
+  domain: string,
+  currentPage: RegistryPage
 ): string {
-  const isHome = page.slug === "index";
+  const isHome = currentPage.pageType === "home";
   const address = site.address || { city: "Dallas", state: "TX" };
   const phone = site.phone || "";
-  const canonicalUrl = `https://${domain}/${page.slug === "index" ? "" : `${page.slug}.html`}`;
+  const canonicalUrl = `https://${domain}/${currentPage.outputFilePath === "index.html" ? "" : currentPage.outputFilePath}`;
 
-  // 1. Home Page: LocalBusiness Schema
   if (isHome) {
     const isServiceArea = site.businessModel === "service-area";
     const postalAddress: Record<string, any> = {
@@ -162,7 +187,6 @@ function buildSchemaOrg(
     return `\n  <script type="application/ld+json">\n  ${JSON.stringify(localBusiness, null, 2)}\n  </script>`;
   }
 
-  // 2. Service Pages: Service Schema + BreadcrumbList
   const layoutType = detectPageLayoutType(page.slug);
   const breadcrumb = {
     "@context": "https://schema.org",
@@ -201,7 +225,6 @@ function buildSchemaOrg(
   }
 
   const breadcrumbScript = `\n  <script type="application/ld+json">\n  ${JSON.stringify(breadcrumb, null, 2)}\n  </script>`;
-
   return `${breadcrumbScript}${specificSchema}`;
 }
 
@@ -217,7 +240,45 @@ export async function assembleWebsite(
     /^https?:\/\//,
     ""
   );
-  const tradeCategory = detectTradeCategory(data.schema?.type || data.site.businessName);
+  const mainTrade = data.schema?.type || data.site.businessName || "Local Service";
+  const tradeSlug = mainTrade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const tradeCategory = detectTradeCategory(mainTrade);
+  const linkStyle: LinkStyle = options?.linkStyle || "web";
+  const useFolderStructure = Boolean(options?.useFolderStructure);
+
+  const effectiveAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+
+  // 1. Build Master Page Registry BEFORE any HTML is generated
+  const registry = buildMasterPageRegistry({
+    businessName: data.site.businessName,
+    nicheTrade: mainTrade,
+    useFolderStructure,
+    mainPages: data.pages.map((p) => ({
+      slug: p.slug,
+      title: p.seo.title,
+      navLabel: p.seo.title.split("|")[0].trim(),
+    })),
+    locations: effectiveAreaCities.map((c: any) => ({
+      city: c.city,
+      stateId: c.stateId,
+      county: c.county,
+      slug: c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`,
+      lat: c.lat,
+      lng: c.lng,
+    })),
+    hasServicesHub: true,
+    hasAreasHub: effectiveAreaCities.length > 0,
+  });
+
+  // 2. Create Image Plan & Bundle Images into files
+  const imagePlan = createImagePlan(
+    data.pages,
+    mainTrade,
+    data.site.address?.city || "Local",
+    data.site.businessName,
+    effectiveAreaCities
+  );
+  const bundledImages = bundleImagesFromPlan(imagePlan);
 
   // Read base.css and base.js
   let baseCss = "";
@@ -235,7 +296,6 @@ export async function assembleWebsite(
     console.warn("[Assembler] Could not read template files directly from disk:", e);
   }
 
-  // Fallback CSS & JS if file read failed in serverless bundle
   if (!baseCss) {
     baseCss = `/* RankLocal Fallback CSS */
 body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
@@ -246,11 +306,9 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
 
   const combinedCss = `${buildThemeVariables(theme)}\n${baseCss}`;
   const files: AssembledWebsite["files"] = [];
-  const usedPhotoIds = new Set<string>();
-  const allResolvedPhotos: StockPhoto[] = [];
-  let photoIndex = 0;
+  const generationLog: GenerationAuditEntry[] = [];
 
-  // 1. Add CSS file (both css/style.css and styles.css for compatibility)
+  // Add bundled CSS and JS files
   files.push({
     path: "css/style.css",
     content: combinedCss,
@@ -262,7 +320,6 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
     mimeType: "text/css",
   });
 
-  // 2. Add JS file (both js/main.js and script.js)
   files.push({
     path: "js/main.js",
     content: baseJs,
@@ -274,13 +331,45 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
     mimeType: "application/javascript",
   });
 
-  // 3. Assemble each HTML Page
+  // Add all bundled images to files so every image exists on disk and in HTTP server
+  files.push(...bundledImages);
+
+  const usedPhotoIds = new Set<string>();
+  const allResolvedPhotos: StockPhoto[] = [];
+  let photoIndex = 0;
+
+  // 3. Assemble each standard HTML Page
   for (const page of data.pages) {
     const slug = page.slug.replace(/\.html$/, "");
+    
+    // Avoid double service-areas.html if handled via effectiveAreaCities hub
+    if (slug === "service-areas" && effectiveAreaCities.length > 0) {
+      continue;
+    }
+
+    // Lookup corresponding page in registry
+    let currentPage = registry.getById(`page-${slug}`) || registry.getByPath(`${slug}.html`) || registry.getById(slug);
+    if (!currentPage) {
+      if (slug === "index") currentPage = registry.getById("home");
+      else if (slug === "services") currentPage = registry.getById("services-hub");
+      else if (slug === "service-areas") currentPage = registry.getById("areas-hub");
+    }
+
+    if (!currentPage) {
+      // Fallback register
+      currentPage = {
+        id: `page-${slug}`,
+        pageType: slug === "index" ? "home" : "about",
+        title: page.seo.title,
+        navLabel: page.seo.title.split("|")[0].trim(),
+        outputFilePath: `${slug}.html`,
+      };
+      registry.register(currentPage);
+    }
+
     const layoutType = detectPageLayoutType(slug);
     const layoutBlueprint = PAGE_LAYOUTS[layoutType] || PAGE_LAYOUTS.custom;
 
-    // Use AI sections if provided; otherwise fill with blueprint defaults
     const activeSections: SectionJSON[] = page.sections && page.sections.length > 0
       ? page.sections
       : layoutBlueprint.defaultSections.map((s) => ({
@@ -290,70 +379,47 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           images: [],
         }));
 
-    // Header (always rendered first)
-    const headerHtml = Sections.renderHeader(data.site);
+    // Header & Navigation from Registry
+    const headerHtml = Sections.renderHeader(data.site, "standard", registry, currentPage, linkStyle);
 
-    // Render body sections in order
+    // Breadcrumbs for inner pages
+    let breadcrumbsHtml = "";
+    if (currentPage.pageType !== "home") {
+      const bRes = renderBreadcrumbs(registry, currentPage, domain, linkStyle);
+      breadcrumbsHtml = bRes.html;
+    }
+
     const renderedSectionsHtml: string[] = [];
-
     const niche = findNicheByIndustry(data.schema?.type || data.site.businessName || data.site.tagline || "");
 
-    for (const section of activeSections) {
-      // Resolve real photos for this section
-      const sectionImages: ResolvedImage[] = [];
+    for (let secIdx = 0; secIdx < activeSections.length; secIdx++) {
+      const section = activeSections[secIdx];
 
-      if (section.images && section.images.length > 0) {
-        for (const img of section.images) {
-          const slotType = img.slot || (section.type === "hero" ? "hero" : "service");
-          const nicheFallback = slotType === "hero"
-            ? niche.imageQueries.hero[photoIndex % niche.imageQueries.hero.length]
-            : slotType === "about"
-            ? niche.imageQueries.team[photoIndex % niche.imageQueries.team.length]
-            : slotType === "gallery"
-            ? niche.imageQueries.work[photoIndex % niche.imageQueries.work.length]
-            : niche.imageQueries.services[photoIndex % niche.imageQueries.services.length];
+      // Validate & Repair Section Content
+      const validation = validateAndRepairSection(section.type, section.content, data.site, slug, secIdx);
+      generationLog.push(validation.audit);
 
-          const stock = await resolveStockPhoto({
-            query: img.query || nicheFallback || page.seo.h1 || data.site.businessName,
-            alt: img.alt,
-            slot: slotType,
-            preferredSource: options?.preferredSource,
-            pexelsKey: options?.pexelsKey,
-            pixabayKey: options?.pixabayKey,
-            usedPhotoIds,
-            tradeCategory,
-            city: data.site.address?.city,
-            businessName: data.site.businessName,
-            index: photoIndex++,
+      if (!validation.valid && validation.audit.removed) {
+        continue;
+      }
+      section.content = validation.content;
+
+      // Find planned images for this section
+      const plannedSlots = imagePlan.filter((p) => p.pageSlug === slug && p.slot === (section.type === "hero" ? "hero" : "service"));
+      const sectionImages: any[] = [];
+
+      for (let i = 0; i < Math.max(plannedSlots.length, 1); i++) {
+        const pSlot = plannedSlots[i];
+        if (pSlot) {
+          sectionImages.push({
+            url: pSlot.localPath,
+            localPath: assetPath(currentPage, pSlot.localPath),
+            localWebpPath: assetPath(currentPage, pSlot.localWebpPath),
+            alt: pSlot.alt,
+            width: pSlot.width,
+            height: pSlot.height,
+            slot: pSlot.slot,
           });
-          sectionImages.push(stock);
-          allResolvedPhotos.push(stock);
-        }
-      } else {
-        const defaultSlots = [section.type === "hero" ? "hero" : "service", "service", "service"];
-        for (const slotName of defaultSlots) {
-          const nicheFallback = slotName === "hero"
-            ? niche.imageQueries.hero[photoIndex % niche.imageQueries.hero.length]
-            : slotName === "about"
-            ? niche.imageQueries.team[photoIndex % niche.imageQueries.team.length]
-            : slotName === "gallery"
-            ? niche.imageQueries.work[photoIndex % niche.imageQueries.work.length]
-            : niche.imageQueries.services[photoIndex % niche.imageQueries.services.length];
-
-          const stock = await resolveStockPhoto({
-            query: nicheFallback || page.seo.h1 || data.site.businessName,
-            slot: slotName,
-            preferredSource: options?.preferredSource,
-            pexelsKey: options?.pexelsKey,
-            pixabayKey: options?.pixabayKey,
-            usedPhotoIds,
-            tradeCategory,
-            city: data.site.address?.city,
-            businessName: data.site.businessName,
-            index: photoIndex++,
-          });
-          sectionImages.push(stock);
-          allResolvedPhotos.push(stock);
         }
       }
 
@@ -362,7 +428,6 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderEmergencyBanner(section, data.site.phone));
           break;
         case "hero":
-          // Ensure hero uses page H1 and SEO details if not in section content
           const heroSection = {
             ...section,
             content: {
@@ -417,49 +482,70 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
       }
     }
 
-    // Footer & Mobile Call Bar (always rendered)
-    const footerHtml = Sections.renderFooter(data.site);
+    // Footer & Mobile Call Bar
+    const footerHtml = Sections.renderFooter(data.site, registry, currentPage, linkStyle);
     const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
 
     // Build Head & Schema
-    const headHtml = buildHead(page.seo, data.site, theme, domain, slug);
-    const schemaHtml = buildSchemaOrg(data.site, page, data.schema?.type || "LocalBusiness", domain);
+    const headHtml = buildHead(page.seo, data.site, theme, domain, currentPage, linkStyle);
+    const schemaHtml = buildSchemaOrg(data.site, page, data.schema?.type || "LocalBusiness", domain, currentPage);
 
-    const fullHtml = `<!DOCTYPE html>
+    let fullBodyHtml = `
+${headerHtml}
+${breadcrumbsHtml}
+  <main>
+${renderedSectionsHtml.join("\n\n")}
+  </main>
+${footerHtml}
+${mobileCallBarHtml}`;
+
+    // Resolve internal AI links [[link:page-id|text]]
+    fullBodyHtml = resolveInternalLinks(fullBodyHtml, currentPage, registry, linkStyle);
+
+    let fullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 ${headHtml}
 ${schemaHtml}
 </head>
 <body class="theme-${theme.id}">
-${headerHtml}
-
-  <main>
-${renderedSectionsHtml.join("\n\n")}
-  </main>
-
-${footerHtml}
-${mobileCallBarHtml}
+${fullBodyHtml}
 </body>
 </html>`;
 
+    // Final Guard Scan for forbidden leak tokens
+    const forbiddenErrors = scanHtmlForForbiddenTokens(fullHtml);
+    if (forbiddenErrors.length > 0) {
+      console.warn(`[Final Guard] Sanitizing ${forbiddenErrors.length} leak token(s) on ${currentPage.outputFilePath}`);
+      for (const err of forbiddenErrors) {
+        if (err.token === "undefined" || err.token === "null" || err.token === "NaN") {
+          fullHtml = fullHtml.replace(new RegExp(`\\b${err.token}\\b`, "g"), "");
+        }
+      }
+    }
+
     files.push({
-      path: `${slug}.html`,
+      path: currentPage.outputFilePath,
       content: fullHtml,
       mimeType: "text/html",
     });
   }
 
-  // 3.5. Generate Service Areas Hub & Location Pages if requested
-  const effectiveAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+  // 4. Generate Service Areas Hub & Location Pages if requested
   if (Array.isArray(effectiveAreaCities) && effectiveAreaCities.length > 0) {
-    const headerHtml = Sections.renderHeader(data.site);
-    const footerHtml = Sections.renderFooter(data.site);
-    const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
-    const mainTrade = data.schema?.type || data.site.businessName || "Plumbing Service";
-    const tradeSlug = mainTrade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const hubPage = registry.getByType("areas hub")[0] || {
+      id: "areas-hub",
+      pageType: "areas hub" as const,
+      title: `Service Areas | ${data.site.businessName}`,
+      navLabel: "Service Areas",
+      outputFilePath: "service-areas.html",
+    };
 
-    // A. Service Areas Hub (service-areas.html)
+    const headerHtml = Sections.renderHeader(data.site, "standard", registry, hubPage, linkStyle);
+    const footerHtml = Sections.renderFooter(data.site, registry, hubPage, linkStyle);
+    const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
+
+    // A. Service Areas Hub
     const hubCities: ServiceAreaCityItem[] = effectiveAreaCities.map((c) => ({
       city: c.city,
       stateId: c.stateId,
@@ -474,7 +560,10 @@ ${mobileCallBarHtml}
       data.site,
       theme,
       data.site.address?.city || "Local",
-      data.site.address?.state || "TX"
+      data.site.address?.state || "TX",
+      registry,
+      hubPage,
+      linkStyle
     );
 
     const hubHead = buildHead(
@@ -486,10 +575,11 @@ ${mobileCallBarHtml}
       data.site,
       theme,
       domain,
-      "service-areas"
+      hubPage,
+      linkStyle
     );
 
-    const hubHtml = `<!DOCTYPE html>
+    let hubHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 ${hubHead}
@@ -504,8 +594,10 @@ ${mobileCallBarHtml}
 </body>
 </html>`;
 
+    hubHtml = resolveInternalLinks(hubHtml, hubPage, registry, linkStyle);
+
     files.push({
-      path: "service-areas.html",
+      path: hubPage.outputFilePath,
       content: hubHtml,
       mimeType: "text/html",
     });
@@ -521,8 +613,27 @@ ${mobileCallBarHtml}
 
     for (let i = 0; i < effectiveAreaCities.length; i++) {
       const c = effectiveAreaCities[i];
-      const citySlug = c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`;
+      const cityClean = c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const stateClean = c.stateId.toLowerCase();
+      const citySlug = c.slug || `${tradeSlug}-${cityClean}-${stateClean}.html`;
       const assignedAngle = ROTATING_ANGLES[i % ROTATING_ANGLES.length];
+
+      const locPage = registry.getByType("location").find(
+        (l) => l.outputFilePath.toLowerCase() === citySlug.toLowerCase() ||
+               l.id === `loc-${cityClean}-${stateClean}`
+      ) || {
+        id: `loc-${cityClean}-${stateClean}`,
+        pageType: "location" as const,
+        title: `${mainTrade} in ${c.city}, ${c.stateId} | ${data.site.businessName}`,
+        navLabel: `${c.city}, ${c.stateId}`,
+        outputFilePath: citySlug,
+      };
+
+      const locHeader = Sections.renderHeader(data.site, "standard", registry, locPage, linkStyle);
+      const locFooter = Sections.renderFooter(data.site, registry, locPage, linkStyle);
+
+      // Hero image planned for location
+      const locHeroPlanned = imagePlan.find((p) => p.pageSlug === citySlug.replace(/\.html$/, "") || p.slot === "hero");
 
       const nearestCities = getNearestSelectedCities(
         { lat: c.lat, lng: c.lng, city: c.city, stateId: c.stateId },
@@ -548,11 +659,11 @@ ${mobileCallBarHtml}
         metaDescription: `Prompt, licensed ${mainTrade.toLowerCase()} in ${c.city}, ${c.stateId}. Upfront pricing and satisfaction guaranteed. Call now!`,
         introParagraph: `When you need dependable, prompt ${mainTrade.toLowerCase()} in ${c.city} and throughout ${c.county} County, our experienced technicians provide upfront estimates and fast dispatch. We understand the specific plumbing and utility configurations across local properties.`,
         angleSectionHeadline: `Professional Standards & Regional Service in ${c.city}`,
-        angleSectionContent: `<p>Homes and commercial facilities in ${c.city} face unique demands through changing regional seasons. From sudden winter freezes to heavy summer usage, ensuring reliable utility performance requires prompt local expertise.</p><p>Our certified technicians arrive fully equipped with modern diagnostic tools to resolve issues cleanly on the first visit, preventing costly secondary property damage.</p>`,
+        angleSectionContent: `<p>Homes and commercial facilities in ${c.city} face unique demands through changing regional seasons. From sudden seasonal shifts to heavy utility usage, ensuring reliable performance requires prompt local expertise.</p><p>Our certified technicians arrive fully equipped with modern diagnostic tools to resolve issues cleanly on the first visit, preventing costly secondary property damage.</p>`,
         servicesIncluded:
           data.site.serviceAreas && data.site.serviceAreas.length > 0
             ? data.site.serviceAreas.slice(0, 6)
-            : ["24/7 Emergency Repairs", "Drain Clearing", "Water Heater Installation"],
+            : ["24/7 Emergency Repairs", "Diagnostic Inspection", "System Maintenance & Replacement"],
         processSteps: [
           { title: "Direct Local Dispatch", desc: `Call our team for fast coordination to your ${c.city} location.` },
           { title: "Upfront Evaluation", desc: "We diagnose the issue thoroughly and provide clear, flat-rate options." },
@@ -563,9 +674,15 @@ ${mobileCallBarHtml}
           { question: `Are your technicians licensed in ${c.stateId}?`, answer: `Yes, all work is performed by state-licensed technicians adhering strictly to municipal safety codes.` },
           { question: `Do you provide upfront pricing for ${c.city} residents?`, answer: "Always. We evaluate your job on-site and present transparent flat-rate pricing before starting any work." },
         ],
+        heroImage: locHeroPlanned ? {
+          localPath: locHeroPlanned.localPath,
+          alt: locHeroPlanned.alt,
+          width: locHeroPlanned.width,
+          height: locHeroPlanned.height,
+        } : undefined,
       };
 
-      const locBody = renderLocationPage(locCtx, data.site, theme, effectiveAreaCities, { lat: c.lat, lng: c.lng });
+      const locBody = renderLocationPage(locCtx, data.site, theme, registry, locPage, linkStyle);
       const locSchema = buildLocationPageSchema(locCtx, data.site, domain, citySlug);
       const locHead = buildHead(
         {
@@ -576,34 +693,37 @@ ${mobileCallBarHtml}
         data.site,
         theme,
         domain,
-        citySlug.replace(/\.html$/, "")
+        locPage,
+        linkStyle
       );
 
-      const locFullHtml = `<!DOCTYPE html>
+      let locFullHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
 ${locHead}
 ${locSchema}
 </head>
 <body class="theme-${theme.id}">
-${headerHtml}
+${locHeader}
 <main>
 ${locBody}
 </main>
-${footerHtml}
+${locFooter}
 ${mobileCallBarHtml}
 </body>
 </html>`;
 
+      locFullHtml = resolveInternalLinks(locFullHtml, locPage, registry, linkStyle);
+
       files.push({
-        path: citySlug,
+        path: locPage.outputFilePath,
         content: locFullHtml,
         mimeType: "text/html",
       });
     }
   }
 
-  // 4. Generate sitemap.xml including ALL generated HTML pages
+  // 5. Generate sitemap.xml including ALL generated HTML pages
   const allHtmlFiles = files.filter((f) => f.path.endsWith(".html"));
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -623,14 +743,14 @@ ${allHtmlFiles
     mimeType: "application/xml",
   });
 
-  // 5. Generate robots.txt
+  // 6. Generate robots.txt
   files.push({
     path: "robots.txt",
     content: `User-agent: *\nAllow: /\nSitemap: https://${domain}/sitemap.xml\n`,
     mimeType: "text/plain",
   });
 
-  // 6. Generate /images/CREDITS.txt for full attribution
+  // 7. Generate /images/CREDITS.txt for full attribution
   const creditsTxt = buildCreditsTxt(allResolvedPhotos, data.site.businessName);
   files.push({
     path: "images/CREDITS.txt",
@@ -638,7 +758,7 @@ ${allHtmlFiles
     mimeType: "text/plain",
   });
 
-  // 7. Run comprehensive Automated Quality Checks & Auto-Fixes before returning/download
+  // 8. Run Quality Checks
   const qualityResult = runQualityChecksAndAutoFix(files, {
     businessName: data.site.businessName,
     phone: data.site.phone,
@@ -657,5 +777,7 @@ ${allHtmlFiles
     files: qualityResult.files,
     photos: allResolvedPhotos,
     qualityReport: qualityResult.report,
+    registry,
+    generationLog,
   };
 }

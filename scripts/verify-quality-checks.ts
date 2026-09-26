@@ -487,7 +487,7 @@ async function testWebsite(name: string, contentJSON: SiteContentJSON, themeId: 
 
   // 3. Detailed Per-Page Checks
   for (const page of htmlFiles) {
-    const html = page.content;
+    const html = typeof page.content === "string" ? page.content : page.content.toString("utf8");
 
     // Viewport meta
     if (!html.includes('name="viewport"')) {

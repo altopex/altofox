@@ -1,61 +1,32 @@
 import { SiteContentJSON } from "../../lib/generator/content-schema";
+import { PageRegistry, RegistryPage, LinkStyle } from "../../lib/registry/page-registry";
+import { renderHeaderFromRegistry } from "../../lib/registry/navigation-renderer";
 
-export function renderHeader(site: SiteContentJSON["site"], variant: string = "standard"): string {
+export function renderHeader(
+  site: SiteContentJSON["site"],
+  variant: string = "standard",
+  registry?: PageRegistry,
+  currentPage?: RegistryPage,
+  linkStyle: LinkStyle = "web"
+): string {
+  if (registry && currentPage) {
+    return renderHeaderFromRegistry({
+      registry,
+      currentPage,
+      site,
+      variant: variant as "standard" | "centered",
+      linkStyle,
+    });
+  }
+
+  // Fallback if registry is not passed
   const phone = site.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const bizName = site.businessName || "Local Services";
 
-  const renderDesktopNavItems = () => {
-    return site.nav
-      .map((item) => {
-        const href = item.slug.endsWith(".html") || item.slug.startsWith("#") ? item.slug : `${item.slug}.html`;
-        if (item.children && item.children.length > 0) {
-          return `
-          <li class="nav-dropdown">
-            <a href="${href}" class="nav-link">${item.label} ▾</a>
-            <ul class="dropdown-menu">
-              ${item.children
-                .map((child) => {
-                  const childHref = child.slug.endsWith(".html") ? child.slug : `${child.slug}.html`;
-                  return `<li><a href="${childHref}">${child.label}</a></li>`;
-                })
-                .join("\n              ")}
-            </ul>
-          </li>`;
-        }
-        return `<li><a href="${href}" class="nav-link">${item.label}</a></li>`;
-      })
-      .join("\n          ");
-  };
-
-  const renderMobileNavItems = () => {
-    return site.nav
-      .map((item) => {
-        const href = item.slug.endsWith(".html") || item.slug.startsWith("#") ? item.slug : `${item.slug}.html`;
-        if (item.children && item.children.length > 0) {
-          return `
-          <li>
-            <a href="${href}" class="mobile-nav-link">${item.label}</a>
-            <ul class="mobile-nav-sublist">
-              ${item.children
-                .map((child) => {
-                  const childHref = child.slug.endsWith(".html") ? child.slug : `${child.slug}.html`;
-                  return `<li><a href="${childHref}" class="mobile-nav-sublink">${child.label}</a></li>`;
-                })
-                .join("\n              ")}
-            </ul>
-          </li>`;
-        }
-        return `<li><a href="${href}" class="mobile-nav-link">${item.label}</a></li>`;
-      })
-      .join("\n          ");
-  };
-
-  const isCentered = variant === "centered";
-
   return `
   <!-- Site Header -->
-  <header class="site-header ${isCentered ? "header-centered" : ""}" id="site-header">
+  <header class="site-header ${variant === "centered" ? "header-centered" : ""}" id="site-header">
     <div class="header-container container">
       <a href="index.html" class="brand-logo" aria-label="${bizName} Home">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary);"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
@@ -65,7 +36,11 @@ export function renderHeader(site: SiteContentJSON["site"], variant: string = "s
       <!-- Desktop Navigation -->
       <nav class="main-nav" aria-label="Main Navigation">
         <ul class="nav-list">
-          ${renderDesktopNavItems()}
+          <li><a href="index.html" class="nav-link active">Home</a></li>
+          <li><a href="services.html" class="nav-link">Services</a></li>
+          <li><a href="service-areas.html" class="nav-link">Service Areas</a></li>
+          <li><a href="about.html" class="nav-link">About</a></li>
+          <li><a href="contact.html" class="nav-link">Contact</a></li>
         </ul>
       </nav>
 
@@ -78,7 +53,7 @@ export function renderHeader(site: SiteContentJSON["site"], variant: string = "s
       </div>
 
       <!-- Mobile Hamburger Toggle -->
-      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+      <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" aria-controls="mobile-drawer">
         <span class="hamburger-bar"></span>
         <span class="hamburger-bar"></span>
         <span class="hamburger-bar"></span>
@@ -86,9 +61,13 @@ export function renderHeader(site: SiteContentJSON["site"], variant: string = "s
     </div>
 
     <!-- Mobile Slide-in Drawer -->
-    <div class="mobile-drawer" id="mobile-drawer" aria-label="Mobile Navigation">
+    <div class="mobile-drawer" id="mobile-drawer" aria-label="Mobile Navigation" role="dialog" aria-modal="true">
       <ul class="mobile-nav-list">
-        ${renderMobileNavItems()}
+        <li><a href="index.html" class="mobile-nav-link">Home</a></li>
+        <li><a href="services.html" class="mobile-nav-link">Services</a></li>
+        <li><a href="service-areas.html" class="mobile-nav-link">Service Areas</a></li>
+        <li><a href="about.html" class="mobile-nav-link">About</a></li>
+        <li><a href="contact.html" class="mobile-nav-link">Contact</a></li>
       </ul>
       <div style="margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--color-border);">
         <a href="tel:${cleanPhone}" class="btn btn-primary" style="width: 100%; margin-bottom: 0.75rem;">Call Now: ${phone}</a>

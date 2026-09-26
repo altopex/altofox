@@ -58,7 +58,7 @@ export interface QualityReport {
 
 export interface AssembleFile {
   path: string;
-  content: string;
+  content: string | Buffer;
   mimeType?: string | null;
 }
 
@@ -215,7 +215,7 @@ export function runQualityChecksAndAutoFix(
 
   // 1. Process and Auto-Fix Every HTML Page
   for (const file of htmlFiles) {
-    let html = file.content;
+    let html = typeof file.content === "string" ? file.content : file.content.toString("utf8");
     const pageSlug = file.path.replace(/\.html$/, "");
     const isHome = pageSlug === "index";
 
@@ -628,7 +628,7 @@ export function runQualityChecksAndAutoFix(
     autoFixes.push("Generated missing sitemap.xml with all pages included.");
   } else {
     // Verify each HTML page is listed
-    let sitemapContent = sitemapFile.content;
+    let sitemapContent = typeof sitemapFile.content === "string" ? sitemapFile.content : sitemapFile.content.toString("utf8");
     let missingPagesCount = 0;
     for (const h of htmlFiles) {
       const slugUrl = `https://${domain}/${h.path === "index.html" ? "" : h.path}`;

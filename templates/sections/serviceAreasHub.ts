@@ -1,6 +1,8 @@
 import { SiteInfoJSON } from "../../lib/generator/content-schema";
 import { Theme } from "../../lib/themes";
 import { SIMPLEMAPS_ATTRIBUTION } from "../../lib/data/geo-utils";
+import { PageRegistry, RegistryPage, linkTo, LinkStyle, renderBreadcrumbs } from "../../lib/registry/page-registry";
+import { safeText } from "../../lib/generator/safe-helpers";
 
 export interface ServiceAreaCityItem {
   city: string;
@@ -12,16 +14,28 @@ export interface ServiceAreaCityItem {
 }
 
 /**
- * Renders the Service Areas Hub Page (service-areas.html)
- * Groups all covered cities by County with links to dedicated location landing pages.
+ * Renders the Service Areas Hub Page strictly using the Master Page Registry
  */
 export function renderServiceAreasHub(
   cities: ServiceAreaCityItem[],
   site: SiteInfoJSON,
   theme: Theme,
   mainCity: string,
-  state: string
+  state: string,
+  registry: PageRegistry,
+  currentPage: RegistryPage,
+  linkStyle: LinkStyle = "web"
 ): string {
+  const phone = safeText(site.phone, "(555) 123-4567");
+  const cleanPhone = phone.replace(/[^\d+]/g, "");
+
+  // Breadcrumbs
+  const { html: breadcrumbsHtml } = renderBreadcrumbs(registry, currentPage, "example.com", linkStyle);
+
+  // Contact Page link
+  const contactPage = registry.getByType("contact")[0];
+  const contactHref = contactPage ? linkTo(currentPage, contactPage, linkStyle) : "contact.html";
+
   // Group cities by County
   const byCounty = new Map<string, ServiceAreaCityItem[]>();
 
@@ -35,90 +49,72 @@ export function renderServiceAreasHub(
   const countiesSorted = Array.from(byCounty.entries()).sort(([a], [b]) => a.localeCompare(b));
 
   return `
-<!-- Breadcrumbs -->
-<nav aria-label="Breadcrumb" class="py-3 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-xs text-slate-500">
-  <ol class="flex items-center space-x-2">
-    <li><a href="index.html" class="hover:text-indigo-600 font-medium">Home</a></li>
-    <li><span class="text-slate-400">/</span></li>
-    <li class="font-semibold text-slate-900" aria-current="page">Service Areas</li>
-  </ol>
-</nav>
+${breadcrumbsHtml}
 
 <!-- Hero Section -->
-<section class="py-12 sm:py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center space-y-4">
-  <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-xs font-bold text-indigo-700 mx-auto">
-    <span>📍 Regional Dispatch &amp; Fast Coverage</span>
-  </div>
-  <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">
-    Areas We Serve Across ${mainCity} and Surrounding Counties
-  </h1>
-  <p class="max-w-2xl mx-auto text-base sm:text-lg text-slate-600 leading-relaxed">
-    Providing prompt, certified, and upfront residential and commercial services across ${cities.length} local communities.
-  </p>
-  <div class="pt-2 flex flex-wrap justify-center gap-3">
-    <a href="tel:${site.phone.replace(/[^\d+]/g, "")}" class="inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md transition">
-      Call ${site.phone}
-    </a>
-    <a href="contact.html" class="inline-flex items-center justify-center px-6 py-3 rounded-xl font-bold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 transition">
-      Book Online
-    </a>
+<section class="section">
+  <div class="container text-center">
+    <div class="badge">📍 Regional Dispatch &amp; Fast Coverage</div>
+    <h1>Areas We Serve Across ${mainCity} and Surrounding Counties</h1>
+    <p class="lead-text" style="max-width: 720px; margin: 0 auto 2rem auto;">
+      Providing prompt, certified, and upfront residential and commercial services across ${cities.length} local communities.
+    </p>
+    <div class="hub-hero-actions" style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+      <a href="tel:${cleanPhone}" class="btn btn-primary">Call ${phone}</a>
+      <a href="${contactHref}" class="btn btn-outline">Book Online</a>
+    </div>
   </div>
 </section>
 
 <!-- Counties & Cities Directory Grid -->
-<section class="py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-10">
-  ${countiesSorted
-    .map(
-      ([countyName, cityList]) => `
-    <div class="bg-white border border-slate-200 rounded-2xl p-6 sm:p-8 shadow-xs space-y-4">
-      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
-        <h2 class="text-xl sm:text-2xl font-bold text-slate-900 flex items-center space-x-2">
-          <span>🏛️</span>
-          <span>${countyName}</span>
-        </h2>
-        <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
-          ${cityList.length} ${cityList.length === 1 ? "Community" : "Communities"}
-        </span>
-      </div>
+<section class="section section-alt">
+  <div class="container">
+    <div class="counties-stack" style="display: flex; flex-direction: column; gap: 2rem;">
+      ${countiesSorted
+        .map(
+          ([countyName, cityList]) => `
+        <div class="card county-card">
+          <div class="county-header" style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--color-border);">
+            <h2 style="font-size: 1.5rem; margin-bottom: 0;">🏛️ ${countyName}</h2>
+            <span class="badge">${cityList.length} ${cityList.length === 1 ? "Community" : "Communities"}</span>
+          </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        ${cityList
-          .map(
-            (c) => `
-          <a href="${c.slug}" class="group p-3.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-indigo-50/60 hover:border-indigo-300 transition flex flex-col justify-between">
-            <div>
-              <span class="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition block">
-                ${c.city}, ${c.stateId}
-              </span>
-              ${
-                c.distanceOffset
-                  ? `<span class="text-[11px] text-slate-500 block mt-0.5">${c.distanceOffset}</span>`
-                  : ""
-              }
-            </div>
-            <div class="mt-2 text-xs font-semibold text-indigo-600 group-hover:translate-x-0.5 transition inline-flex items-center">
-              <span>View local services</span>
-              <span class="ml-1">→</span>
-            </div>
-          </a>
-        `
-          )
-          .join("")}
-      </div>
+          <div class="cities-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+            ${cityList
+              .map((c) => {
+                // Find matching location page in registry
+                const locPage = registry.getByType("location").find(
+                  (l) => l.data?.city?.toLowerCase() === c.city.toLowerCase() ||
+                         l.outputFilePath.toLowerCase().includes(c.city.toLowerCase())
+                );
+                const href = locPage ? linkTo(currentPage, locPage, linkStyle) : c.slug;
+
+                return `
+              <a href="${href}" class="city-chip-card" style="display: block; padding: 1rem; border-radius: var(--radius); background: var(--color-background); border: 1px solid var(--color-border); transition: var(--transition);">
+                <div style="font-weight: 700; color: var(--color-secondary);">${c.city}, ${c.stateId}</div>
+                ${c.distanceOffset ? `<div style="font-size: 0.8rem; color: var(--color-muted); margin-top: 0.25rem;">${c.distanceOffset}</div>` : ""}
+                <div style="font-size: 0.85rem; font-weight: 600; color: var(--color-primary); margin-top: 0.5rem;">View local services →</div>
+              </a>`;
+              })
+              .join("\n            ")}
+          </div>
+        </div>`
+        )
+        .join("\n      ")}
     </div>
-  `
-    )
-    .join("")}
+  </div>
 </section>
 
-<!-- SimpleMaps Attribution -->
-<section class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center text-xs text-slate-400">
-  <p>
-    ${SIMPLEMAPS_ATTRIBUTION.attributionText}
-    <a href="${SIMPLEMAPS_ATTRIBUTION.url}" target="_blank" rel="noopener noreferrer" class="underline hover:text-slate-600">
-      ${SIMPLEMAPS_ATTRIBUTION.name}
-    </a>.
-  </p>
+<!-- Attribution -->
+<section class="section" style="padding-top: 2rem; padding-bottom: 2rem; text-align: center; font-size: 0.85rem; color: var(--color-muted);">
+  <div class="container">
+    <p>
+      ${SIMPLEMAPS_ATTRIBUTION.attributionText}
+      <a href="${SIMPLEMAPS_ATTRIBUTION.url}" target="_blank" rel="noopener noreferrer" style="text-decoration: underline;">
+        ${SIMPLEMAPS_ATTRIBUTION.name}
+      </a>.
+    </p>
+  </div>
 </section>
   `.trim();
 }

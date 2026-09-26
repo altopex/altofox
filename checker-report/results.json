@@ -1,0 +1,1529 @@
+[
+  {
+    "siteId": "plumber-portland-or",
+    "siteName": "Rose City Plumbing Pros",
+    "timestamp": "2026-09-25T20:16:20.255Z",
+    "totalIssues": 0,
+    "criticalCount": 0,
+    "warningCount": 0,
+    "pagesChecked": 11,
+    "orphanPages": [],
+    "pageReports": [
+      {
+        "page": "index.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/index-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/index-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/index-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/index-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "about.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/about-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/about-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/about-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/about-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "services.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/services-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/services-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/services-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/services-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "contact.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/contact-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/contact-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/contact-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/contact-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "faq.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/faq-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/faq-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/faq-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/faq-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "service-areas.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/service-areas-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/service-areas-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/service-areas-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/service-areas-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "plumber-beaverton-or.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-beaverton-or-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-beaverton-or-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-beaverton-or-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-beaverton-or-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "plumber-hillsboro-or.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-hillsboro-or-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-hillsboro-or-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-hillsboro-or-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-hillsboro-or-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "plumber-gresham-or.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-gresham-or-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-gresham-or-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-gresham-or-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-gresham-or-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "plumber-tigard-or.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-tigard-or-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-tigard-or-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-tigard-or-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-tigard-or-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "plumber-lake-oswego-or.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-lake-oswego-or-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-lake-oswego-or-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-lake-oswego-or-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/plumber-portland-or/plumber-lake-oswego-or-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      }
+    ],
+    "globalIssues": [],
+    "screenshotsDir": "checker-report/screenshots/plumber-portland-or"
+  },
+  {
+    "siteId": "electrician-dallas-tx",
+    "siteName": "Lone Star Spark Electric",
+    "timestamp": "2026-09-25T20:16:34.986Z",
+    "totalIssues": 0,
+    "criticalCount": 0,
+    "warningCount": 0,
+    "pagesChecked": 11,
+    "orphanPages": [],
+    "pageReports": [
+      {
+        "page": "index.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/index-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/index-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/index-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/index-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "about.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/about-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/about-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/about-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/about-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "services.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/services-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/services-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/services-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/services-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "contact.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/contact-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/contact-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/contact-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/contact-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "faq.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/faq-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/faq-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/faq-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/faq-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "service-areas.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/service-areas-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/service-areas-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/service-areas-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/service-areas-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "electrician-garland-tx.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-garland-tx-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-garland-tx-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-garland-tx-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-garland-tx-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "electrician-irving-tx.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-irving-tx-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-irving-tx-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-irving-tx-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-irving-tx-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "electrician-grand-prairie-tx.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-grand-prairie-tx-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-grand-prairie-tx-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-grand-prairie-tx-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-grand-prairie-tx-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "electrician-mesquite-tx.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-mesquite-tx-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-mesquite-tx-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-mesquite-tx-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-mesquite-tx-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "electrician-carrollton-tx.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-carrollton-tx-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-carrollton-tx-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-carrollton-tx-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/electrician-dallas-tx/electrician-carrollton-tx-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      }
+    ],
+    "globalIssues": [],
+    "screenshotsDir": "checker-report/screenshots/electrician-dallas-tx"
+  },
+  {
+    "siteId": "tree-service-atlanta-ga",
+    "siteName": "PeachState Tree Care Specialists",
+    "timestamp": "2026-09-25T20:16:49.805Z",
+    "totalIssues": 0,
+    "criticalCount": 0,
+    "warningCount": 0,
+    "pagesChecked": 11,
+    "orphanPages": [],
+    "pageReports": [
+      {
+        "page": "index.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/index-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/index-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/index-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/index-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "about.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/about-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/about-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/about-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/about-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "services.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/services-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/services-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/services-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/services-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "contact.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/contact-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/contact-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/contact-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/contact-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "faq.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/faq-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/faq-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/faq-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/faq-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "service-areas.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/service-areas-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/service-areas-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/service-areas-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/service-areas-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "tree-service-marietta-ga.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-marietta-ga-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-marietta-ga-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-marietta-ga-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-marietta-ga-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "tree-service-alpharetta-ga.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-alpharetta-ga-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-alpharetta-ga-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-alpharetta-ga-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-alpharetta-ga-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "tree-service-roswell-ga.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-roswell-ga-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-roswell-ga-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-roswell-ga-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-roswell-ga-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "tree-service-sandy-springs-ga.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-sandy-springs-ga-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-sandy-springs-ga-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-sandy-springs-ga-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-sandy-springs-ga-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      },
+      {
+        "page": "tree-service-smyrna-ga.html",
+        "issues": [],
+        "criticalCount": 0,
+        "warningCount": 0,
+        "layoutResults": [
+          {
+            "width": 390,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 390,
+            "viewportWidth": 390,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-smyrna-ga-390px.png"
+          },
+          {
+            "width": 768,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 768,
+            "viewportWidth": 768,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-smyrna-ga-768px.png"
+          },
+          {
+            "width": 1280,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1280,
+            "viewportWidth": 1280,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-smyrna-ga-1280px.png"
+          },
+          {
+            "width": 1440,
+            "hasHorizontalScroll": false,
+            "scrollWidth": 1440,
+            "viewportWidth": 1440,
+            "overflowElements": [],
+            "overlappingElements": [],
+            "screenshotPath": "/Users/raselahmed/antigravity/altofox/checker-report/screenshots/tree-service-atlanta-ga/tree-service-smyrna-ga-1440px.png"
+          }
+        ],
+        "consoleErrors": []
+      }
+    ],
+    "globalIssues": [],
+    "screenshotsDir": "checker-report/screenshots/tree-service-atlanta-ga"
+  }
+]

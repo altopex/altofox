@@ -38,3 +38,8 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+# Checker test output artifacts (preserve results.json for in-app UI)
+checker-report/screenshots/
+checker-report/sites/
+checker-report/zips/

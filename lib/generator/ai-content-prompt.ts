@@ -388,7 +388,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
     ? formData.serviceAreasList
     : formData.serviceAreas
     ? formData.serviceAreas.split(",").map((a) => a.trim()).filter(Boolean)
-    : [city, "Plano", "Frisco", "McKinney", "Irving", "Richardson"];
+    : [city, `${city} Metro`, "Surrounding Communities", "Neighboring Towns"];
 
   // Build navigation items
   const navItems = [

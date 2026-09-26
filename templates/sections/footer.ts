@@ -1,6 +1,23 @@
 import { SiteContentJSON } from "../../lib/generator/content-schema";
+import { PageRegistry, RegistryPage, LinkStyle } from "../../lib/registry/page-registry";
+import { renderFooterFromRegistry } from "../../lib/registry/navigation-renderer";
 
-export function renderFooter(site: SiteContentJSON["site"]): string {
+export function renderFooter(
+  site: SiteContentJSON["site"],
+  registry?: PageRegistry,
+  currentPage?: RegistryPage,
+  linkStyle: LinkStyle = "web"
+): string {
+  if (registry && currentPage) {
+    return renderFooterFromRegistry({
+      registry,
+      currentPage,
+      site,
+      linkStyle,
+    });
+  }
+
+  // Fallback if registry not passed
   const bizName = site.businessName || "Local Services";
   const tagline = site.tagline || "Professional, licensed, and guaranteed local services.";
   const phone = site.phone || "(555) 123-4567";
@@ -8,13 +25,12 @@ export function renderFooter(site: SiteContentJSON["site"]): string {
   const address = site.address || { city: "Local Area" };
   const isServiceArea = site.businessModel === "service-area";
 
-  // Google Policy: Service-area businesses must hide street address everywhere on the site
   const addressDisplay = isServiceArea
     ? `Serving ${address.city || "local communities"} and surrounding areas`
     : [address.street, address.city, address.state, address.zip].filter(Boolean).join(", ") || `Serving ${address.city || "local communities"}`;
 
   const email = site.email || "";
-  const areas = site.serviceAreas && site.serviceAreas.length > 0 ? site.serviceAreas : ["Local Communities", "Suburbs", "Metro Area"];
+  const areas = site.serviceAreas && site.serviceAreas.length > 0 ? site.serviceAreas : [];
 
   return `
   <!-- Site Footer: 4-Column Layout -->
@@ -37,13 +53,11 @@ export function renderFooter(site: SiteContentJSON["site"]): string {
         <div class="footer-col">
           <h4>Quick Links</h4>
           <ul class="footer-links">
-            ${site.nav
-              .slice(0, 6)
-              .map((item) => {
-                const href = item.slug.endsWith(".html") || item.slug.startsWith("#") ? item.slug : `${item.slug}.html`;
-                return `<li><a href="${href}">${item.label}</a></li>`;
-              })
-              .join("\n            ")}
+            <li><a href="index.html">Home</a></li>
+            <li><a href="services.html">Services</a></li>
+            <li><a href="service-areas.html">Service Areas</a></li>
+            <li><a href="about.html">About Us</a></li>
+            <li><a href="contact.html">Contact Us</a></li>
           </ul>
         </div>
 
@@ -67,7 +81,7 @@ export function renderFooter(site: SiteContentJSON["site"]): string {
       </div>
 
       <div class="footer-bottom">
-        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated. City data by <a href="https://simplemaps.com/data/us-cities" target="_blank" rel="noopener noreferrer" style="color: #94A3B8; text-decoration: underline;">SimpleMaps</a> under CC BY 4.0.</p>
+        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated.</p>
       </div>
     </div>
   </footer>`;
