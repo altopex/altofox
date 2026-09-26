@@ -435,3 +435,146 @@ export function buildMasterPageRegistry(options: RegistryBuilderOptions): PageRe
 
   return registry;
 }
+
+/**
+ * Builds a comprehensive Master Page Registry directly from a RankLocalBusinessProfile
+ * Supports both standalone pages and Service x Location matrix pages with silo hierarchy.
+ */
+export function buildRegistryFromBusinessProfile(
+  profile: import("../entities/types").RankLocalBusinessProfile,
+  options: {
+    useFolderStructure?: boolean;
+    generateServiceLocationMatrix?: boolean;
+    maxMatrixPages?: number;
+    mainPages?: { slug: string; title: string; navLabel?: string }[];
+  } = {}
+): PageRegistry {
+  const useFolders = Boolean(options.useFolderStructure);
+  const trade = profile.nicheTrade || "Local Contractor";
+  const tradeSlug = trade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  const registry = new PageRegistry();
+
+  // 1. Home Page
+  registry.register({
+    id: "home",
+    pageType: "home",
+    title: `${profile.businessName} | Top-Rated ${trade}`,
+    navLabel: "Home",
+    outputFilePath: "index.html",
+    order: 1,
+  });
+
+  // 2. Main Standard Pages
+  const standardPages = options.mainPages || [
+    { slug: "about", title: `About Us | ${profile.businessName}`, navLabel: "About" },
+    { slug: "contact", title: `Contact Us | ${profile.businessName}`, navLabel: "Contact" },
+    { slug: "reviews", title: `Customer Reviews | ${profile.businessName}`, navLabel: "Reviews" },
+  ];
+
+  for (const p of standardPages) {
+    const slug = p.slug.replace(/\.html$/, "");
+    if (slug === "index" || slug === "services" || slug === "service-areas") continue;
+
+    const pageType: PageType = slug === "about" ? "about" : slug === "contact" ? "contact" : "about";
+    registry.register({
+      id: `page-${slug}`,
+      pageType,
+      title: p.title,
+      navLabel: p.navLabel || p.title,
+      outputFilePath: useFolders ? `${slug}/index.html` : `${slug}.html`,
+      parentPageId: "home",
+      order: 10,
+    });
+  }
+
+  // 3. Services Hub
+  registry.register({
+    id: "services-hub",
+    pageType: "services hub",
+    title: `Our Services | ${profile.businessName}`,
+    navLabel: "Services",
+    outputFilePath: useFolders ? "services/index.html" : "services.html",
+    parentPageId: "home",
+    order: 2,
+  });
+
+  // 4. Individual Service Pages
+  for (const svc of profile.services) {
+    const svcSlug = svc.slug;
+    registry.register({
+      id: `svc-${svcSlug}`,
+      pageType: "service",
+      title: `${svc.name} | ${profile.businessName}`,
+      navLabel: svc.shortName || svc.name,
+      outputFilePath: useFolders ? `services/${svcSlug}/index.html` : `service-${svcSlug}.html`,
+      parentPageId: "services-hub",
+      order: 3,
+      data: { serviceId: svc.id, service: svc },
+    });
+  }
+
+  // 5. Service Areas Hub
+  if (profile.locations.length > 0) {
+    registry.register({
+      id: "areas-hub",
+      pageType: "areas hub",
+      title: `Service Areas | ${profile.businessName}`,
+      navLabel: "Areas Served",
+      outputFilePath: useFolders ? "service-areas/index.html" : "service-areas.html",
+      parentPageId: "home",
+      order: 4,
+    });
+
+    // 6. Individual Location Pages
+    for (const loc of profile.locations) {
+      const cityClean = loc.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const stateClean = loc.stateCode.toLowerCase();
+      const slug = `${tradeSlug}-${cityClean}-${stateClean}`;
+
+      registry.register({
+        id: `loc-${loc.slug}`,
+        pageType: "location",
+        title: `${trade} in ${loc.city}, ${loc.stateCode} | ${profile.businessName}`,
+        navLabel: `${loc.city}, ${loc.stateCode}`,
+        outputFilePath: useFolders ? `areas/${loc.slug}/index.html` : `${slug}.html`,
+        parentPageId: "areas-hub",
+        order: 5,
+        data: { locationId: loc.id, location: loc },
+      });
+    }
+
+    // 7. Optional Service x Location Matrix Pages (e.g. "Water Heater Repair in Beaverton, OR")
+    if (options.generateServiceLocationMatrix) {
+      const maxPages = options.maxMatrixPages || 100;
+      let count = 0;
+
+      for (const loc of profile.locations) {
+        for (const svc of profile.services) {
+          if (count >= maxPages) break;
+          const matrixSlug = `${svc.slug}-${loc.slug}`;
+          registry.register({
+            id: `matrix-${matrixSlug}`,
+            pageType: "service_location",
+            title: `${svc.name} in ${loc.city}, ${loc.stateCode} | ${profile.businessName}`,
+            navLabel: `${svc.shortName || svc.name} in ${loc.city}`,
+            outputFilePath: useFolders ? `services/${svc.slug}/${loc.slug}/index.html` : `${matrixSlug}.html`,
+            parentPageId: `svc-${svc.slug}`,
+            order: 6,
+            data: {
+              serviceId: svc.id,
+              locationId: loc.id,
+              service: svc,
+              location: loc,
+            },
+          });
+          count++;
+        }
+        if (count >= maxPages) break;
+      }
+    }
+  }
+
+  return registry;
+}
+
