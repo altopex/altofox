@@ -52,6 +52,12 @@ import { RankRentManager } from "./rankrent/RankRentManager";
 import { analyzeHtmlRecommendations, BuilderRecommendation } from "@/lib/recommendations/recommendation-engine";
 import { applyRecommendationFix, applyAllRecommendations } from "@/lib/recommendations/fix-applier";
 import { RecommendationFixPanel } from "./editor/RecommendationFixPanel";
+import {
+  sanitizeTitle,
+  sanitizeMetaContent,
+  sanitizeHeadline,
+  sanitizeHtmlContent,
+} from "@/lib/security/html-sanitizer";
 
 interface WebsiteManagerProps {
   project: SavedProject;
@@ -282,29 +288,36 @@ export function WebsiteManager({
   const executeSave = async () => {
     let updatedHtml = activeHtmlContent;
 
+    const cleanTitle = sanitizeTitle(pageTitle);
+    const cleanMeta = sanitizeMetaContent(metaDescription);
+    const cleanH1 = sanitizeHeadline(pageH1);
+
     // Update <title>
-    if (pageTitle) {
+    if (cleanTitle) {
       updatedHtml = updatedHtml.replace(
         /<title[^>]*>[\s\S]*?<\/title>/i,
-        `<title>${pageTitle}</title>`
+        `<title>${cleanTitle}</title>`
       );
     }
 
     // Update meta description
-    if (metaDescription) {
+    if (cleanMeta) {
       updatedHtml = updatedHtml.replace(
         /<meta[^>]*?name=["']description["'][^>]*?content=["'][^"']*["']/i,
-        `<meta name="description" content="${metaDescription}">`
+        `<meta name="description" content="${cleanMeta}">`
       );
     }
 
     // Update H1
-    if (pageH1) {
+    if (cleanH1) {
       updatedHtml = updatedHtml.replace(
         /<h1([^>]*)>[\s\S]*?<\/h1>/i,
-        `<h1$1>${pageH1}</h1>`
+        `<h1$1>${cleanH1}</h1>`
       );
     }
+
+    // Sanitize HTML to prevent XSS attacks while retaining custom HTML/CSS capability
+    updatedHtml = sanitizeHtmlContent(updatedHtml);
 
     const updatedFiles = project.files.map((f) =>
       f.path === selectedPagePath
@@ -950,6 +963,7 @@ export function WebsiteManager({
                       title="Page Preview"
                       srcDoc={activeHtmlContent || currentPageFile?.content}
                       className="w-full h-full border-0"
+                      sandbox="allow-scripts allow-same-origin"
                     />
                   </div>
                 </div>

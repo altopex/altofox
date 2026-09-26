@@ -36,19 +36,26 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function setAuthCookies(token: string | null, status: string | null) {
   if (typeof document === "undefined") return;
+  const isSecure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
   if (token) {
-    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800`;
-    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800`;
+    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    try {
+      localStorage.setItem("ranklocal_token_persist", token);
+    } catch {}
   } else {
-    document.cookie = "ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-    document.cookie = "altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    document.cookie = `ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
+    document.cookie = `altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
+    try {
+      localStorage.removeItem("ranklocal_token_persist");
+    } catch {}
   }
   if (status) {
-    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800`;
-    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800`;
+    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
   } else {
-    document.cookie = "ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-    document.cookie = "altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+    document.cookie = `ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
+    document.cookie = `altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
   }
 }
 
@@ -129,10 +136,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(initialSession.user);
           await loadUserProfile(initialSession.user.id, initialSession.user.email, initialSession.access_token);
         } else {
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setAuthCookies(null, null);
+          // Check persisted token fallback on hard refresh
+          let restored = false;
+          try {
+            const persisted = typeof localStorage !== "undefined" ? localStorage.getItem("ranklocal_token_persist") : null;
+            if (persisted) {
+              const { data: userData } = await supabase.auth.getUser(persisted);
+              if (userData?.user && mounted) {
+                setUser(userData.user);
+                await loadUserProfile(userData.user.id, userData.user.email, persisted);
+                restored = true;
+              }
+            }
+          } catch {}
+
+          if (!restored && mounted) {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setAuthCookies(null, null);
+          }
         }
       } catch (err) {
         console.error("[Auth] Init error:", err);

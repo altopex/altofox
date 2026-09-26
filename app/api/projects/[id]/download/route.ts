@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import JSZip from "jszip";
 import { BRAND } from "@/config/brand";
+import { optimizeStaticFile, generateRobotsTxt } from "@/lib/export/optimizer";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +27,16 @@ export async function GET(
 
     const zip = new JSZip();
 
-    // Add all static files to the zip
+    // Add all static files to the zip with production minification
     for (const file of project.files) {
-      zip.file(file.path, file.content);
+      const optimizedContent = optimizeStaticFile(file.path, file.content);
+      zip.file(file.path, optimizedContent);
+    }
+
+    // Include robots.txt if not present
+    if (!project.files.some((f) => f.path === "robots.txt")) {
+      const domain = `${project.name.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`;
+      zip.file("robots.txt", generateRobotsTxt(domain));
     }
 
     // Add a helpful README.md explaining how to preview or deploy

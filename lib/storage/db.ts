@@ -268,9 +268,11 @@ export async function importProjectBackup(file: File): Promise<SavedProject> {
 export async function generateWebsiteZIP(
   project: SavedProject,
   mode: "full" | "changed-only" = "full",
-  sinceTimestamp?: number
+  sinceTimestamp?: number,
+  optimize: boolean = true
 ): Promise<{ blob: Blob; changedFilesCount: number; changedFilePaths: string[] }> {
   const JSZip = (await import("jszip")).default;
+  const { optimizeStaticFile, generateRobotsTxt } = await import("../export/optimizer");
   const zip = new JSZip();
   const redirects = generateRedirectFiles(project.redirects || []);
 
@@ -280,7 +282,8 @@ export async function generateWebsiteZIP(
   for (const f of project.files) {
     const isChanged = !referenceTime || (f.lastModified && f.lastModified > referenceTime);
     if (mode === "full" || isChanged) {
-      zip.file(f.path, f.content);
+      const contentToPack = optimize ? optimizeStaticFile(f.path, f.content) : f.content;
+      zip.file(f.path, contentToPack);
       if (isChanged) {
         changedFilePaths.push(f.path);
       }
@@ -297,10 +300,21 @@ export async function generateWebsiteZIP(
   // Always ensure sitemap is included
   const sitemap = project.files.find((f) => f.path === "sitemap.xml");
   if (sitemap && !zip.file("sitemap.xml")) {
-    zip.file("sitemap.xml", sitemap.content);
+    const sitemapContent = optimize ? optimizeStaticFile("sitemap.xml", sitemap.content) : sitemap.content;
+    zip.file("sitemap.xml", sitemapContent);
   }
 
-  const blob = await zip.generateAsync({ type: "blob" });
+  // Include robots.txt if not explicitly present
+  if (!zip.file("robots.txt")) {
+    const domain = project.businessDetails?.websiteDomain || "example.com";
+    zip.file("robots.txt", generateRobotsTxt(domain));
+  }
+
+  const blob = await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 9 },
+  });
   return {
     blob,
     changedFilesCount: changedFilePaths.length,
