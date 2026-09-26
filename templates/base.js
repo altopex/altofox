@@ -212,25 +212,83 @@ document.addEventListener('DOMContentLoaded', () => {
     el.textContent = String(new Date().getFullYear());
   });
 
-  // 8. Contact Form UX Feedback
+  // 8. Contact Form UX Feedback & Rank & Rent Lead Forwarding
   const contactForms = document.querySelectorAll('form[data-ajax-form]');
   contactForms.forEach((form) => {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitBtn = form.querySelector('button[type="submit"]');
-      const originalText = submitBtn ? submitBtn.innerHTML : 'Submit';
+      const originalText = submitBtn ? submitBtn.innerHTML : 'Submit Request';
+
+      // Status message container
+      let statusBox = form.querySelector('.form-status-msg');
+      if (!statusBox) {
+        statusBox = document.createElement('div');
+        statusBox.className = 'form-status-msg';
+        statusBox.style.cssText = 'margin-top: 1rem; padding: 0.875rem 1.25rem; border-radius: var(--radius-md, 8px); font-size: 0.95rem; font-weight: 500; display: none;';
+        form.appendChild(statusBox);
+      }
+
       if (submitBtn) {
-        submitBtn.innerHTML = 'Sending...';
+        submitBtn.innerHTML = 'Sending Request...';
         submitBtn.disabled = true;
       }
-      setTimeout(() => {
-        alert('Thank you! Your request has been received. Our team will contact you shortly.');
+      statusBox.style.display = 'none';
+
+      // Gather form values
+      const formData = new FormData(form);
+      const payload = {
+        name: formData.get('name') || '',
+        phone: formData.get('phone') || '',
+        service: formData.get('service') || '',
+        message: formData.get('message') || '',
+        webhookUrl: form.getAttribute('data-webhook-url') || '',
+        forwardEmail: form.getAttribute('data-forward-email') || '',
+        tenantName: form.getAttribute('data-tenant-name') || '',
+        siteId: form.getAttribute('data-site-id') || document.title,
+        sourceUrl: window.location.href,
+        timestamp: new Date().toISOString()
+      };
+
+      try {
+        const webhook = form.getAttribute('data-webhook-url');
+        if (webhook && webhook.startsWith('http')) {
+          await fetch(webhook, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            mode: 'no-cors'
+          });
+        }
+
+        // Try local lead API endpoint if accessible
+        try {
+          await fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+        } catch (_) {}
+
+        // Show elegant success feedback
+        statusBox.style.display = 'block';
+        statusBox.style.background = '#ecfdf5';
+        statusBox.style.color = '#065f46';
+        statusBox.style.border = '1px solid #a7f3d0';
+        statusBox.innerHTML = '✓ <strong>Thank you!</strong> Your request has been received. Our team will contact you shortly.';
         form.reset();
+      } catch (err) {
+        statusBox.style.display = 'block';
+        statusBox.style.background = '#fef2f2';
+        statusBox.style.color = '#991b1b';
+        statusBox.style.border = '1px solid #fecaca';
+        statusBox.innerHTML = 'An error occurred while sending. Please call us directly for immediate dispatch.';
+      } finally {
         if (submitBtn) {
           submitBtn.innerHTML = originalText;
           submitBtn.disabled = false;
         }
-      }, 700);
+      }
     });
   });
 });

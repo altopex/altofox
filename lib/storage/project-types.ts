@@ -115,4 +115,54 @@ export interface SavedProject {
 
   // Monthly Optimization Cycles
   optimizationCycles?: OptimizationCycle[];
+
+  // Rank & Rent Configuration & Leads
+  rankRentConfig?: RankRentConfig;
+  leads?: CapturedLead[];
+}
+
+export type RankRentStatus = "available" | "rented" | "prospecting" | "paused";
+
+export interface CapturedLead {
+  id: string;
+  timestamp: number;
+  dateStr: string;
+  name: string;
+  phone: string;
+  email?: string;
+  service?: string;
+  message?: string;
+  sourcePage?: string;
+  deliveredTo?: string;
+  status: "delivered" | "failed" | "pending";
+}
+
+export interface RankRentConfig {
+  enabled: boolean;
+  status: RankRentStatus;
+  monthlyRent: number;
+  currency?: string;
+  leaseStartDate?: string;
+  leaseRenewalDate?: string;
+  billingInterval?: "monthly" | "quarterly" | "yearly";
+
+  // Tenant / Client Info
+  clientName?: string;
+  clientContact?: string;
+  clientEmail?: string;
+  clientPhone?: string;
+  trackingPhone?: string;
+
+  // Lead Forwarding
+  leadForwardEmail?: string;
+  leadWebhookUrl?: string;
+  leadDeliveryMethod?: "webhook" | "email" | "both" | "api";
+
+  // "Rent This Site" Prospect Banner (for available sites)
+  showProspectBanner?: boolean;
+  prospectBannerText?: string;
+  prospectContactPhone?: string;
+  prospectContactEmail?: string;
+
+  notes?: string;
 }

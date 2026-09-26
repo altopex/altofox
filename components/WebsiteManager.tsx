@@ -41,12 +41,14 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
+  Key,
 } from "lucide-react";
 import { useProjectPresence } from "@/lib/supabase/presence";
 import { ConflictModal } from "./editor/ConflictModal";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { logActivity } from "@/lib/supabase/activity";
 import { ActivityFeed } from "./activity/ActivityFeed";
+import { RankRentManager } from "./rankrent/RankRentManager";
 
 interface WebsiteManagerProps {
   project: SavedProject;
@@ -61,7 +63,7 @@ export function WebsiteManager({
 }: WebsiteManagerProps) {
   const [project, setProject] = useState<SavedProject>(initialProject);
   const [activeTab, setActiveTab] = useState<
-    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles"
+    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles" | "rank-rent"
   >("pages");
 
   // Modals
@@ -447,6 +449,30 @@ export function WebsiteManager({
             >
               <Tag className="w-4 h-4" />
               <span>Business Details</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("rank-rent")}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition ${
+                activeTab === "rank-rent"
+                  ? "bg-indigo-600 text-white font-bold"
+                  : "hover:bg-slate-800 text-slate-400"
+              }`}
+            >
+              <div className="flex items-center space-x-2.5">
+                <Key className="w-4 h-4 text-amber-400" />
+                <span>Rank &amp; Rent</span>
+              </div>
+              {project.rankRentConfig?.status === "rented" ? (
+                <span className="text-[9px] font-bold bg-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded-full">
+                  Rented
+                </span>
+              ) : project.rankRentConfig?.status === "available" ? (
+                <span className="text-[9px] font-bold bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded-full">
+                  Lease
+                </span>
+              ) : null}
             </button>
 
             <button
@@ -1158,6 +1184,23 @@ export function WebsiteManager({
                     })}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB 8: RANK & RENT COMMAND CENTER */}
+          {activeTab === "rank-rent" && (
+            <div className="flex-1 overflow-y-auto bg-slate-50">
+              <RankRentManager
+                project={project}
+                onProjectUpdated={(updated) => {
+                  setProject(updated);
+                  onProjectUpdated(updated);
+                }}
+                onShowToast={(msg) => {
+                  // Instant alert / confirmation
+                  console.log("[Rank & Rent]", msg);
+                }}
+              />
             </div>
           )}
         </main>

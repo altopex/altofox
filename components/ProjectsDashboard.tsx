@@ -18,6 +18,9 @@ import {
   ChevronRight,
   Globe,
   Sparkles,
+  Key,
+  DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { ImportWebsiteModal } from "./ImportWebsiteModal";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
@@ -43,13 +46,40 @@ export function ProjectsDashboard({
 }: ProjectsDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"lastEdited" | "name">("lastEdited");
+  const [rentFilter, setRentFilter] = useState<"all" | "rented" | "available">("all");
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [cycleProject, setCycleProject] = useState<SavedProject | null>(null);
+
+  // Rank & Rent MRR & Stats
+  const rankRentStats = useMemo(() => {
+    let mrr = 0;
+    let rentedCount = 0;
+    let availableCount = 0;
+
+    for (const p of projects) {
+      if (p.rankRentConfig?.status === "rented") {
+        rentedCount++;
+        mrr += p.rankRentConfig.monthlyRent || 0;
+      } else if (p.rankRentConfig?.status === "available" || !p.rankRentConfig) {
+        availableCount++;
+      }
+    }
+
+    return { mrr, rentedCount, availableCount };
+  }, [projects]);
 
   // Filter & Sort Projects
   const filteredProjects = useMemo(() => {
     return projects
       .filter((p) => {
+        // Rent status filter
+        if (rentFilter === "rented" && p.rankRentConfig?.status !== "rented") {
+          return false;
+        }
+        if (rentFilter === "available" && p.rankRentConfig?.status === "rented") {
+          return false;
+        }
+
         const q = searchQuery.toLowerCase();
         return (
           p.name.toLowerCase().includes(q) ||
@@ -64,7 +94,7 @@ export function ProjectsDashboard({
         }
         return b.lastEditedAt - a.lastEditedAt;
       });
-  }, [projects, searchQuery, sortBy]);
+  }, [projects, searchQuery, sortBy, rentFilter]);
 
   // Handle Export Backup
   const handleExport = async (p: SavedProject, e: React.MouseEvent) => {
@@ -113,17 +143,96 @@ export function ProjectsDashboard({
         </div>
       </div>
 
-      {/* Controls: Search & Sort */}
+      {/* Rank & Rent Recurring Revenue Banner */}
+      {projects.length > 0 && (
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+              <Key className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm font-extrabold tracking-tight">Rank &amp; Rent Portfolio</span>
+                <span className="text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30 px-2 py-0.5 rounded-full">
+                  Lead Gen Mode
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {rankRentStats.rentedCount} rented website{rankRentStats.rentedCount === 1 ? "" : "s"} &bull; {rankRentStats.availableCount} available to lease
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-6 border-t sm:border-t-0 sm:border-l border-slate-800 pt-3 sm:pt-0 sm:pl-6">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Monthly Lease MRR</span>
+              <div className="text-xl font-black text-emerald-400 mt-0.5">
+                ${rankRentStats.mrr.toLocaleString()}
+                <span className="text-xs text-slate-400 font-normal"> / mo</span>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Annual Run-Rate</span>
+              <div className="text-xl font-black text-indigo-300 mt-0.5">
+                ${(rankRentStats.mrr * 12).toLocaleString()}
+                <span className="text-xs text-slate-400 font-normal"> / yr</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Controls: Search, Rent Filters & Sort */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, city, trade, or domain…"
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-indigo-500"
-          />
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, city, trade, or domain…"
+              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          {/* Rank & Rent Filter Tabs */}
+          <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setRentFilter("all")}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                rentFilter === "all"
+                  ? "bg-white text-slate-900 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              All ({projects.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRentFilter("rented")}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                rentFilter === "rented"
+                  ? "bg-white text-emerald-700 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Rented ({rankRentStats.rentedCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setRentFilter("available")}
+              className={`px-2.5 py-1 rounded-lg transition ${
+                rentFilter === "available"
+                  ? "bg-white text-blue-700 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              Available ({rankRentStats.availableCount})
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2 text-xs">
@@ -178,11 +287,23 @@ export function ProjectsDashboard({
                 className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer flex flex-col justify-between group space-y-4"
               >
                 <div className="space-y-3">
-                  {/* Top Row: Niche + Last Edited */}
+                  {/* Top Row: Niche + Rank & Rent Status + Last Edited */}
                   <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
-                      {proj.formData?.businessType || "Contractor"}
-                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                        {proj.formData?.businessType || "Contractor"}
+                      </span>
+                      {proj.rankRentConfig?.status === "rented" ? (
+                        <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center space-x-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span>${proj.rankRentConfig.monthlyRent || 0}/mo</span>
+                        </span>
+                      ) : proj.rankRentConfig?.status === "available" ? (
+                        <span className="font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                          Available
+                        </span>
+                      ) : null}
+                    </div>
                     <span className="text-slate-400 font-mono flex items-center space-x-1">
                       <Calendar className="w-3 h-3" />
                       <span>{lastEditedStr}</span>

@@ -130,6 +130,7 @@ export function renderContactForm(
               <span>Submit Request</span>
               <span>→</span>
             </button>
+            <div class="form-status-msg" style="display:none; margin-top: 1rem; padding: 0.875rem 1.25rem; border-radius: var(--radius-md, 8px); font-size: 0.95rem; font-weight: 500;"></div>
           </form>
         </div>
       </div>
