@@ -19,8 +19,14 @@
 # SQLite Database (contains local user data & encrypted keys)
 prisma/*.db
 prisma/*.db-journal
+*.db
+*.db-journal
+dev.db
 *.sqlite
 *.sqlite3
+
+# Scratch / temporary artifacts
+/scratch/
 
 # Debug & npm logs
 npm-debug.log*

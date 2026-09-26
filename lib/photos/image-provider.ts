@@ -6,12 +6,14 @@ export interface ImageContext {
   pageTitle?: string;
   serviceName?: string;
   city?: string;
+  cityName?: string;
   state?: string;
   stateCode?: string;
   trade?: string;
   targetKeyword?: string;
   slot?: "hero" | "service" | "about" | "gallery" | "avatar";
   pageType?: string;
+  pageSlug?: string;
   index?: number;
   width?: number;
   height?: number;
@@ -73,7 +75,7 @@ export function generateDynamicImageQuery(
 ): { query: string; alt: string } {
   const trade = (context.trade || "local service").trim();
   const service = (context.serviceName || trade).trim();
-  const city = (context.city || "").trim();
+  const city = (context.city || context.cityName || "").trim();
   const state = (context.stateCode || context.state || "").trim();
   const location = [city, state].filter(Boolean).join(" ");
   const slot = context.slot || "hero";
