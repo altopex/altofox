@@ -26,6 +26,8 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/static") ||
     pathname.startsWith("/api/auth") ||
     pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
     PUBLIC_FILE_EXTENSIONS.some((ext) => pathname.endsWith(ext))
   ) {
     return NextResponse.next();
