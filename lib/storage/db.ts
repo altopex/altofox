@@ -298,8 +298,22 @@ export async function generateWebsiteZIP(
     if (!f || !f.path) continue;
     const isChanged = !referenceTime || (f.lastModified && f.lastModified > referenceTime);
     if (mode === "full" || isChanged) {
-      const contentToPack = optimize ? optimizeStaticFile(f.path, f.content || "") : (f.content || "");
-      zip.file(f.path, contentToPack);
+      const ext = f.path.split(".").pop()?.toLowerCase() || "";
+      const isText = ["html", "css", "js", "json", "txt", "xml", "svg", "md"].includes(ext);
+
+      if (isText) {
+        const contentToPack = optimize ? optimizeStaticFile(f.path, f.content || "") : (f.content || "");
+        zip.file(f.path, contentToPack);
+      } else {
+        const raw = f.content || "";
+        if (raw.startsWith("data:") && raw.includes(";base64,")) {
+          const b64 = raw.split(";base64,")[1];
+          zip.file(f.path, b64, { base64: true });
+        } else {
+          zip.file(f.path, raw);
+        }
+      }
+
       if (isChanged) {
         changedFilePaths.push(f.path);
       }
@@ -329,7 +343,7 @@ export async function generateWebsiteZIP(
   const blob = await zip.generateAsync({
     type: "blob",
     compression: "DEFLATE",
-    compressionOptions: { level: 9 },
+    compressionOptions: { level: 6 },
   });
   return {
     blob,

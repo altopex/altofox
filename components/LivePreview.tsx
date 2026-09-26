@@ -190,54 +190,84 @@ export function LivePreview({
     maxWidth: number
   ): Promise<{ jpgBlob: Blob; webpBlob: Blob }> => {
     return new Promise((resolve) => {
-      if (typeof window === "undefined") {
+      if (typeof window === "undefined" || !blob) {
         resolve({ jpgBlob: blob, webpBlob: blob });
         return;
       }
 
+      let settled = false;
+      const finish = (result: { jpgBlob: Blob; webpBlob: Blob }) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(safetyTimer);
+          try {
+            URL.revokeObjectURL(objectUrl);
+          } catch {}
+          resolve(result);
+        }
+      };
+
+      // 3-second timeout guard to prevent hanging if image decode stalls
+      const safetyTimer = setTimeout(() => {
+        finish({ jpgBlob: blob, webpBlob: blob });
+      }, 3000);
+
+      let objectUrl = "";
+      try {
+        objectUrl = URL.createObjectURL(blob);
+      } catch {
+        finish({ jpgBlob: blob, webpBlob: blob });
+        return;
+      }
+
       const img = new Image();
-      const objectUrl = URL.createObjectURL(blob);
       img.crossOrigin = "anonymous";
 
       img.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        let width = img.naturalWidth || 800;
-        let height = img.naturalHeight || 600;
+        try {
+          let width = img.naturalWidth || 800;
+          let height = img.naturalHeight || 600;
 
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+          }
+
+          canvas.toBlob(
+            (webpBlob) => {
+              try {
+                canvas.toBlob(
+                  (jpgBlob) => {
+                    finish({
+                      webpBlob: webpBlob || blob,
+                      jpgBlob: jpgBlob || blob,
+                    });
+                  },
+                  "image/jpeg",
+                  0.82
+                );
+              } catch {
+                finish({ jpgBlob: blob, webpBlob: webpBlob || blob });
+              }
+            },
+            "image/webp",
+            0.82
+          );
+        } catch {
+          finish({ jpgBlob: blob, webpBlob: blob });
         }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-        }
-
-        canvas.toBlob(
-          (webpBlob) => {
-            canvas.toBlob(
-              (jpgBlob) => {
-                resolve({
-                  webpBlob: webpBlob || blob,
-                  jpgBlob: jpgBlob || blob,
-                });
-              },
-              "image/jpeg",
-              0.82
-            );
-          },
-          "image/webp",
-          0.82
-        );
       };
 
       img.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve({ jpgBlob: blob, webpBlob: blob });
+        finish({ jpgBlob: blob, webpBlob: blob });
       };
 
       img.src = objectUrl;
@@ -275,12 +305,13 @@ export function LivePreview({
 
       const seenPaths = new Set<string>();
 
-      if (project.photos && project.photos.length > 0) {
+      if (project?.photos && project.photos.length > 0) {
         for (const p of project.photos) {
-          if (!seenPaths.has(p.localPath)) {
+          const url = p.downloadUrl || p.url;
+          if (url && (url.startsWith("http://") || url.startsWith("https://")) && !seenPaths.has(p.localPath)) {
             seenPaths.add(p.localPath);
             photosToFetch.push({
-              remoteUrl: p.downloadUrl || p.url,
+              remoteUrl: url,
               localPath: p.localPath,
               localWebpPath: p.localWebpPath || p.localPath.replace(/\.jpg$/, ".webp"),
               slot: p.slot || "service",
@@ -289,36 +320,43 @@ export function LivePreview({
         }
       } else {
         // Parse from HTML files if project.photos not present
-        for (const file of project.files) {
-          if (!file.path.endsWith(".html")) continue;
+        for (const file of project?.files || []) {
+          if (!file?.path || !file.path.endsWith(".html")) continue;
+          const content = file.content || "";
+
           const imgRegex = /<img[^>]*?src=["'](images\/[^"']+)["'][^>]*?data-remote-src=["']([^"']+)["'][^>]*?>/gi;
           let match;
-          while ((match = imgRegex.exec(file.content)) !== null) {
+          while ((match = imgRegex.exec(content)) !== null) {
             const localPath = match[1];
             const remoteUrl = match[2];
-            if (!seenPaths.has(localPath)) {
-              seenPaths.add(localPath);
-              photosToFetch.push({
-                remoteUrl,
-                localPath,
-                localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
-                slot: localPath.includes("hero") ? "hero" : "service",
-              });
+            if (remoteUrl && (remoteUrl.startsWith("http://") || remoteUrl.startsWith("https://"))) {
+              if (!seenPaths.has(localPath)) {
+                seenPaths.add(localPath);
+                photosToFetch.push({
+                  remoteUrl,
+                  localPath,
+                  localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
+                  slot: localPath.includes("hero") ? "hero" : "service",
+                });
+              }
             }
           }
+
           const bgRegex = /style=["']background-image:\s*url\(['"](images\/[^'"]+)['"]\);["'][^>]*?data-bg-remote=["']([^"']+)["']/gi;
           let bgMatch;
-          while ((bgMatch = bgRegex.exec(file.content)) !== null) {
+          while ((bgMatch = bgRegex.exec(content)) !== null) {
             const localPath = bgMatch[1];
             const remoteUrl = bgMatch[2];
-            if (!seenPaths.has(localPath)) {
-              seenPaths.add(localPath);
-              photosToFetch.push({
-                remoteUrl,
-                localPath,
-                localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
-                slot: "hero",
-              });
+            if (remoteUrl && (remoteUrl.startsWith("http://") || remoteUrl.startsWith("https://"))) {
+              if (!seenPaths.has(localPath)) {
+                seenPaths.add(localPath);
+                photosToFetch.push({
+                  remoteUrl,
+                  localPath,
+                  localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
+                  slot: "hero",
+                });
+              }
             }
           }
         }
@@ -328,7 +366,7 @@ export function LivePreview({
       let photoCount = 0;
       for (const item of photosToFetch) {
         photoCount++;
-        setZippingStatus(`Optimizing photo ${photoCount} of ${photosToFetch.length}…`);
+        setZippingStatus(`Packaging photo ${photoCount} of ${photosToFetch.length}…`);
         try {
           const proxyUrl = `/api/images/proxy?url=${encodeURIComponent(item.remoteUrl)}`;
           const controller = new AbortController();
@@ -341,12 +379,18 @@ export function LivePreview({
             const isAvatar = item.slot === "avatar";
             const maxWidth = isHero ? 1920 : isAvatar ? 200 : 800;
 
-            const processed = await processImageWithCanvas(blob, maxWidth);
-            zip.file(item.localPath, processed.jpgBlob);
-            zip.file(item.localWebpPath, processed.webpBlob);
+            try {
+              const processed = await processImageWithCanvas(blob, maxWidth);
+              zip.file(item.localPath, processed.jpgBlob);
+              zip.file(item.localWebpPath, processed.webpBlob);
+            } catch {
+              // Fallback to raw blob directly if canvas operation fails
+              zip.file(item.localPath, blob);
+            }
           }
         } catch (imgErr) {
-          console.warn(`Could not bundle image ${item.localPath}:`, imgErr);
+          console.warn(`[ZIP Export] Non-critical image failed to bundle (${item.localPath}), omitting:`, imgErr);
+          // Gracefully omit non-critical missing images without halting ZIP package creation
         }
       }
 
@@ -354,7 +398,7 @@ export function LivePreview({
       const zipBlob = await zip.generateAsync({
         type: "blob",
         compression: "DEFLATE",
-        compressionOptions: { level: 9 },
+        compressionOptions: { level: 6 },
       });
 
       const blobUrl = URL.createObjectURL(zipBlob);
@@ -380,9 +424,48 @@ export function LivePreview({
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
-    } catch (err) {
-      console.error("ZIP download failed:", err);
-      alert("Failed to create ZIP download. Please try again.");
+    } catch (err: any) {
+      console.warn("[ZIP Export] Client-side packaging failed, attempting server streaming fallback:", err);
+      setZippingStatus("Streaming ZIP from server…");
+
+      try {
+        const res = await fetch("/api/projects/export", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: project?.name,
+            files: project?.files,
+            photos: project?.photos,
+          }),
+        });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const tempLink = document.createElement("a");
+          tempLink.href = blobUrl;
+          const cleanName =
+            (project?.name || "website")
+              .toLowerCase()
+              .replace(/[^a-z0-9]/g, "-")
+              .replace(/-+/g, "-")
+              .replace(/^-|-$/g, "") || "website";
+          tempLink.download = `${cleanName}.zip`;
+          document.body.appendChild(tempLink);
+          tempLink.click();
+          document.body.removeChild(tempLink);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+          setDownloadSuccess(true);
+          setTimeout(() => setDownloadSuccess(false), 3000);
+          return;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || `Server responded with status ${res.status}`);
+        }
+      } catch (fallbackErr: any) {
+        console.error("[ZIP Export] Server fallback also failed:", fallbackErr);
+        alert(`Failed to create ZIP download: ${err?.message || fallbackErr?.message || "Unknown error"}. Please check browser console.`);
+      }
     } finally {
       setIsZipping(false);
       setZippingStatus("");
