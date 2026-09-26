@@ -197,12 +197,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     plan = "starter",
   }: SignUpParams) => {
     try {
-      const supabase = getSupabaseBrowserClient();
+      const cleanEmail = email.trim();
       const chosenPlan = plan || "starter";
+
+      // 1. Primary: Use dedicated server signup endpoint that auto-confirms user
+      // and completely avoids Supabase free SMTP email rate limits
+      try {
+        const apiRes = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: cleanEmail,
+            password,
+            fullName: fullName.trim(),
+            companyName: companyName?.trim() || null,
+            plan: chosenPlan,
+          }),
+        });
+
+        const apiData = await apiRes.json();
+
+        if (apiRes.ok && apiData.success) {
+          // Immediately log the newly created user in
+          const loginRes = await signInWithPassword(cleanEmail, password);
+          return {
+            success: true,
+            requiresEmailConfirmation: false,
+            error: loginRes.success ? undefined : loginRes.error,
+          };
+        } else if (apiRes.status === 409) {
+          return {
+            success: false,
+            error: apiData.error || "An account with this email address already exists. Please sign in.",
+          };
+        } else if (apiRes.status >= 400 && apiRes.status < 500) {
+          return {
+            success: false,
+            error: apiData.error || "Registration validation error.",
+          };
+        }
+      } catch (apiErr) {
+        console.warn("[Auth] Server signup route failed, falling back to client SDK:", apiErr);
+      }
+
+      // 2. Fallback: Client-side SDK signup
+      const supabase = getSupabaseBrowserClient();
       const websiteLimit = chosenPlan === "agency" ? 30 : 5;
 
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: cleanEmail,
         password,
         options: {
           data: {
@@ -216,6 +259,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
+        if (
+          error.message.toLowerCase().includes("rate limit") ||
+          error.message.toLowerCase().includes("over_email_send_rate_limit")
+        ) {
+          return {
+            success: false,
+            error: "Email verification service is temporarily busy. Please wait a minute or sign in if you already registered.",
+          };
+        }
         return { success: false, error: error.message };
       }
 
