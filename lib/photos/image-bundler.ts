@@ -1,6 +1,11 @@
 import { AssembleFile } from "../quality/quality-checker";
 import { findNicheByIndustry } from "../../niches";
 import { ImageSlotType } from "./stock-service";
+import {
+  generateDynamicImageQuery,
+  resolvePageImage,
+  ImageProviderType,
+} from "./image-provider";
 
 export interface ImagePlanSlot {
   id: string;
@@ -13,6 +18,8 @@ export interface ImagePlanSlot {
   localWebpPath: string;
   pageSlug: string;
   status: "found" | "fallback_used" | "placeholder_used";
+  remoteUrl: string;
+  fallbackUrl: string;
 }
 
 // Valid binary buffers that load in every browser without 404 or decoding errors
@@ -27,19 +34,24 @@ export const VALID_WEBP_BUFFER = Buffer.from(
 );
 
 /**
- * Creates a comprehensive image plan for all pages in the website,
- * ensuring every section and location page gets distinct, SEO-optimized images.
+ * Creates a comprehensive, contextual image plan for all pages in the website.
+ * Strictly generates unique, contextual image queries based on page service, location,
+ * keyword, and search intent.
  */
 export function createImagePlan(
-  pages: Array<{ slug: string; sections?: any[] }>,
+  pages: Array<{ slug: string; title?: string; sections?: any[] }>,
   trade: string,
   city: string,
   businessName: string,
-  locationPages?: Array<{ slug?: string; city: string; stateId: string }>
+  locationPages?: Array<{ slug?: string; city: string; stateId: string }>,
+  options: {
+    preferredSource?: ImageProviderType;
+    state?: string;
+  } = {}
 ): ImagePlanSlot[] {
   const plan: ImagePlanSlot[] = [];
   const usedPaths = new Set<string>();
-  const niche = findNicheByIndustry(trade);
+  const usedQueries = new Set<string>();
   const tradeClean = trade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const cityClean = city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
@@ -48,10 +60,15 @@ export function createImagePlan(
   // 1. Plan images for standard pages
   for (const page of pages) {
     const slug = page.slug.replace(/\.html$/, "");
+    const pageTitle = page.title || slug.replace(/-/g, " ");
     const sections = page.sections || [];
 
+    const isHomePage = slug === "index" || slug === "home";
+    const isServicePage = slug.includes("service") || (!isHomePage && !slug.includes("contact") && !slug.includes("about") && !slug.includes("area"));
+    const serviceName = isServicePage && !isHomePage ? pageTitle.replace(/\|.*$/, "").trim() : undefined;
+
     for (const section of sections) {
-      const type = section.type;
+      const type = typeof section === "string" ? section : section?.type;
       let slotType: ImageSlotType = "service";
       let defaultWidth = 800;
       let defaultHeight = 533;
@@ -85,26 +102,47 @@ export function createImagePlan(
         }
         usedPaths.add(localPath);
 
-        const alt = `${trade} ${slotType} for ${businessName} in ${city}`;
-        const query = slotType === "hero"
-          ? niche.imageQueries.hero[(photoIndex - 1) % niche.imageQueries.hero.length]
-          : slotType === "about"
-          ? niche.imageQueries.team[(photoIndex - 1) % niche.imageQueries.team.length]
-          : slotType === "gallery"
-          ? niche.imageQueries.work[(photoIndex - 1) % niche.imageQueries.work.length]
-          : niche.imageQueries.services[(photoIndex - 1) % niche.imageQueries.services.length];
+        // Check if section provided explicit query from AI
+        const explicitSlot = typeof section === "object" && section?.images ? section.images[i] : undefined;
+        const explicitQuery = explicitSlot?.query;
+        const explicitAlt = explicitSlot?.alt;
+
+        const resolved = resolvePageImage(
+          {
+            pageTitle,
+            serviceName,
+            city,
+            state: options.state,
+            trade,
+            slot: slotType,
+            pageType: isHomePage ? "home" : isServicePage ? "service" : "standard",
+            index: photoIndex + i,
+            width: defaultWidth,
+            height: defaultHeight,
+            customAlt: explicitAlt,
+          },
+          {
+            preferredSource: options.preferredSource,
+            usedQueries: explicitQuery ? undefined : usedQueries,
+          }
+        );
+
+        const finalQuery = explicitQuery ? explicitQuery.trim() : resolved.query;
+        const finalAlt = explicitAlt ? explicitAlt.trim() : resolved.alt;
 
         plan.push({
           id: `img-${slug}-${slotType}-${photoIndex}`,
           slot: slotType,
-          query: query || `${trade} ${slotType}`,
-          alt,
+          query: finalQuery,
+          alt: finalAlt,
           width: defaultWidth,
           height: defaultHeight,
           localPath,
           localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
           pageSlug: slug,
           status: "found",
+          remoteUrl: resolved.url,
+          fallbackUrl: resolved.fallbackUrl,
         });
 
         photoIndex++;
@@ -112,27 +150,48 @@ export function createImagePlan(
     }
   }
 
-  // 2. Plan hero images for Location Pages
+  // 2. Plan hero images for Location Pages with unique city queries
   if (locationPages && locationPages.length > 0) {
     for (const loc of locationPages) {
       const locCityClean = loc.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const locStateClean = loc.stateId.toLowerCase();
       const locSlug = loc.slug ? loc.slug.replace(/\.html$/, "") : `${tradeClean}-${locCityClean}-${locStateClean}`;
       const localPath = `images/${tradeClean}-hero-${locCityClean}-${locStateClean}.jpg`;
-      
+
       if (!usedPaths.has(localPath)) {
         usedPaths.add(localPath);
+
+        const resolvedLoc = resolvePageImage(
+          {
+            pageTitle: `${trade} in ${loc.city}, ${loc.stateId}`,
+            city: loc.city,
+            state: loc.stateId,
+            stateCode: loc.stateId,
+            trade,
+            slot: "hero",
+            pageType: "location",
+            width: 1200,
+            height: 800,
+          },
+          {
+            preferredSource: options.preferredSource,
+            usedQueries,
+          }
+        );
+
         plan.push({
           id: `img-loc-${locSlug}`,
           slot: "hero",
-          query: `${trade} technician in ${loc.city}`,
-          alt: `Licensed ${trade} technicians serving ${loc.city}, ${loc.stateId}`,
+          query: resolvedLoc.query,
+          alt: resolvedLoc.alt,
           width: 1200,
           height: 800,
           localPath,
           localWebpPath: localPath.replace(/\.jpg$/, ".webp"),
           pageSlug: locSlug,
           status: "found",
+          remoteUrl: resolvedLoc.url,
+          fallbackUrl: resolvedLoc.fallbackUrl,
         });
       }
     }

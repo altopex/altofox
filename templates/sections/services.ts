@@ -44,8 +44,8 @@ export function renderServices(
             return `
         <div class="card service-card reveal">
           <picture>
-            <source srcset="${img.localWebpPath || img.localPath || img.url}" type="image/webp">
-            <img src="${img.localPath || img.url}" data-remote-src="${img.url}" alt="${img.alt || item.title}" class="img-card" width="800" height="533" loading="lazy">
+            <source srcset="${img.url || img.localWebpPath || img.localPath}" type="image/webp">
+            <img src="${img.url || img.localPath}" data-remote-src="${img.url}" alt="${img.alt || item.title}" class="img-card" width="800" height="533" loading="lazy"${img.fallbackUrl ? ` onerror="this.onerror=null;this.src='${img.fallbackUrl}';"` : ""}>
           </picture>
           <div class="service-card-body">
             <h3>${item.title}</h3>
@@ -122,8 +122,8 @@ export function renderServices(
         <div class="service-alt-row ${isReverse ? "reverse" : ""} reveal">
           <div class="service-alt-image">
             <picture>
-              <source srcset="${img.localWebpPath || img.localPath || img.url}" type="image/webp">
-              <img src="${img.localPath || img.url}" data-remote-src="${img.url}" alt="${img.alt || item.title}" class="img-card" style="aspect-ratio: 4/3;" width="800" height="600" loading="lazy">
+              <source srcset="${img.url || img.localWebpPath || img.localPath}" type="image/webp">
+              <img src="${img.url || img.localPath}" data-remote-src="${img.url}" alt="${img.alt || item.title}" class="img-card" style="aspect-ratio: 4/3;" width="800" height="600" loading="lazy"${img.fallbackUrl ? ` onerror="this.onerror=null;this.src='${img.fallbackUrl}';"` : ""}>
             </picture>
           </div>
           <div class="service-alt-text">

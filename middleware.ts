@@ -85,9 +85,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 5. Handle Protected API routes
+  // 5. Handle Protected API routes (Team, storage, project management, keys)
+  const isPublicBuilderProjectEndpoint =
+    pathname.startsWith("/api/projects/export") ||
+    pathname.startsWith("/api/projects/analyze") ||
+    pathname.startsWith("/api/projects/improve") ||
+    pathname.includes("/download");
+
   const isProtectedApiRoute =
-    pathname.startsWith("/api/projects") ||
+    (pathname.startsWith("/api/projects") && !isPublicBuilderProjectEndpoint) ||
     pathname.startsWith("/api/team") ||
     pathname.startsWith("/api/storage") ||
     pathname.startsWith("/api/search-console") ||

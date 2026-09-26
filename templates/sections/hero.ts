@@ -135,8 +135,8 @@ export function renderHero(
       </div>
       <div class="hero-image-wrap reveal">
         <picture>
-          <source srcset="${mainImage.localWebpPath || mainImage.localPath || mainImage.url}" type="image/webp">
-          <img src="${mainImage.localPath || mainImage.url}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-hero img-hero-split" width="1920" height="1080" fetchpriority="high" loading="eager">
+          <source srcset="${mainImage.url || mainImage.localWebpPath || mainImage.localPath}" type="image/webp">
+          <img src="${mainImage.url || mainImage.localPath}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-hero img-hero-split" width="1920" height="1080" fetchpriority="high" loading="eager"${mainImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${mainImage.fallbackUrl}';"` : ""}>
         </picture>
         ${floatingCardHtml}
       </div>
@@ -148,7 +148,7 @@ export function renderHero(
   if (variant === "fullImage") {
     return `
   <!-- Hero Section: Full Image Variant -->
-  <section class="hero hero-full-image" style="background-image: url('${mainImage.localPath || mainImage.url}');" data-bg-remote="${mainImage.url}">
+  <section class="hero hero-full-image" style="background-image: url('${mainImage.url || mainImage.localPath}');" data-bg-remote="${mainImage.url}">
     <div class="hero-overlay"></div>
     <div class="container reveal">
       <span class="badge" style="background: rgba(255, 255, 255, 0.15); color: #FFFFFF;">${eyebrow}</span>
@@ -193,16 +193,16 @@ export function renderHero(
       </div>
       <div class="hero-collage-grid reveal">
         <picture>
-          <source srcset="${mainImage.localWebpPath || mainImage.localPath || mainImage.url}" type="image/webp">
-          <img src="${mainImage.localPath || mainImage.url}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" width="1920" height="1080" fetchpriority="high" loading="eager">
+          <source srcset="${mainImage.url || mainImage.localWebpPath || mainImage.localPath}" type="image/webp">
+          <img src="${mainImage.url || mainImage.localPath}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" width="1920" height="1080" fetchpriority="high" loading="eager"${mainImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${mainImage.fallbackUrl}';"` : ""}>
         </picture>
         <picture>
-          <source srcset="${secondImage.localWebpPath || secondImage.localPath || secondImage.url}" type="image/webp">
-          <img src="${secondImage.localPath || secondImage.url}" data-remote-src="${secondImage.url}" alt="${secondImage.alt}" class="img-card" width="800" height="600" loading="lazy">
+          <source srcset="${secondImage.url || secondImage.localWebpPath || secondImage.localPath}" type="image/webp">
+          <img src="${secondImage.url || secondImage.localPath}" data-remote-src="${secondImage.url}" alt="${secondImage.alt}" class="img-card" width="800" height="600" loading="lazy"${secondImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${secondImage.fallbackUrl}';"` : ""}>
         </picture>
         <picture>
-          <source srcset="${thirdImage.localWebpPath || thirdImage.localPath || thirdImage.url}" type="image/webp">
-          <img src="${thirdImage.localPath || thirdImage.url}" data-remote-src="${thirdImage.url}" alt="${thirdImage.alt}" class="img-card" width="800" height="600" loading="lazy">
+          <source srcset="${thirdImage.url || thirdImage.localWebpPath || thirdImage.localPath}" type="image/webp">
+          <img src="${thirdImage.url || thirdImage.localPath}" data-remote-src="${thirdImage.url}" alt="${thirdImage.alt}" class="img-card" width="800" height="600" loading="lazy"${thirdImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${thirdImage.fallbackUrl}';"` : ""}>
         </picture>
       </div>
     </div>

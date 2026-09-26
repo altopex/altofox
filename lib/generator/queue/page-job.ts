@@ -103,7 +103,14 @@ Required Output JSON Structure:
         "subheadline": "Benefit-driven subtext citing local reliability and rapid dispatch in ${city}",
         "primaryCta": "Call Now: ${businessProfile.phone}",
         "secondaryCta": "Request Fast Quote"
-      }
+      },
+      "images": [
+        {
+          "slot": "main",
+          "query": "${serviceName.toLowerCase()} in ${city.toLowerCase()} ${state.toLowerCase()}",
+          "alt": "Professional ${serviceName.toLowerCase()} technicians serving ${city}, ${state}"
+        }
+      ]
     },
     {
       "type": "trust_bar",

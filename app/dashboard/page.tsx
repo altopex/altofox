@@ -1538,6 +1538,21 @@ export default function DashboardPage() {
                     setCurrentStep(5);
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
+                  onUpdateProject={(updatedProj) => {
+                    setCurrentProject(updatedProj);
+                    try {
+                      saveProjectToDB({
+                        id: updatedProj.projectId,
+                        name: updatedProj.name,
+                        provider: updatedProj.provider as any,
+                        model: updatedProj.model,
+                        prompt: `Theme: ${updatedProj.themeName || "Default"}`,
+                        createdAt: Date.now(),
+                        lastEditedAt: Date.now(),
+                        files: updatedProj.files,
+                      } as any);
+                    } catch {}
+                  }}
                   onOpenManager={() => {
                     if (!user) {
                       setLoginModalReason("Sign in to your team account to access the Website Manager and Dashboard.");

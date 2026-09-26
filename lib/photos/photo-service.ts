@@ -17,6 +17,7 @@ export interface ResolvedImage {
   sourceUrl?: string;
   source?: string;
   id?: string;
+  fallbackUrl?: string;
 }
 
 // Curated high-resolution photos by trade and slot type

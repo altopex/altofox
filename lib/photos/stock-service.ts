@@ -113,8 +113,12 @@ export function buildBingImageUrl(
   shardIndex: number = 1
 ): string {
   const hostIndex = (Math.abs(shardIndex) % 4) + 1; // 1 to 4
-  const clean = (query || "home service").trim().replace(/\s+/g, "+");
-  return `https://tse${hostIndex}.mm.bing.net/th?q=${encodeURIComponent(clean).replace(/%2B/g, "+")}&w=${width}&h=${height}`;
+  const clean = (query || "home service")
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, " ")
+    .trim()
+    .replace(/\s+/g, "+");
+  return `https://tse${hostIndex}.mm.bing.net/th?q=${clean}&w=${width}&h=${height}`;
 }
 
 /**

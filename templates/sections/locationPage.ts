@@ -24,7 +24,9 @@ export interface LocationPageContext {
   processSteps: { title: string; desc: string }[];
   faqs: { question: string; answer: string }[];
   heroImage?: {
-    localPath: string;
+    localPath?: string;
+    url?: string;
+    fallbackUrl?: string;
     alt: string;
     width: number;
     height: number;
@@ -97,10 +99,11 @@ export function renderLocationPage(
   const areasHubHref = areasHub ? linkTo(currentPage, areasHub, linkStyle) : "service-areas.html";
 
   // Hero Image
-  const heroImageSrc = ctx.heroImage
-    ? assetPath(currentPage, ctx.heroImage.localPath)
-    : assetPath(currentPage, `images/hero-${ctx.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`);
+  const heroImageSrc = ctx.heroImage?.url ||
+    (ctx.heroImage?.localPath ? assetPath(currentPage, ctx.heroImage.localPath) : "") ||
+    assetPath(currentPage, `images/hero-${ctx.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.jpg`);
   const heroImageAlt = ctx.heroImage?.alt || `Professional technicians in ${ctx.city}, ${ctx.stateId}`;
+  const fallbackAttr = ctx.heroImage?.fallbackUrl ? ` onerror="this.onerror=null;this.src='${ctx.heroImage.fallbackUrl}';"` : "";
 
   // Nearby locations from registry
   const allLocations = registry.getByType("location").filter((l) => l.id !== currentPage.id);
@@ -148,7 +151,7 @@ ${breadcrumbsHtml}
             width="${ctx.heroImage?.width || 1200}"
             height="${ctx.heroImage?.height || 800}"
             loading="eager"
-            fetchpriority="high"
+            fetchpriority="high"${fallbackAttr}
           >
           <div class="map-embed-container" style="margin-top: 1rem; border-radius: var(--radius); overflow: hidden; height: 220px; border: 1px solid var(--color-border);">
             <iframe

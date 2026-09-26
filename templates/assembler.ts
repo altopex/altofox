@@ -272,11 +272,19 @@ export async function assembleWebsite(
 
   // 2. Create Image Plan & Bundle Images into files
   const imagePlan = createImagePlan(
-    data.pages,
+    data.pages.map((p) => ({
+      slug: p.slug,
+      title: p.seo?.title || p.seo?.h1,
+      sections: p.sections,
+    })),
     mainTrade,
     data.site.address?.city || "Local",
     data.site.businessName,
-    effectiveAreaCities
+    effectiveAreaCities,
+    {
+      preferredSource: options?.preferredSource,
+      state: data.site.address?.state,
+    }
   );
   const bundledImages = bundleImagesFromPlan(imagePlan);
 
@@ -370,14 +378,12 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
     const layoutType = detectPageLayoutType(slug);
     const layoutBlueprint = PAGE_LAYOUTS[layoutType] || PAGE_LAYOUTS.custom;
 
-    const activeSections: SectionJSON[] = page.sections && page.sections.length > 0
-      ? page.sections
-      : layoutBlueprint.defaultSections.map((s) => ({
-          type: s.type,
-          variant: s.variant || "default",
-          content: {},
-          images: [],
-        }));
+    const rawSections = page.sections && page.sections.length > 0 ? page.sections : layoutBlueprint.defaultSections;
+    const activeSections: SectionJSON[] = rawSections.map((s: any) =>
+      typeof s === "string"
+        ? { type: s, variant: "default", content: {}, images: [] }
+        : { ...s, content: s.content || {}, images: s.images || [] }
+    );
 
     // Header & Navigation from Registry
     const headerHtml = Sections.renderHeader(data.site, "standard", registry, currentPage, linkStyle);
@@ -412,7 +418,8 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
         const pSlot = plannedSlots[i];
         if (pSlot) {
           sectionImages.push({
-            url: pSlot.localPath,
+            url: pSlot.remoteUrl || pSlot.fallbackUrl,
+            fallbackUrl: pSlot.fallbackUrl,
             localPath: assetPath(currentPage, pSlot.localPath),
             localWebpPath: assetPath(currentPage, pSlot.localWebpPath),
             alt: pSlot.alt,
@@ -632,8 +639,15 @@ ${mobileCallBarHtml}
       const locHeader = Sections.renderHeader(data.site, "standard", registry, locPage, linkStyle);
       const locFooter = Sections.renderFooter(data.site, registry, locPage, linkStyle);
 
-      // Hero image planned for location
-      const locHeroPlanned = imagePlan.find((p) => p.pageSlug === citySlug.replace(/\.html$/, "") || p.slot === "hero");
+      // Hero image planned for location (strictly matches this city/location)
+      const locCleanSlug = citySlug.replace(/\.html$/, "").toLowerCase();
+      const locHeroPlanned =
+        imagePlan.find(
+          (p) =>
+            p.pageSlug.toLowerCase() === locCleanSlug ||
+            p.pageSlug.toLowerCase().includes(cityClean) ||
+            p.id === `img-loc-${locCleanSlug}`
+        ) || imagePlan.find((p) => p.slot === "hero");
 
       const nearestCities = getNearestSelectedCities(
         { lat: c.lat, lng: c.lng, city: c.city, stateId: c.stateId },
@@ -676,6 +690,8 @@ ${mobileCallBarHtml}
         ],
         heroImage: locHeroPlanned ? {
           localPath: locHeroPlanned.localPath,
+          url: locHeroPlanned.remoteUrl || locHeroPlanned.fallbackUrl,
+          fallbackUrl: locHeroPlanned.fallbackUrl,
           alt: locHeroPlanned.alt,
           width: locHeroPlanned.width,
           height: locHeroPlanned.height,

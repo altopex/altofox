@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Check signup_mode from app_settings
     let signupMode = "approval_required";
-    let contactEmail = "support@ranklocal.com";
+    let contactEmail = "support@ranklocal.site";
     try {
       const settingsRes = await pool.query(
         "SELECT signup_mode, contact_email FROM public.app_settings LIMIT 1;"

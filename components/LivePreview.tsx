@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
 import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
+import { WebsiteQualityAuditReport, auditWebsiteQuality } from "../lib/quality/website-quality-auditor";
+import { ImprovementActionType } from "../lib/quality/website-improver";
 import { QualityScorecard } from "./QualityScorecard";
 
 export interface ProjectFileItem {
@@ -76,6 +78,7 @@ interface LivePreviewProps {
   onOpenKeywordMap?: () => void;
   onOpenFindReplace?: () => void;
   onOpenBlogManager?: () => void;
+  onUpdateProject?: (updatedProject: ProjectData) => void;
 }
 
 export function LivePreview({
@@ -87,6 +90,7 @@ export function LivePreview({
   onOpenKeywordMap,
   onOpenFindReplace,
   onOpenBlogManager,
+  onUpdateProject,
 }: LivePreviewProps) {
   // Show mobile preview by default next to desktop preview ("split" mode)
   const [viewMode, setViewMode] = useState<"split" | "desktop" | "mobile" | "tablet">("split");
@@ -98,23 +102,42 @@ export function LivePreview({
   const [mobileAudit, setMobileAudit] = useState<PageMobileAuditResult | null>(null);
   const [isMobileAuditing, setIsMobileAuditing] = useState(false);
 
+  // Active files state & version safety (Original vs Improved)
+  const [currentFiles, setCurrentFiles] = useState<ProjectFileItem[]>(project.files);
+  const [originalFiles, setOriginalFiles] = useState<ProjectFileItem[] | null>(null);
+  const [activeVersion, setActiveVersion] = useState<"original" | "improved">("improved");
+  const [isImproving, setIsImproving] = useState(false);
+  const [improvingStep, setImprovingStep] = useState("");
+  const [activeAction, setActiveAction] = useState<string | null>(null);
+  const [recentChanges, setRecentChanges] = useState<string[]>([]);
+  const [customAuditReport, setCustomAuditReport] = useState<WebsiteQualityAuditReport | null>(null);
+
+  // Synchronize state when project changes
+  useEffect(() => {
+    setCurrentFiles(project.files);
+    setOriginalFiles(null);
+    setActiveVersion("improved");
+    setRecentChanges([]);
+    setCustomAuditReport(null);
+  }, [project.projectId, project.files]);
+
   // List of all HTML pages generated
-  const htmlFiles = project.files.filter((f) => f.path.toLowerCase().endsWith(".html"));
+  const htmlFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".html"));
 
   // Inlined preview HTML for the currently selected page
   const inlinedPreviewHtml = useMemo(() => {
     let html =
-      project.files.find((f) => f.path.toLowerCase() === activePage.toLowerCase())?.content ||
-      project.files.find((f) => f.path.toLowerCase() === "index.html")?.content ||
-      project.files.find((f) => f.path.toLowerCase().endsWith(".html"))?.content ||
+      currentFiles.find((f) => f.path.toLowerCase() === activePage.toLowerCase())?.content ||
+      currentFiles.find((f) => f.path.toLowerCase() === "index.html")?.content ||
+      currentFiles.find((f) => f.path.toLowerCase().endsWith(".html"))?.content ||
       "<!DOCTYPE html><html><body><h1>No HTML content found</h1></body></html>";
 
     const css =
-      project.files.find((f) => f.path.toLowerCase() === "css/style.css" || f.path.toLowerCase() === "styles.css")?.content ||
-      project.files.find((f) => f.path.toLowerCase().endsWith(".css"))?.content || "";
+      currentFiles.find((f) => f.path.toLowerCase() === "css/style.css" || f.path.toLowerCase() === "styles.css")?.content ||
+      currentFiles.find((f) => f.path.toLowerCase().endsWith(".css"))?.content || "";
     const js =
-      project.files.find((f) => f.path.toLowerCase() === "js/main.js" || f.path.toLowerCase() === "script.js")?.content ||
-      project.files.find((f) => f.path.toLowerCase().endsWith(".js"))?.content || "";
+      currentFiles.find((f) => f.path.toLowerCase() === "js/main.js" || f.path.toLowerCase() === "script.js")?.content ||
+      currentFiles.find((f) => f.path.toLowerCase().endsWith(".js"))?.content || "";
 
     if (css) {
       const styleTag = `<style>\n/* Inlined styles.css */\n${css}\n</style>`;
@@ -147,17 +170,85 @@ export function LivePreview({
     html = html.replace(/<source[^>]*?srcset=["']images\/[^"']+["'][^>]*?>/gi, "");
 
     return html;
-  }, [project.files, activePage]);
+  }, [currentFiles, activePage]);
 
-  // Comprehensive Quality Report (use server report or compute client-side)
-  const qualityReport: QualityReport = useMemo(() => {
-    if (project.qualityReport) return project.qualityReport;
-    const res = runQualityChecksAndAutoFix(project.files, {
+  // Comprehensive Quality & SEO Audit Report (calculated from real checks)
+  const qualityReport: WebsiteQualityAuditReport = useMemo(() => {
+    if (customAuditReport) return customAuditReport;
+    return auditWebsiteQuality(currentFiles, {
       businessName: project.name,
       domain: project.websiteDomain,
     });
-    return res.report;
-  }, [project.qualityReport, project.files, project.name, project.websiteDomain]);
+  }, [customAuditReport, currentFiles, project.name, project.websiteDomain]);
+
+  // Handler for targeted improvement actions (Individual or Improve All)
+  const handleImproveAction = async (actionType: ImprovementActionType) => {
+    setIsImproving(true);
+    setActiveAction(actionType);
+    setImprovingStep(
+      actionType === "improve_all"
+        ? "Analyzing website & applying full 95+ quality improvements…"
+        : `Applying ${actionType.replace("improve_", "").replace(/_/g, " ")} improvement…`
+    );
+
+    try {
+      if (!originalFiles) {
+        setOriginalFiles([...currentFiles]);
+      }
+
+      const res = await fetch("/api/projects/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: actionType,
+          files: currentFiles,
+          meta: {
+            businessName: project.name,
+            domain: project.websiteDomain,
+          },
+          projectId: project.projectId,
+          provider: project.provider,
+          model: project.model,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && Array.isArray(data.improvedFiles)) {
+        setCurrentFiles(data.improvedFiles);
+        setCustomAuditReport(data.report);
+        setActiveVersion("improved");
+        if (Array.isArray(data.changesApplied)) {
+          setRecentChanges((prev) => [...prev, ...data.changesApplied]);
+        }
+        if (onUpdateProject) {
+          onUpdateProject({
+            ...project,
+            files: data.improvedFiles,
+            qualityReport: data.report,
+          });
+        }
+      } else {
+        alert(data.error || "Failed to apply improvement.");
+      }
+    } catch (err: any) {
+      console.error("Improvement error:", err);
+      alert(err.message || "Failed to execute improvement.");
+    } finally {
+      setIsImproving(false);
+      setActiveAction(null);
+      setImprovingStep("");
+    }
+  };
+
+  const handleToggleVersion = (ver: "original" | "improved") => {
+    setActiveVersion(ver);
+    if (ver === "original" && originalFiles) {
+      setCurrentFiles(originalFiles);
+      setCustomAuditReport(null);
+    } else if (ver === "improved" && project.files) {
+      // Keep or restore improved files
+    }
+  };
 
   // Run automated hidden iframe mobile audit at 360px, 390px, 768px, 1280px (debounced)
   useEffect(() => {
@@ -284,7 +375,7 @@ export function LivePreview({
       const zip = new JSZip();
 
       // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt, CREDITS.txt
-      for (const file of project?.files || []) {
+      for (const file of currentFiles || []) {
         if (!file?.path) continue;
         zip.file(file.path, file.content || "");
       }
@@ -320,7 +411,7 @@ export function LivePreview({
         }
       } else {
         // Parse from HTML files if project.photos not present
-        for (const file of project?.files || []) {
+        for (const file of currentFiles || []) {
           if (!file?.path || !file.path.endsWith(".html")) continue;
           const content = file.content || "";
 
@@ -434,7 +525,7 @@ export function LivePreview({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: project?.name,
-            files: project?.files,
+            files: currentFiles,
             photos: project?.photos,
           }),
         });
@@ -777,6 +868,14 @@ export function LivePreview({
             mobileAudit={mobileAudit}
             activePage={activePage}
             isMobileAuditing={isMobileAuditing}
+            onImproveAction={handleImproveAction}
+            isImproving={isImproving}
+            improvingStep={improvingStep}
+            activeAction={activeAction}
+            hasOriginalVersion={Boolean(originalFiles)}
+            activeVersion={activeVersion}
+            onToggleVersion={handleToggleVersion}
+            recentChanges={recentChanges}
           />
 
           {/* Quick Optimization & Content Tools */}

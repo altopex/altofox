@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getProvider } from "@/lib/ai";
 import { ProviderType } from "@/lib/ai/types";
 import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "@/templates/sections/locationPage";
+import { resolvePageImage } from "@/lib/photos/image-provider";
 import { THEMES } from "@/lib/themes";
 import { SiteInfoJSON } from "@/lib/generator/content-schema";
 import { calculateTextSimilarity } from "@/lib/quality/quality-checker";
@@ -113,6 +114,25 @@ Angle: ${assignedAngle}`;
       };
     }
 
+    const resolvedHero = resolvePageImage(
+      {
+        pageTitle: `${mainService} in ${cityData.city}, ${cityData.stateId}`,
+        city: cityData.city,
+        state: cityData.stateName || cityData.stateId,
+        stateCode: cityData.stateId,
+        trade: mainService,
+        slot: "hero",
+        pageType: "location",
+        targetKeyword: `${mainService.toLowerCase()} in ${cityData.city.toLowerCase()}`,
+        width: 1200,
+        height: 800,
+      },
+      {
+        preferredSource: provider === "bing" ? "bing" : (provider as any),
+        pexelsKey: apiKey,
+      }
+    );
+
     const context: LocationPageContext = {
       city: cityData.city,
       stateId: cityData.stateId,
@@ -132,6 +152,13 @@ Angle: ${assignedAngle}`;
       servicesIncluded: servicesList.length > 0 ? servicesList.slice(0, 6) : ["Repairs", "Maintenance", "Emergency Service"],
       processSteps: aiResult.processSteps || [],
       faqs: aiResult.faqs || [],
+      heroImage: {
+        url: resolvedHero.url,
+        fallbackUrl: resolvedHero.fallbackUrl,
+        alt: resolvedHero.alt,
+        width: resolvedHero.width,
+        height: resolvedHero.height,
+      },
     };
 
     const locationBodyHtml = renderLocationPage(

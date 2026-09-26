@@ -38,8 +38,8 @@ export function renderAbout(
     <div class="container about-grid">
       <div class="reveal">
         <picture>
-          <source srcset="${mainImage.localWebpPath || mainImage.localPath || mainImage.url}" type="image/webp">
-          <img src="${mainImage.localPath || mainImage.url}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" style="aspect-ratio: 4/3; box-shadow: var(--shadow-lg);" width="800" height="600" loading="lazy">
+          <source srcset="${mainImage.url || mainImage.localWebpPath || mainImage.localPath}" type="image/webp">
+          <img src="${mainImage.url || mainImage.localPath}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" style="aspect-ratio: 4/3; box-shadow: var(--shadow-lg);" width="800" height="600" loading="lazy"${mainImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${mainImage.fallbackUrl}';"` : ""}>
         </picture>
       </div>
       <div class="reveal">
@@ -73,12 +73,12 @@ export function renderAbout(
       </div>
       <div class="reveal" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
         <picture>
-          <source srcset="${mainImage.localWebpPath || mainImage.localPath || mainImage.url}" type="image/webp">
-          <img src="${mainImage.localPath || mainImage.url}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" style="aspect-ratio: 1/1; box-shadow: var(--shadow-md);" width="600" height="600" loading="lazy">
+          <source srcset="${mainImage.url || mainImage.localWebpPath || mainImage.localPath}" type="image/webp">
+          <img src="${mainImage.url || mainImage.localPath}" data-remote-src="${mainImage.url}" alt="${mainImage.alt}" class="img-card" style="aspect-ratio: 1/1; box-shadow: var(--shadow-md);" width="600" height="600" loading="lazy"${mainImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${mainImage.fallbackUrl}';"` : ""}>
         </picture>
         <picture>
-          <source srcset="${secondImage.localWebpPath || secondImage.localPath || secondImage.url}" type="image/webp">
-          <img src="${secondImage.localPath || secondImage.url}" data-remote-src="${secondImage.url}" alt="${secondImage.alt}" class="img-card" style="aspect-ratio: 1/1; margin-top: 2rem; box-shadow: var(--shadow-md);" width="600" height="600" loading="lazy">
+          <source srcset="${secondImage.url || secondImage.localWebpPath || secondImage.localPath}" type="image/webp">
+          <img src="${secondImage.url || secondImage.localPath}" data-remote-src="${secondImage.url}" alt="${secondImage.alt}" class="img-card" style="aspect-ratio: 1/1; margin-top: 2rem; box-shadow: var(--shadow-md);" width="600" height="600" loading="lazy"${secondImage.fallbackUrl ? ` onerror="this.onerror=null;this.src='${secondImage.fallbackUrl}';"` : ""}>
         </picture>
       </div>
     </div>
