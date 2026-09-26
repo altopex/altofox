@@ -21,7 +21,7 @@ export interface LocationPageContext {
   angleSectionHeadline: string;
   angleSectionContent: string;
   servicesIncluded: string[];
-  processSteps: { title: string; desc: string }[];
+  processSteps: { title: string; desc?: string; description?: string }[];
   faqs: { question: string; answer: string }[];
   heroImage?: {
     localPath?: string;
@@ -31,6 +31,15 @@ export interface LocationPageContext {
     width: number;
     height: number;
   };
+  searchIntent?: string;
+  commonProblemsTitle?: string;
+  commonProblems?: Array<{ title: string; description: string; whyItHappens?: string; severity?: string }>;
+  whenToCall?: Array<{ symptom: string; action: string }>;
+  customerPrepSteps?: string[];
+  serviceScopeTitle?: string;
+  regionalClimateHeadline?: string;
+  regionalClimateContent?: string;
+  relatedServices?: Array<{ name: string; slug?: string; description?: string }>;
 }
 
 /**
@@ -169,6 +178,34 @@ ${breadcrumbsHtml}
   </div>
 </section>
 
+${
+  ctx.customerPrepSteps && ctx.customerPrepSteps.length > 0
+    ? `
+<!-- Homeowner Preparation & Immediate Steps -->
+<section class="section">
+  <div class="container">
+    <div class="card prep-card" style="border-left: 4px solid var(--color-primary); background: var(--color-surface, #F8FAFC); padding: 1.75rem; border-radius: var(--radius);">
+      <div class="badge" style="margin-bottom: 0.75rem;">Actionable Homeowner Guidance</div>
+      <h2 style="font-size: 1.35rem; margin-bottom: 0.75rem;">Steps to Take Before Our Technician Arrives at Your ${ctx.city} Property</h2>
+      <ul class="prep-list" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.75rem;">
+        ${ctx.customerPrepSteps
+          .map(
+            (step, idx) => `
+          <li style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <span style="display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; background: var(--color-primary); color: white; font-weight: bold; font-size: 0.75rem; flex-shrink: 0;">${idx + 1}</span>
+            <span style="font-size: 0.95rem; line-height: 1.5; color: var(--color-text);">${step}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    </div>
+  </div>
+</section>
+`
+    : ""
+}
+
 <!-- Unique Regional Angle / Local Context Section -->
 <section class="section section-alt">
   <div class="container">
@@ -185,6 +222,90 @@ ${breadcrumbsHtml}
              </div>`
           : ""
       }
+    </div>
+  </div>
+</section>
+
+${
+  ctx.commonProblems && ctx.commonProblems.length > 0
+    ? `
+<!-- Common Trade Problems We Resolve -->
+<section class="section">
+  <div class="container">
+    <div class="section-header">
+      <div class="badge">Diagnosis &amp; Root Causes</div>
+      <h2>${ctx.commonProblemsTitle || `Common Issues We Resolve in ${ctx.city}`}</h2>
+      <p>Understanding why component failures occur helps homeowners make informed, cost-effective decisions.</p>
+    </div>
+
+    <div class="cards-grid">
+      ${ctx.commonProblems
+        .map(
+          (prob) => `
+        <div class="card problem-card">
+          <div class="card-header">
+            <h3>${prob.title}</h3>
+            ${prob.severity === "critical" ? `<span class="badge" style="background: #FEE2E2; color: #991B1B;">Priority</span>` : ""}
+          </div>
+          <p>${prob.description}</p>
+          ${
+            prob.whyItHappens
+              ? `
+            <div style="margin-top: 0.75rem; padding: 0.75rem; background: rgba(15, 23, 42, 0.03); border-radius: 6px; font-size: 0.85rem; color: var(--color-muted);">
+              <strong>Technical Cause:</strong> ${prob.whyItHappens}
+            </div>
+          `
+              : ""
+          }
+        </div>
+      `
+        )
+        .join("")}
+    </div>
+  </div>
+</section>
+`
+    : ""
+}
+
+${
+  ctx.whenToCall && ctx.whenToCall.length > 0
+    ? `
+<!-- When to Call Professional Diagnostic Service -->
+<section class="section section-alt">
+  <div class="container">
+    <div class="card diagnostic-card" style="padding: 2rem;">
+      <div class="badge" style="margin-bottom: 0.75rem;">Troubleshooting Triggers</div>
+      <h2>When to Call a Professional in ${ctx.city}</h2>
+      <p style="color: var(--color-muted); margin-bottom: 1.5rem;">If you observe any of the following symptoms, scheduling a prompt inspection prevents minor wear from turning into major property damage:</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+        ${ctx.whenToCall
+          .map(
+            (item) => `
+          <div style="border: 1px solid var(--color-border); border-radius: var(--radius); padding: 1.25rem; background: var(--color-surface, #fff);">
+            <h4 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--color-text);">⚠️ ${item.symptom}</h4>
+            <p style="font-size: 0.9rem; color: var(--color-muted); margin: 0; line-height: 1.5;">${item.action}</p>
+          </div>
+        `
+          )
+          .join("")}
+      </div>
+    </div>
+  </div>
+</section>
+`
+    : ""
+}
+
+<!-- Mid-Page Calling Opportunity -->
+<section class="section" style="padding: 2rem 0; background: var(--color-primary); color: white;">
+  <div class="container" style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1.5rem;">
+    <div>
+      <h3 style="color: white; margin: 0 0 0.25rem 0; font-size: 1.25rem;">Facing a Service Problem in ${ctx.city}?</h3>
+      <p style="margin: 0; opacity: 0.9; font-size: 0.95rem;">Speak directly with our local dispatch coordinator for upfront pricing and fast arrival.</p>
+    </div>
+    <div style="display: flex; gap: 0.75rem; align-items: center;">
+      <a href="tel:${cleanPhone}" class="btn" style="background: white; color: var(--color-primary); font-weight: bold; padding: 0.75rem 1.5rem; border-radius: var(--radius);">Call ${phone}</a>
     </div>
   </div>
 </section>
@@ -235,7 +356,7 @@ ${breadcrumbsHtml}
         <div class="card process-step-card">
           <div class="step-badge">${idx + 1}</div>
           <h3>${step.title}</h3>
-          <p>${step.desc}</p>
+          <p>${step.desc || step.description || ""}</p>
         </div>
       `
         )

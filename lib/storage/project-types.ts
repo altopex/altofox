@@ -65,6 +65,19 @@ export interface OptimizationCycle {
   pageScores?: Record<string, number>;
 }
 
+export interface ProjectVersion {
+  id: string;
+  versionNumber: number;
+  label: string;
+  createdAt: number;
+  dateStr: string;
+  source: "original" | "search_console" | "quality_improver" | "manual_edit";
+  summary: string;
+  affectedPages: string[];
+  files: { path: string; content: string; mimeType?: string; size?: number; lastModified?: number }[];
+  qualityScore?: number;
+}
+
 export interface SavedProject {
   id: string; // unique project id
   name: string; // e.g. "Lone Star Plumbing"
@@ -72,6 +85,10 @@ export interface SavedProject {
   lastEditedAt: number;
   lastDownloadedAt?: number;
   thumbnail?: string;
+
+  // Version History (Original vs Improved 1, Improved 2, etc.)
+  versions?: ProjectVersion[];
+  currentVersionId?: string;
 
   // Global settings & data
   formData: any; // All wizard input state

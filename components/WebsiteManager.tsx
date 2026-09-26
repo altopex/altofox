@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { SavedProject, URLRedirect, ProjectChangeLogEntry } from "../lib/storage/project-types";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { SavedProject, URLRedirect, ProjectChangeLogEntry, ProjectVersion } from "../lib/storage/project-types";
 import { saveProjectToDB, exportProjectBackup, generateWebsiteZIP } from "../lib/storage/db";
+import {
+  ensureProjectVersions,
+  createProjectVersionSnapshot,
+  switchProjectVersion,
+  getOriginalVersion,
+  getCurrentVersion,
+} from "../lib/storage/project-versions";
 import { KeywordMapModal, KeywordMapEntry } from "./KeywordMapModal";
 import { FindReplaceModal } from "./FindReplaceModal";
 import { SearchConsoleHub } from "./SearchConsoleHub";
@@ -10,6 +17,7 @@ import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { Theme, THEMES } from "../lib/themes";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { preparePreviewHtml } from "../lib/export/preview-renderer";
 import {
   FolderKanban,
   FileText,
@@ -495,11 +503,16 @@ export function WebsiteManager({
   // Download ZIP
   const handleDownloadZip = async (mode: "full" | "changed-only" = "full") => {
     try {
-      const { blob } = await generateWebsiteZIP(
+      const { blob, validation } = await generateWebsiteZIP(
         project,
         mode,
         project.lastDownloadedAt
       );
+
+      if (validation && !validation.valid && validation.errors.length > 0) {
+        alert(`Validation check failed: ${validation.errors.join("; ")}`);
+        return;
+      }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -566,8 +579,31 @@ export function WebsiteManager({
                 {project.name}
               </h1>
               <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                Saved &amp; IndexedDB Synced
+                Saved &amp; Synced
               </span>
+              {project.versions && project.versions.length > 1 && (
+                <div className="flex items-center space-x-1 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full text-xs">
+                  <span className="text-[10px] font-bold text-indigo-700">
+                    {project.versions.find((v) => v.id === project.currentVersionId)?.label || "Active Version"}
+                  </span>
+                  <select
+                    value={project.currentVersionId || project.versions[project.versions.length - 1].id}
+                    onChange={(e) => {
+                      const switched = switchProjectVersion(project, e.target.value);
+                      saveProjectToDB(switched);
+                      setProject(switched);
+                      onProjectUpdated(switched);
+                    }}
+                    className="text-[10px] bg-white border border-indigo-300 rounded px-1 py-0.5 font-semibold text-slate-700"
+                  >
+                    {project.versions.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.label} ({v.dateStr})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <p className="text-[10px] text-slate-500 truncate">
               Domain: {project.businessDetails?.websiteDomain || "example.com"} •{" "}
@@ -1117,9 +1153,20 @@ export function WebsiteManager({
                     <ErrorBoundary fallbackTitle="Page Preview Encountered an Issue">
                       <iframe
                         title="Page Preview"
-                        srcDoc={activeHtmlContent || currentPageFile?.content}
+                        srcDoc={preparePreviewHtml({
+                          pagePath: selectedPagePath,
+                          files: (project.files || []).map((f) =>
+                            f.path === selectedPagePath && activeHtmlContent ? { ...f, content: activeHtmlContent } : f
+                          ),
+                          photos: (project as any).photos || [],
+                          businessDetails: {
+                            name: project.name,
+                            domain: (project as any).businessDetails?.websiteDomain || (project as any).websiteDomain,
+                          },
+                          viewport: previewDevice,
+                        })}
                         className="w-full h-full border-0"
-                        sandbox="allow-scripts allow-same-origin"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                       />
                     </ErrorBoundary>
                   </div>
@@ -1167,22 +1214,15 @@ export function WebsiteManager({
                     const updatedFiles = project.files.map((f) =>
                       f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
                     );
-                    const logEntry: ProjectChangeLogEntry = {
-                      id: `log-${Date.now()}`,
-                      timestamp: Date.now(),
-                      dateStr: new Date().toLocaleDateString(),
+                    const updatedWithVersion = createProjectVersionSnapshot(project, {
+                      source: "search_console",
                       summary: logSummary,
                       affectedPages: [path],
-                    };
-                    const updated = {
-                      ...project,
-                      files: updatedFiles,
-                      lastEditedAt: Date.now(),
-                      changeLog: [logEntry, ...(project.changeLog || [])],
-                    };
-                    saveProjectToDB(updated);
-                    setProject(updated);
-                    onProjectUpdated(updated);
+                      updatedFiles,
+                    });
+                    saveProjectToDB(updatedWithVersion);
+                    setProject(updatedWithVersion);
+                    onProjectUpdated(updatedWithVersion);
                   }}
                 />
               </ErrorBoundary>

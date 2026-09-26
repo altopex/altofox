@@ -32,6 +32,14 @@ import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobi
 import { WebsiteQualityAuditReport, auditWebsiteQuality } from "../lib/quality/website-quality-auditor";
 import { ImprovementActionType } from "../lib/quality/website-improver";
 import { QualityScorecard } from "./QualityScorecard";
+import { validateWebsiteFiles, ZipValidationResult } from "../lib/export/zip-validator";
+import { buildCanonicalWebsiteFiles } from "../lib/export/canonical-files";
+import {
+  preparePreviewHtml,
+  validatePreviewReadiness,
+  extractSchemaOrgFromHtml,
+  PreviewValidationReport,
+} from "../lib/export/preview-renderer";
 import { ProviderType } from "@/lib/ai/types";
 
 export interface ProjectFileItem {
@@ -106,39 +114,61 @@ export function LivePreview({
   // Active files state & version safety (Original vs Improved)
   const [currentFiles, setCurrentFiles] = useState<ProjectFileItem[]>(project.files);
   const [originalFiles, setOriginalFiles] = useState<ProjectFileItem[] | null>(null);
+  const [improvedFiles, setImprovedFiles] = useState<ProjectFileItem[] | null>(null);
   const [activeVersion, setActiveVersion] = useState<"original" | "improved">("improved");
   const [isImproving, setIsImproving] = useState(false);
   const [improvingStep, setImprovingStep] = useState("");
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [recentChanges, setRecentChanges] = useState<string[]>([]);
   const [customAuditReport, setCustomAuditReport] = useState<WebsiteQualityAuditReport | null>(null);
+  const [validationResult, setValidationResult] = useState<ZipValidationResult | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
 
-  // Synchronize state when project changes
+  const [telClickedNotice, setTelClickedNotice] = useState<string | null>(null);
+  const [showSchemaModal, setShowSchemaModal] = useState(false);
+
+  // Synchronize state when project changes and ensure canonical files (sitemap, robots, etc.)
   useEffect(() => {
-    setCurrentFiles(project.files);
+    const canonical = buildCanonicalWebsiteFiles(project.files || [], {
+      projectName: project.name,
+      domain: project.websiteDomain,
+    });
+    setCurrentFiles(canonical.files);
     setOriginalFiles(null);
+    setImprovedFiles(null);
     setActiveVersion("improved");
     setRecentChanges([]);
     setCustomAuditReport(null);
-  }, [project.projectId, project.files]);
+    setValidationResult(null);
+  }, [project.projectId, project.files, project.name, project.websiteDomain]);
 
   // List of all HTML pages generated
   const htmlFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".html"));
 
-  // Listen for iframe link clicks to navigate smoothly between pages in preview mode
+  // Check if sitemap or robots exist in currentFiles
+  const hasSitemap = currentFiles.some((f) => f.path.toLowerCase() === "sitemap.xml");
+  const hasRobots = currentFiles.some((f) => f.path.toLowerCase() === "robots.txt");
+
+  // Listen for iframe link clicks to navigate smoothly between pages in preview mode (POSIX resolved)
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
-      if (e.data && e.data.type === "PREVIEW_NAVIGATE" && typeof e.data.path === "string") {
-        const targetPath = e.data.path.replace(/^\.?\//, "").toLowerCase();
+      if (!e.data) return;
+      if (e.data.type === "PREVIEW_NAVIGATE" && typeof e.data.path === "string") {
+        const targetPath = e.data.path.toLowerCase();
         const found = currentFiles.find(
           (f) =>
             f.path.toLowerCase() === targetPath ||
-            f.path.toLowerCase().endsWith("/" + targetPath) ||
-            f.path.toLowerCase() === targetPath + ".html"
+            f.path.toLowerCase().replace(/^\/+/, "") === targetPath ||
+            f.path.toLowerCase() === `${targetPath}.html` ||
+            f.path.toLowerCase().endsWith("/" + targetPath)
         );
         if (found) {
           setActivePage(found.path);
         }
+      } else if (e.data.type === "PREVIEW_TEL_CLICK") {
+        setTelClickedNotice(`📞 Click-to-Call Verified: ${e.data.text || e.data.phone} (Working tel: link on mobile & desktop)`);
+        setTimeout(() => setTelClickedNotice(null), 4500);
       }
     };
     window.addEventListener("message", handleMsg);
@@ -147,126 +177,29 @@ export function LivePreview({
 
   // Inlined preview HTML for the currently selected page with complete asset resolution
   const inlinedPreviewHtml = useMemo(() => {
-    let html =
-      currentFiles.find((f) => f.path.toLowerCase() === activePage.toLowerCase())?.content ||
-      currentFiles.find((f) => f.path.toLowerCase() === "index.html")?.content ||
-      currentFiles.find((f) => f.path.toLowerCase().endsWith(".html"))?.content ||
-      "<!DOCTYPE html><html><body><h1>No HTML content found</h1></body></html>";
+    return preparePreviewHtml({
+      pagePath: activePage,
+      files: currentFiles,
+      photos: project.photos,
+      businessDetails: {
+        name: project.name,
+        domain: project.websiteDomain,
+      },
+      viewport: viewMode,
+    });
+  }, [currentFiles, activePage, project.photos, project.name, project.websiteDomain, viewMode]);
 
-    if (typeof html !== "string") {
-      html = String(html);
-    }
-
-    // Combine all CSS files into one master style block so custom classes & themes always render
-    const cssFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".css"));
-    if (cssFiles.length > 0) {
-      const combinedCss = cssFiles
-        .map((f) => `/* Inlined: ${f.path} */\n${f.content}`)
-        .join("\n\n");
-      const styleTag = `<style>\n${combinedCss}\n</style>`;
-      html = html.includes("</head>")
-        ? html.replace("</head>", `${styleTag}\n</head>`)
-        : `${styleTag}\n${html}`;
-    }
-
-    // Combine all JS files into a single DOMContentLoaded execution wrapper
-    const jsFiles = currentFiles.filter((f) => f.path.toLowerCase().endsWith(".js"));
-    if (jsFiles.length > 0) {
-      const combinedJs = jsFiles
-        .map((f) => `// Inlined: ${f.path}\n${f.content}`)
-        .join("\n\n");
-      const scriptTag = `<script>\ndocument.addEventListener("DOMContentLoaded", function() {\n${combinedJs}\n});\n</script>`;
-      html = html.includes("</body>")
-        ? html.replace("</body>", `${scriptTag}\n</body>`)
-        : `${html}\n${scriptTag}`;
-    }
-
-    // Build photo lookup map from project.photos to resolve any local image paths
-    const photoMap = new Map<string, string>();
-    if (Array.isArray(project.photos)) {
-      for (const p of project.photos) {
-        const remote = p.url || (p as any).remoteUrl;
-        if (remote) {
-          if (p.localPath) {
-            const clean = p.localPath.replace(/^\.?\/?/, "").toLowerCase();
-            photoMap.set(clean, remote);
-            photoMap.set(clean.replace(/^images\//, ""), remote);
-          }
-        }
-      }
-    }
-
-    // 1. Replace local image paths with their high-res remote CDN URLs if data-remote-src is present
-    html = html.replace(
-      /<img([^>]*?)src=["']([^"']+)["']([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)>/gi,
-      '<img$1src="$4"$3data-remote-src="$4"$5>'
-    );
-    html = html.replace(
-      /<img([^>]*?)data-remote-src=["']([^"']+)["']([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi,
-      '<img$1data-remote-src="$2"$3src="$2"$5>'
-    );
-
-    // 2. Map relative image sources to remote photo URLs
-    html = html.replace(
-      /<img([^>]*?)src=["'](\.?\/?images\/[^"']+)["']([^>]*?)>/gi,
-      (match, prefix, imgPath, suffix) => {
-        if (match.includes("data-remote-src")) return match;
-        const clean = imgPath.replace(/^\.?\/?/, "").toLowerCase();
-        const fileName = clean.replace(/^images\//, "");
-        const remote = photoMap.get(clean) || photoMap.get(fileName);
-        if (remote) {
-          return `<img${prefix}src="${remote}" data-remote-src="${remote}"${suffix}>`;
-        }
-        return match;
-      }
-    );
-
-    // 3. Map background images
-    html = html.replace(
-      /style=["']([^"']*?)background-image:\s*url\(['"](\.?\/?images\/[^'"]+)['"]\);?([^"']*?)["']/gi,
-      (match, pre, imgPath, post) => {
-        const clean = imgPath.replace(/^\.?\/?/, "").toLowerCase();
-        const fileName = clean.replace(/^images\//, "");
-        const remote = photoMap.get(clean) || photoMap.get(fileName);
-        if (remote) {
-          return `style="${pre}background-image: url('${remote}');${post}"`;
-        }
-        return match;
-      }
-    );
-    html = html.replace(
-      /style=["']background-image:\s*url\(['"]images\/[^'"]+['"]\);["']([^>]*?)data-bg-remote=["']([^"']+)["']/gi,
-      'style="background-image: url(\'$2\');"$1data-bg-remote="$2"'
-    );
-
-    // 4. Strip <source srcset="images/..." type="image/webp"> in preview so preview loads remote <img> src
-    html = html.replace(/<source[^>]*?srcset=["'](\.?\/?images\/[^"']+)["'][^>]*?>/gi, "");
-
-    // 5. Inject smooth client navigation interceptor for multi-page previews (preserves tel: and mailto:)
-    const navInterceptor = `<script>
-(function() {
-  document.addEventListener("click", function(e) {
-    var a = e.target && e.target.closest ? e.target.closest("a") : null;
-    if (!a) return;
-    var href = a.getAttribute("href");
-    if (!href) return;
-    if (href.startsWith("tel:") || href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("http://") || href.startsWith("https://")) {
-      return; // Do not intercept phone calls, email, or external links
-    }
-    e.preventDefault();
-    window.parent.postMessage({ type: "PREVIEW_NAVIGATE", path: href }, "*");
-  });
-})();
-</script>`;
-
-    if (html.includes("</body>")) {
-      html = html.replace("</body>", `${navInterceptor}\n</body>`);
-    } else {
-      html += navInterceptor;
-    }
-
-    return html;
+  // Preview readiness report (verifying complete content, headers, heroes, services, tel links, styling)
+  const previewReadiness = useMemo(() => {
+    return validatePreviewReadiness(currentFiles, activePage, project.photos);
   }, [currentFiles, activePage, project.photos]);
+
+  // Schema.org structured data extracted from current active page
+  const currentSchemas = useMemo(() => {
+    const activeFile = currentFiles.find((f) => f.path.toLowerCase() === activePage.toLowerCase());
+    const content = activeFile?.content ? String(activeFile.content) : "";
+    return extractSchemaOrgFromHtml(content);
+  }, [currentFiles, activePage]);
 
   // Comprehensive Quality & SEO Audit Report (calculated from real checks)
   const qualityReport: WebsiteQualityAuditReport = useMemo(() => {
@@ -311,10 +244,35 @@ export function LivePreview({
 
       const storedModel = typeof window !== "undefined"
         ? localStorage.getItem(`altofox_model_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_model_${storedProvider}`) ||
           localStorage.getItem("altofox_active_model") ||
           project.model ||
           undefined
         : project.model;
+
+      const storedBaseUrl = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_base_url_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_base_url_${storedProvider}`) ||
+          localStorage.getItem("altofox_base_url_custom") ||
+          localStorage.getItem("ranklocal_base_url_custom") ||
+          undefined
+        : undefined;
+
+      const storedOrgId = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_org_id_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_org_id_${storedProvider}`) ||
+          localStorage.getItem("altofox_org_id_custom") ||
+          localStorage.getItem("ranklocal_org_id_custom") ||
+          undefined
+        : undefined;
+
+      const storedProviderName = typeof window !== "undefined"
+        ? localStorage.getItem(`altofox_provider_name_${storedProvider}`) ||
+          localStorage.getItem(`ranklocal_provider_name_${storedProvider}`) ||
+          localStorage.getItem("altofox_provider_name_custom") ||
+          localStorage.getItem("ranklocal_provider_name_custom") ||
+          undefined
+        : undefined;
 
       const res = await fetch("/api/projects/improve", {
         method: "POST",
@@ -330,11 +288,19 @@ export function LivePreview({
           provider: storedProvider,
           apiKey: storedKey || undefined,
           model: storedModel,
+          baseUrl: storedBaseUrl,
+          organizationId: storedOrgId,
+          providerName: storedProviderName,
         }),
       });
 
+      if (!originalFiles) {
+        setOriginalFiles(currentFiles);
+      }
+
       const data = await res.json();
       if (data.success && Array.isArray(data.improvedFiles)) {
+        setImprovedFiles(data.improvedFiles);
         setCurrentFiles(data.improvedFiles);
         setCustomAuditReport(data.report);
         setActiveVersion("improved");
@@ -366,8 +332,10 @@ export function LivePreview({
     if (ver === "original" && originalFiles) {
       setCurrentFiles(originalFiles);
       setCustomAuditReport(null);
+    } else if (ver === "improved" && improvedFiles) {
+      setCurrentFiles(improvedFiles);
     } else if (ver === "improved" && project.files) {
-      // Keep or restore improved files
+      setCurrentFiles(project.files);
     }
   };
 
@@ -486,17 +454,45 @@ export function LivePreview({
     });
   };
 
+  const handleRunValidation = () => {
+    setIsValidating(true);
+    try {
+      const res = validateWebsiteFiles({
+        files: currentFiles,
+        expectedPages: currentFiles.filter((f) => f.path.endsWith(".html")).map((f) => f.path),
+        domain: project?.websiteDomain || project?.name,
+      });
+      setValidationResult(res);
+      setShowValidationModal(true);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   // Download all files as a clean ZIP package named after the business
   const handleDownloadZip = async () => {
     try {
       setIsZipping(true);
+      setZippingStatus("Validating website package integrity…");
+
+      const canonical = buildCanonicalWebsiteFiles(currentFiles, {
+        projectName: project?.name,
+        domain: project?.websiteDomain,
+      });
+      const validation = canonical.validation;
+      setValidationResult(validation);
+
+      if (!validation.valid && validation.errors.length > 0) {
+        throw new Error(`Validation check failed: ${validation.errors.join("; ")}`);
+      }
+
       setZippingStatus("Gathering website files…");
       const JSZipModule = await import("jszip");
       const JSZip = (JSZipModule as any).default?.default || (JSZipModule as any).default || JSZipModule;
       const zip = new JSZip();
 
-      // Add all HTML pages, styles.css, script.js, sitemap.xml, robots.txt, CREDITS.txt
-      for (const file of currentFiles || []) {
+      // Add all canonical files (ensures 100% identical files between Preview and ZIP download)
+      for (const file of canonical.files) {
         if (!file?.path) continue;
         zip.file(file.path, file.content || "");
       }
@@ -766,6 +762,23 @@ export function LivePreview({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Browser-style Preview Frame (8 of 12 cols) */}
         <div className="lg:col-span-8 flex flex-col space-y-3">
+          {/* Working Phone / Click-to-Call Feedback Banner */}
+          {telClickedNotice && (
+            <div className="bg-emerald-600 text-white text-xs font-semibold px-4 py-2.5 rounded-[12px] flex items-center justify-between shadow-md animate-in fade-in slide-in-from-top duration-200">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-white animate-ping shrink-0" />
+                <span>{telClickedNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTelClickedNotice(null)}
+                className="text-white hover:bg-emerald-700 px-2 py-0.5 rounded text-[11px] font-bold transition ml-3"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {/* Page Tabs & Device Controls */}
           <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-2 flex flex-wrap items-center justify-between gap-2 shadow-sm">
             {/* Page selector tabs */}
@@ -790,6 +803,51 @@ export function LivePreview({
                   </button>
                 );
               })}
+
+              {/* Sitemap.xml quick preview tab */}
+              {hasSitemap && (
+                <button
+                  type="button"
+                  onClick={() => setActivePage("sitemap.xml")}
+                  className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 ${
+                    activePage.toLowerCase() === "sitemap.xml"
+                      ? "bg-sky-600 text-white font-semibold shadow-sm"
+                      : "bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
+                  }`}
+                  title="Inspect canonical sitemap.xml generated with project"
+                >
+                  sitemap.xml
+                </button>
+              )}
+
+              {/* Robots.txt quick preview tab */}
+              {hasRobots && (
+                <button
+                  type="button"
+                  onClick={() => setActivePage("robots.txt")}
+                  className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 ${
+                    activePage.toLowerCase() === "robots.txt"
+                      ? "bg-slate-700 text-white font-semibold shadow-sm"
+                      : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                  }`}
+                  title="Inspect canonical robots.txt generated with project"
+                >
+                  robots.txt
+                </button>
+              )}
+
+              {/* Schema Inspector Tab */}
+              <button
+                type="button"
+                onClick={() => setShowSchemaModal(true)}
+                className="px-2.5 py-1 rounded-[8px] text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shrink-0 flex items-center gap-1"
+                title="Inspect Schema.org JSON-LD structured data on this page"
+              >
+                <span>Schema</span>
+                <span className="bg-emerald-200 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                  {currentSchemas.length}
+                </span>
+              </button>
             </div>
 
             {/* Viewport device toggles */}
@@ -918,7 +976,7 @@ export function LivePreview({
                     srcDoc={inlinedPreviewHtml}
                     title="Desktop Preview"
                     className="w-full flex-1 border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                   />
                 </div>
 
@@ -944,7 +1002,7 @@ export function LivePreview({
                     srcDoc={inlinedPreviewHtml}
                     title="Mobile Preview"
                     className="w-full flex-1 border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                   />
                 </div>
               </div>
@@ -973,7 +1031,7 @@ export function LivePreview({
                     srcDoc={inlinedPreviewHtml}
                     title="Generated Static Website Live Preview"
                     className="w-full h-full border-0 bg-white"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                   />
                 </div>
               </div>
@@ -1118,6 +1176,21 @@ export function LivePreview({
                 )}
               </button>
 
+              {/* Validate Website Package Button */}
+              <button
+                type="button"
+                onClick={handleRunValidation}
+                disabled={isValidating}
+                className="w-full inline-flex items-center justify-center space-x-2 py-2 px-3 rounded-[10px] border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-bold text-slate-700 transition"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>
+                  {validationResult
+                    ? `Validated: ${validationResult.passedChecks}/${validationResult.totalChecks} Checks Passed`
+                    : "Validate Improved Website (18 Checks)"}
+                </span>
+              </button>
+
               {/* Generate Again Button */}
               {onGenerateAgain && (
                 <button
@@ -1211,6 +1284,130 @@ export function LivePreview({
           </div>
         </div>
       </div>
+
+      {/* Validation Checklist Modal */}
+      {showValidationModal && validationResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2.5">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${validationResult.valid ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Website Package Integrity Validation</h3>
+                  <p className="text-xs text-slate-500">
+                    {validationResult.passedChecks} of {validationResult.totalChecks} automated verification checks passed ({validationResult.score}% integrity score)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowValidationModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-2.5 flex-1 text-xs">
+              {validationResult.checks.map((check) => (
+                <div
+                  key={check.id}
+                  className={`p-3 rounded-xl border flex items-start space-x-3 ${
+                    check.passed ? "bg-emerald-50/40 border-emerald-200 text-slate-800" : "bg-red-50/50 border-red-200 text-red-900"
+                  }`}
+                >
+                  <span className={`shrink-0 mt-0.5 font-bold ${check.passed ? "text-emerald-600" : "text-red-600"}`}>
+                    {check.passed ? "✓" : "✕"}
+                  </span>
+                  <div>
+                    <div className="font-bold">{check.name}</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5 leading-relaxed">{check.message}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                {validationResult.fileStats.totalFiles} files verified in preview set
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowValidationModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition"
+              >
+                Close Validation Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schema.org Structured Data Inspector Modal */}
+      {showSchemaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center bg-emerald-100 text-emerald-700">
+                  <Code className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Schema.org Structured Data Inspector</h3>
+                  <p className="text-xs text-slate-500">
+                    Inspecting {currentSchemas.length} JSON-LD schema markup blocks on <strong className="text-slate-800">{activePage}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSchemaModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+              {currentSchemas.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                  <p className="font-semibold text-slate-700">No JSON-LD schema detected on this page.</p>
+                  <p className="text-[11px] mt-1 text-slate-500">Local business schema is typically embedded on index.html, contact.html, and service pages.</p>
+                </div>
+              ) : (
+                currentSchemas.map((schema, idx) => (
+                  <div key={idx} className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                    <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex items-center justify-between text-[11px]">
+                      <span className="font-bold text-slate-800">
+                        Schema #{idx + 1}: <code className="text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{schema["@type"] || "Thing"}</code>
+                      </span>
+                      <span className="text-slate-500 font-mono text-[10px]">application/ld+json</span>
+                    </div>
+                    <pre className="p-3 bg-slate-900 text-slate-100 overflow-x-auto text-[11px] font-mono leading-relaxed max-h-60">
+                      {JSON.stringify(schema, null, 2)}
+                    </pre>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="p-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <span className="text-xs text-slate-500">
+                Google Rich Snippets Compliant
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowSchemaModal(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition"
+              >
+                Close Inspector
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -125,6 +125,7 @@ import {
   deleteProjectFromDB,
   duplicateProjectInDB,
 } from "@/lib/storage/db";
+import { ensureProjectVersions } from "@/lib/storage/project-versions";
 import { AppShell, NavTab } from "@/components/navigation/AppShell";
 import { useAuth } from "@/lib/auth/AuthContext";
 
@@ -1080,6 +1081,27 @@ export default function DashboardPage() {
           provider: activeProvider,
           model: activeModel,
           apiKey: localKey || undefined,
+          baseUrl:
+            (typeof window !== "undefined"
+              ? localStorage.getItem(`altofox_base_url_${activeProvider}`) ||
+                localStorage.getItem(`ranklocal_base_url_${activeProvider}`) ||
+                localStorage.getItem("altofox_base_url_custom") ||
+                localStorage.getItem("ranklocal_base_url_custom")
+              : undefined) || undefined,
+          organizationId:
+            (typeof window !== "undefined"
+              ? localStorage.getItem(`altofox_org_id_${activeProvider}`) ||
+                localStorage.getItem(`ranklocal_org_id_${activeProvider}`) ||
+                localStorage.getItem("altofox_org_id_custom") ||
+                localStorage.getItem("ranklocal_org_id_custom")
+              : undefined) || undefined,
+          providerName:
+            (typeof window !== "undefined"
+              ? localStorage.getItem(`altofox_provider_name_${activeProvider}`) ||
+                localStorage.getItem(`ranklocal_provider_name_${activeProvider}`) ||
+                localStorage.getItem("altofox_provider_name_custom") ||
+                localStorage.getItem("ranklocal_provider_name_custom")
+              : undefined) || undefined,
           pexelsKey,
           pixabayKey,
           preferredSource,
@@ -1165,8 +1187,9 @@ export default function DashboardPage() {
             redirects: [],
           };
 
-          await saveProjectToDB(newSavedProject);
-          setActiveSavedProject(newSavedProject);
+          const finalSavedProject = ensureProjectVersions(newSavedProject);
+          await saveProjectToDB(finalSavedProject);
+          setActiveSavedProject(finalSavedProject);
           await loadAllSavedProjects();
         } catch (dbErr) {
           console.warn("Could not save project to IndexedDB:", dbErr);
@@ -2989,6 +3012,10 @@ export default function DashboardPage() {
           handleOpenSettings("models");
         } else {
           setNavTab(tab);
+          if (tab === "projects") {
+            setViewMode("dashboard");
+            loadAllSavedProjects();
+          }
         }
       }}
       activeProjectId={activeSavedProject?.id}
@@ -3084,6 +3111,22 @@ export default function DashboardPage() {
                   onOpenProject={(proj) => {
                     setActiveSavedProject(proj);
                     setViewMode("manager");
+                  }}
+                  onPreviewProject={(proj) => {
+                    const projData: ProjectData = {
+                      projectId: proj.id,
+                      name: proj.name,
+                      notes: proj.formData?.notes,
+                      provider: "anthropic",
+                      model: "claude-3-5-sonnet",
+                      themeName: proj.theme?.name || "Clean Modern",
+                      websiteDomain: proj.formData?.websiteDomain || `${proj.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`,
+                      files: proj.files,
+                      photos: [],
+                    };
+                    setCurrentProject(projData);
+                    setActiveSavedProject(proj);
+                    setViewMode("builder");
                   }}
                   onNewWebsite={() => {
                     setViewMode("builder");

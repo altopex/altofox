@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { preparePreviewHtml } from "@/lib/export/preview-renderer";
 
 export const dynamic = "force-dynamic";
 
@@ -22,50 +23,14 @@ export async function GET(
     const { searchParams } = new URL(req.url);
     const targetPage = searchParams.get("page") || "index.html";
 
-    // Find requested HTML file or fallback to index.html
-    let htmlFile = project.files.find(
-      (f) => f.path.toLowerCase() === targetPage.toLowerCase()
-    );
-    if (!htmlFile) {
-      htmlFile = project.files.find((f) => f.path.toLowerCase() === "index.html");
-    }
-    if (!htmlFile) {
-      htmlFile = project.files.find((f) => f.path.toLowerCase().endsWith(".html"));
-    }
-
-    if (!htmlFile) {
-      return new Response("No HTML file found in this project.", { status: 404 });
-    }
-
-    let renderedHtml = htmlFile.content;
-
-    // Rewrite relative .html navigation links so clicking links stays inside the preview iframe
-    renderedHtml = renderedHtml.replace(
-      /href="([a-zA-Z0-9_\-]+\.html)"/g,
-      (match, p1) => `href="?page=${p1}"`
-    );
-
-    // Inline styles.css if present to make preview self-contained
-    const cssFile = project.files.find((f) => f.path.toLowerCase() === "styles.css");
-    if (cssFile) {
-      const styleTag = `<style>\n/* Inlined styles.css */\n${cssFile.content}\n</style>`;
-      if (renderedHtml.includes("</head>")) {
-        renderedHtml = renderedHtml.replace("</head>", `${styleTag}\n</head>`);
-      } else {
-        renderedHtml = `${styleTag}\n${renderedHtml}`;
-      }
-    }
-
-    // Inline script.js if present
-    const jsFile = project.files.find((f) => f.path.toLowerCase() === "script.js");
-    if (jsFile) {
-      const scriptTag = `<script>\n// Inlined script.js\ndocument.addEventListener("DOMContentLoaded", function() {\n${jsFile.content}\n});\n</script>`;
-      if (renderedHtml.includes("</body>")) {
-        renderedHtml = renderedHtml.replace("</body>", `${scriptTag}\n</body>`);
-      } else {
-        renderedHtml = `${renderedHtml}\n${scriptTag}`;
-      }
-    }
+    const renderedHtml = preparePreviewHtml({
+      pagePath: targetPage,
+      files: project.files,
+      photos: [],
+      businessDetails: {
+        name: project.name,
+      },
+    });
 
     return new Response(renderedHtml, {
       status: 200,

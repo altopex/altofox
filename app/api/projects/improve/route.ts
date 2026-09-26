@@ -20,6 +20,8 @@ export async function POST(req: NextRequest) {
       model,
       apiKey,
       baseUrl,
+      organizationId,
+      providerName,
     } = body;
 
     let files: SiteFile[] = directFiles || [];
@@ -48,22 +50,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Resolve credentials across direct client key, requested provider, and configured DB/env keys
-    let resolvedProvider: ProviderType = (provider as ProviderType) || "gemini";
+    let resolvedProvider: ProviderType = (provider as ProviderType) || "custom";
     let resolvedApiKey: string | undefined = apiKey?.trim() || undefined;
     let resolvedBaseUrl: string | undefined = baseUrl?.trim() || undefined;
     let resolvedModel: string | undefined = model?.trim() || undefined;
+    let resolvedOrgId: string | undefined = organizationId?.trim() || undefined;
+    let resolvedName: string | undefined = providerName?.trim() || undefined;
 
     try {
       const creds = await getAnyConfiguredProviderCredentials(
         resolvedProvider,
         resolvedApiKey,
         resolvedBaseUrl,
-        resolvedModel
+        resolvedModel,
+        resolvedOrgId,
+        resolvedName
       );
       resolvedProvider = creds.provider;
       resolvedApiKey = creds.apiKey;
       resolvedBaseUrl = creds.baseUrl;
       resolvedModel = creds.defaultModel || resolvedModel;
+      resolvedOrgId = creds.organizationId || resolvedOrgId;
+      resolvedName = creds.providerName || resolvedName;
     } catch {
       // Safe fallback: If no AI key configured anywhere, continue with 100% programmatic quality improvement
       console.warn("[Improve API] No active AI provider key configured. Executing programmatic quality improvements.");
@@ -78,6 +86,8 @@ export async function POST(req: NextRequest) {
         model: resolvedModel,
         apiKey: resolvedApiKey,
         baseUrl: resolvedBaseUrl,
+        organizationId: resolvedOrgId,
+        providerName: resolvedName,
       }
     );
 

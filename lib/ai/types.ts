@@ -11,6 +11,8 @@ export interface AIProviderConfig {
   apiKey: string;
   baseUrl?: string;
   defaultModel?: string;
+  organizationId?: string;
+  providerName?: string;
 }
 
 export interface ChatMessage {

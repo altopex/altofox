@@ -19,6 +19,7 @@ import {
 } from "../lib/search-console/search-console-analyzer";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { generateWebsiteZIP, exportProjectBackup, saveProjectToDB } from "../lib/storage/db";
+import { createProjectVersionSnapshot } from "../lib/storage/project-versions";
 import { BRAND } from "@/config/brand";
 import {
   Sparkles,
@@ -369,6 +370,45 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
     }
   };
 
+  // Step 6: Download Full Improved Website ZIP with Validation
+  const handleDownloadFullZip = async () => {
+    setIsExportingZip(true);
+    try {
+      const mockProject: SavedProject = {
+        ...project,
+        files: workingFiles.map((wf) => ({
+          path: wf.path,
+          content: wf.content,
+          lastModified: Date.now(),
+        })),
+      };
+
+      const { blob, validation } = await generateWebsiteZIP(
+        mockProject,
+        "full"
+      );
+
+      if (validation && !validation.valid && validation.errors.length > 0) {
+        alert(`Validation check failed: ${validation.errors.join("; ")}`);
+        return;
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      a.download = `${safeName}-improved-full-website.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExportingZip(false);
+    }
+  };
+
   // Step 6: Download Changed Files Only ZIP
   const handleDownloadChangedZip = async () => {
     setIsExportingZip(true);
@@ -491,12 +531,16 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
       lastModified: pagesChanged.includes(wf.path) ? now : undefined,
     }));
 
+    const updatedWithVersion = createProjectVersionSnapshot(project, {
+      source: "search_console",
+      summary: `Completed Monthly Optimization Cycle #${cycleNum} (${dateRangeInput})`,
+      affectedPages: pagesChanged,
+      updatedFiles,
+    });
+
     const updatedProject: SavedProject = {
-      ...project,
-      files: updatedFiles,
-      lastEditedAt: now,
-      optimizationCycles: [...(project.optimizationCycles || []), newCycle],
-      changeLog: [newChangeLogEntry, ...(project.changeLog || [])],
+      ...updatedWithVersion,
+      optimizationCycles: [...(updatedWithVersion.optimizationCycles || []), newCycle],
     };
 
     await saveProjectToDB(updatedProject);
@@ -1131,7 +1175,32 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* Full Improved Website ZIP */}
+                <div className="p-5 bg-emerald-50/60 border border-emerald-300 rounded-xl space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      Download Improved Website (Full ZIP)
+                    </h4>
+                    <p className="text-xs text-slate-600">
+                      Packages ALL HTML pages, styles, scripts, images, and sitemap. 100% self-contained and ready to publish.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isExportingZip}
+                    onClick={handleDownloadFullZip}
+                    className="w-full inline-flex items-center justify-center space-x-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{isExportingZip ? "Validating & Zipping…" : "Download Full Improved ZIP"}</span>
+                  </button>
+                </div>
+
                 {/* Changed Files Only ZIP */}
                 <div className="p-5 bg-indigo-50/50 border border-indigo-200 rounded-xl space-y-3 flex flex-col justify-between">
                   <div className="space-y-1.5">

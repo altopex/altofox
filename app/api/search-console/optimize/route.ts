@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProvider, ProviderType } from "@/lib/ai";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
+import { optimizePageWithGscData } from "@/lib/search-console/search-console-optimizer";
+import { GSCQueryRow } from "@/lib/search-console/search-console-analyzer";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,104 +11,97 @@ export async function POST(req: NextRequest) {
       pagePath,
       currentHtml,
       query,
-      impressions,
-      position,
+      impressions = 25,
+      position = 11,
       dateRange,
-      businessType,
-      city,
-      provider = "gemini",
-      model = "gemini-1.5-pro",
+      businessType = "Contractor",
+      businessName,
+      phone,
+      city = "Local",
+      state = "TX",
+      queries: rawQueries,
+      availablePagePaths,
+      provider,
+      model,
       apiKey,
       baseUrl,
+      organizationId,
+      providerName,
     } = body;
 
-    const systemPrompt = `You are an expert technical SEO analyst optimizing a local business website based on Google Search Console performance data.
-The target page is "${pagePath}" and the high-potential search query is "${query}" (Position ${position}, ${impressions} impressions in ${dateRange || "recent period"}).
+    if (!currentHtml || typeof currentHtml !== "string") {
+      return NextResponse.json({ success: false, error: "Missing or invalid currentHtml." }, { status: 400 });
+    }
 
-Your job:
-1. Provide 3 specific actionable recommendations for better rankings and higher CTR.
-2. Rewrite the page's HTML to:
-   - Include "${query}" or its main intent naturally in a subheading (H2/H3) or dedicated FAQ item.
-   - Adjust the <title> and meta description if position is high but CTR is low.
-   - Never keyword-stuff. Preserve existing design, styling classes, and facts.
+    // Assemble query dataset for targeted optimization
+    const queryRows: GSCQueryRow[] = Array.isArray(rawQueries) && rawQueries.length > 0
+      ? rawQueries
+      : [{ query, clicks: Math.round(impressions * 0.03), impressions, ctr: 0.03, position }];
 
-Respond with ONLY valid JSON:
+    // 1. Run deterministic, fact-preserving GSC optimization
+    const gscResult = optimizePageWithGscData(currentHtml, {
+      pagePath,
+      queries: queryRows,
+      businessName,
+      businessType,
+      phone,
+      city,
+      state,
+      availablePagePaths,
+    });
+
+    let suggestions = gscResult.changesApplied;
+    let finalHtml = gscResult.optimizedHtml;
+
+    // 2. Optionally invoke AI to refine copy nuances if credentials are provided
+    try {
+      const resolvedCreds = await getAnyConfiguredProviderCredentials(
+        provider as ProviderType,
+        apiKey,
+        baseUrl,
+        model,
+        organizationId,
+        providerName
+      );
+
+      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "custom";
+      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.CUSTOM_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+
+      if (activeKey) {
+        const aiProvider = getProvider(activeProviderType);
+        const systemPrompt = `You are a surgical technical SEO analyst optimizing an existing local service web page based on Google Search Console data.
+Your job is to provide 3 concise, specific bullet points summarizing how ranking for "${query}" (Position ${position}, ${impressions} impressions) was strengthened.
+Do NOT rewrite the whole page. Respond with valid JSON:
 {
-  "suggestions": [
-    "Refined meta description to include action-oriented call to action targeting '${query}'.",
-    "Added an FAQ item addressing '${query}' directly.",
-    "Integrated query into an H2 section heading."
-  ],
-  "optimizedHtml": "The full updated HTML..."
+  "suggestions": ["Refined title and meta description to target '${query}'.", "Added an FAQ answering customer intent around '${query}'.", "Preserved all contact numbers and navigation."]
 }`;
 
-    const userPrompt = `Query: ${query}
-Current Position: ${position}
-Impressions: ${impressions}
-Page Path: ${pagePath}
-Current HTML snippet:
-${(currentHtml || "").slice(0, 16000)}`;
+        const resp = await aiProvider.generate({
+          model: resolvedCreds?.defaultModel || model || (activeProviderType === "custom" ? "llama3" : "gpt-4o-mini"),
+          prompt: `Page: ${pagePath}, Query: ${query}`,
+          systemPrompt,
+          apiKey: activeKey,
+          baseUrl: resolvedCreds?.baseUrl || baseUrl,
+          organizationId: resolvedCreds?.organizationId || organizationId,
+          providerName: resolvedCreds?.providerName || providerName,
+          jsonMode: true,
+        });
 
-    let suggestions = [
-      `Incorporated target query "${query}" into an H2 subheading.`,
-      `Added an FAQ section specifically answering customer questions around "${query}".`,
-      `Enhanced meta description with direct call to action to boost organic CTR.`,
-    ];
-    let optimizedHtml = currentHtml;
-
-    try {
-      let resolvedCreds;
-      try {
-        resolvedCreds = await getAnyConfiguredProviderCredentials(
-          provider as ProviderType,
-          apiKey,
-          baseUrl,
-          model
-        );
-      } catch {
-        // Fallback to direct key or env
+        const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+          suggestions = parsed.suggestions;
+        }
       }
-
-      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "gemini";
-      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
-
-      if (!activeKey) {
-        throw new Error("No active AI key found for search console optimization.");
-      }
-
-      const aiProvider = getProvider(activeProviderType);
-      const resp = await aiProvider.generate({
-        model: resolvedCreds?.defaultModel || model || "gemini-1.5-pro",
-        prompt: userPrompt,
-        systemPrompt,
-        apiKey: activeKey,
-        baseUrl: resolvedCreds?.baseUrl || baseUrl,
-        jsonMode: true,
-      });
-
-      const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
-      const parsed = JSON.parse(cleanJson);
-      if (Array.isArray(parsed.suggestions)) suggestions = parsed.suggestions;
-      if (parsed.optimizedHtml) optimizedHtml = parsed.optimizedHtml;
     } catch {
-      // Programmatic optimization fallback: add query FAQ
-      const newFaqItem = `
-<details class="bg-indigo-50/50 border border-indigo-200 rounded-xl p-4 my-3">
-  <summary class="font-bold text-sm text-slate-900 cursor-pointer select-none">How does your team handle ${query} in ${city}?</summary>
-  <p class="text-xs text-slate-600 mt-2 leading-relaxed">Our licensed technicians provide upfront pricing, prompt dispatch, and comprehensive service guarantees for ${query}.</p>
-</details>
-`;
-      if (optimizedHtml.includes("</main>")) {
-        optimizedHtml = optimizedHtml.replace("</main>", `${newFaqItem}\n</main>`);
-      } else if (optimizedHtml.includes("<footer")) {
-        optimizedHtml = optimizedHtml.replace("<footer", `${newFaqItem}\n<footer`);
-      }
+      // AI refinement optional; deterministic optimization succeeded
     }
 
     return NextResponse.json({
       success: true,
       suggestions,
-      optimizedHtml,
+      optimizedHtml: finalHtml,
+      preservedFacts: gscResult.preservedFacts,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

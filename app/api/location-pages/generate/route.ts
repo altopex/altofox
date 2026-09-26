@@ -1,117 +1,219 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProvider } from "@/lib/ai";
 import { ProviderType } from "@/lib/ai/types";
+import { getProviderCredentials } from "@/lib/ai/keys";
+import { generateWebsite } from "@/lib/ai/generate-website";
 import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "@/templates/sections/locationPage";
 import { resolvePageImage } from "@/lib/photos/image-provider";
 import { THEMES } from "@/lib/themes";
 import { SiteInfoJSON } from "@/lib/generator/content-schema";
-import { calculateTextSimilarity } from "@/lib/quality/quality-checker";
-
-const ROTATING_ANGLES = [
-  "Common seasonal challenges and climate conditions affecting local homes in this region",
-  "What local homeowners can expect during our dispatch, diagnosis, and arrival",
-  "Scheduling, travel, and how we coordinate same-day emergency coverage",
-  "How to choose an honest, licensed trade contractor in this specific community",
-  "Service-specific maintenance and prevention guide tailored to regional architecture",
-];
+import {
+  buildLocationContentStrategy,
+  auditLocationPageQuality,
+  auditBulkLocationPages,
+} from "@/lib/location/quality-engine";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const {
-      cityData, // { city, stateId, stateName, county, population, distanceOffset, zipCodes, localNotes }
+      cityData, // { city, stateId, stateName, county, population, distanceOffset, zipCodes, localNotes, lat, lng }
       businessInfo, // SiteInfoJSON
       themeId = "modern-pro",
       mainService = "Plumbing Service",
       servicesList = [],
       provider = "gemini",
-      model = "gemini-1.5-pro",
+      model,
+      baseUrl,
+      organizationId,
+      providerName,
       apiKey,
       angleIndex = 0,
       allSelectedCities = [],
       domain = "example.com",
+      existingPages = [], // Array<{ slug: string; html: string }>
+      bulkCities, // Optional array of cityData objects for bulk generation
     } = body;
 
+    // Handle Bulk Location Generation if requested
+    if (Array.isArray(bulkCities) && bulkCities.length > 0) {
+      const generatedPages: Array<{
+        slug: string;
+        html: string;
+        city: string;
+        stateId: string;
+        service: string;
+        context: LocationPageContext;
+      }> = [];
+
+      const theme = THEMES.find((t: any) => t.id === themeId) || THEMES[0];
+
+      for (let i = 0; i < bulkCities.length; i++) {
+        const c = bulkCities[i];
+        const strategy = buildLocationContentStrategy({
+          serviceName: mainService,
+          cityData: c,
+          businessInfo: businessInfo as SiteInfoJSON,
+          angleIndex: i,
+          allSelectedCities,
+        });
+
+        const resolvedHero = resolvePageImage(
+          {
+            pageTitle: `${mainService} in ${c.city}, ${c.stateId}`,
+            city: c.city,
+            state: c.stateName || c.stateId,
+            stateCode: c.stateId,
+            trade: mainService,
+            slot: "hero",
+            pageType: "location",
+            targetKeyword: `${mainService.toLowerCase()} in ${c.city.toLowerCase()}`,
+            width: 1200,
+            height: 800,
+          },
+          {
+            preferredSource: provider === "bing" ? "bing" : (provider as any),
+            pexelsKey: apiKey,
+          }
+        );
+
+        const locCtx: LocationPageContext = {
+          city: c.city,
+          stateId: c.stateId,
+          stateName: c.stateName || c.stateId,
+          county: c.county || "Regional",
+          population: c.population,
+          distanceOffset: c.distanceOffset,
+          zipCodes: c.zipCodes,
+          localNotes: c.localNotes,
+          angleUsed: strategy.assignedAngle,
+          h1: strategy.h1,
+          metaTitle: strategy.metaTitle,
+          metaDescription: strategy.metaDescription,
+          introParagraph: strategy.introParagraph,
+          angleSectionHeadline: strategy.regionalClimateHeadline,
+          angleSectionContent: strategy.regionalClimateContent,
+          commonProblemsTitle: strategy.commonProblemsTitle,
+          commonProblems: strategy.commonProblems,
+          whenToCall: strategy.whenToCall,
+          customerPrepSteps: strategy.customerPrepSteps,
+          serviceScopeTitle: strategy.serviceScopeTitle,
+          servicesIncluded: servicesList.length > 0 ? servicesList.slice(0, 6) : strategy.servicesOfferedInCity,
+          processSteps: strategy.serviceScope,
+          faqs: strategy.faqs,
+          heroImage: {
+            url: resolvedHero.url,
+            fallbackUrl: resolvedHero.fallbackUrl,
+            alt: resolvedHero.alt,
+            width: resolvedHero.width,
+            height: resolvedHero.height,
+          },
+        };
+
+        const locationBodyHtml = renderLocationPage(
+          locCtx,
+          businessInfo as SiteInfoJSON,
+          theme,
+          allSelectedCities,
+          { lat: c.lat, lng: c.lng }
+        );
+
+        const slug = `${mainService.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`;
+
+        generatedPages.push({
+          slug,
+          html: locationBodyHtml,
+          city: c.city,
+          stateId: c.stateId,
+          service: mainService,
+          context: locCtx,
+        });
+      }
+
+      const bulkAnalysis = auditBulkLocationPages(generatedPages);
+
+      return NextResponse.json({
+        success: true,
+        bulk: true,
+        analysis: bulkAnalysis,
+        pages: generatedPages.map((p) => ({
+          slug: p.slug,
+          city: p.city,
+          stateId: p.stateId,
+          context: p.context,
+          html: p.html,
+        })),
+      });
+    }
+
+    // Single Location Page Generation
     if (!cityData || !cityData.city) {
       return NextResponse.json({ success: false, error: "Missing city data" }, { status: 400 });
     }
 
-    const assignedAngle = ROTATING_ANGLES[angleIndex % ROTATING_ANGLES.length];
     const theme = THEMES.find((t: any) => t.id === themeId) || THEMES[0];
 
-    // Local data package strictly adhering to Google spam rules (no invented facts or fake reviews)
-    const systemPrompt = `You are an elite local SEO content strategist writing a dedicated, high-converting location landing page for a local service contractor.
-You must follow Google's local SEO and helpful content guidelines strictly:
-- Target 600–900 words of genuinely useful, non-doorway content.
-- Unique angle: "${assignedAngle}".
-- Write specifically for ${cityData.city}, ${cityData.stateId} (${cityData.county} County).
-- Distance & direction from hub: ${cityData.distanceOffset || "Central service hub"}.
-- Use ONLY truthful facts provided in the data package. Never invent local landmarks, fake neighborhood names, fake statistics, or fake reviews.
-- Respond with ONLY valid JSON (no markdown, no code fences):
+    // Build the intent-driven content strategy
+    let strategy = buildLocationContentStrategy({
+      serviceName: mainService,
+      cityData,
+      businessInfo: businessInfo as SiteInfoJSON,
+      angleIndex,
+      allSelectedCities,
+    });
+
+    // If AI generation is requested and API key or provider is present, attempt AI enhancement
+    let creds: any = null;
+    try {
+      creds = await getProviderCredentials(provider as ProviderType, apiKey, baseUrl, model, organizationId, providerName);
+    } catch {}
+
+    if (creds?.apiKey) {
+      try {
+        const systemPrompt = `You are a top-tier local SEO content strategist. Write a high-converting, strictly truthful location landing page for ${mainService} in ${cityData.city}, ${cityData.stateId} (${cityData.county} County).
+Follow Google helpful content & local search guidelines strictly:
+- Target intent: "${strategy.searchIntent}".
+- Assigned local angle: "${strategy.assignedAngle}".
+- Never fabricate fake local landmarks, fake reviews, fake licenses, or fake statistics.
+- Respond with ONLY valid JSON (no markdown backticks, no preamble):
 {
-  "h1": "[Main Service] in [City], [State]",
-  "metaTitle": "[Primary Keyword] | [Business Name]",
-  "metaDescription": "Concise 120-155 character description with call to action",
-  "introParagraph": "Engaging 80-120 word intro mentioning the city, county, prompt dispatch, and license.",
-  "angleSectionHeadline": "Specific heading reflecting the assigned angle",
-  "angleSectionContent": "<p>2-3 detailed paragraphs analyzing local challenges, regional climate, or scheduling standards for homes in this city.</p>",
-  "processSteps": [
-    { "title": "Step 1 Title", "desc": "Step 1 description" },
-    { "title": "Step 2 Title", "desc": "Step 2 description" },
-    { "title": "Step 3 Title", "desc": "Step 3 description" }
-  ],
-  "faqs": [
-    { "question": "FAQ question mentioning city?", "answer": "Detailed answer explaining response time, warranty, or estimates." },
-    { "question": "FAQ question 2?", "answer": "Answer 2." },
-    { "question": "FAQ question 3?", "answer": "Answer 3." }
-  ]
+  "h1": "[Service] in [City], [State]",
+  "metaTitle": "[Title under 60 chars with brand]",
+  "metaDescription": "[Action-oriented description under 155 chars]",
+  "introParagraph": "[Direct 80-120 word opening answering service, location, need, and action]",
+  "angleSectionHeadline": "[Headline reflecting assigned angle]",
+  "angleSectionContent": "<p>2-3 detailed paragraphs analyzing local challenges, climate standards, or property architecture.</p>"
 }`;
 
-    const userPrompt = `Business: ${businessInfo.businessName || "Local Specialist"}
-Trade: ${mainService}
-Target City: ${cityData.city}, ${cityData.stateId} (${cityData.county} County)
-Population: ${cityData.population ? cityData.population.toLocaleString() : "Regional"}
-Distance Offset: ${cityData.distanceOffset || "Local Hub"}
-ZIP Codes: ${cityData.zipCodes ? cityData.zipCodes.slice(0, 5).join(", ") : "Local"}
-User Notes: ${cityData.localNotes || "None"}
-Services Available: ${servicesList.join(", ")}
-Confirmed Facts: License ${businessInfo.licenseNumber || "Licensed"}, 24/7 emergency dispatch, warranty protection.
-Angle: ${assignedAngle}`;
+        const userPrompt = `Business: ${businessInfo.businessName || "Local Specialist"}
+Trade Service: ${mainService}
+Location: ${cityData.city}, ${cityData.stateId} (${cityData.county} County)
+Phone: ${businessInfo.phone || "(555) 123-4567"}
+Intent: ${strategy.searchIntent}
+Angle: ${strategy.assignedAngle}`;
 
-    let aiResult: any = null;
+        const rawText = await generateWebsite({
+          provider: provider as ProviderType,
+          apiKey: creds.apiKey,
+          model: model || creds.defaultModel,
+          prompt: userPrompt,
+          systemPrompt,
+          maxTokens: 2000,
+          baseUrl: creds.baseUrl,
+          organizationId: creds.organizationId,
+          providerName: creds.providerName,
+        });
 
-    try {
-      const aiProvider = getProvider((provider as ProviderType) || "gemini");
-      const resp = await aiProvider.generate({
-        model: model || "gemini-1.5-pro",
-        prompt: userPrompt,
-        systemPrompt,
-        apiKey: apiKey || process.env.GEMINI_API_KEY,
-        jsonMode: true,
-      });
-
-      const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
-      aiResult = JSON.parse(cleanJson);
-    } catch {
-      // Fallback structured content if AI unavailable
-      aiResult = {
-        h1: `${mainService} in ${cityData.city}, ${cityData.stateId}`,
-        metaTitle: `${mainService} in ${cityData.city}, ${cityData.stateId} | ${businessInfo.businessName || "AltoFox"}`,
-        metaDescription: `Prompt, licensed ${mainService.toLowerCase()} in ${cityData.city}, ${cityData.stateId}. Upfront pricing and satisfaction guaranteed. Call today!`,
-        introParagraph: `When you need dependable, prompt ${mainService.toLowerCase()} in ${cityData.city} and throughout ${cityData.county} County, our experienced technicians provide upfront estimates and fast dispatch. We understand the specific plumbing and utility configurations across local properties.`,
-        angleSectionHeadline: `Professional Standards & Regional Service in ${cityData.city}`,
-        angleSectionContent: `<p>Homes and commercial facilities in ${cityData.city} face unique demands through changing regional seasons. From sudden winter freezes to heavy summer usage, ensuring reliable utility performance requires prompt local expertise.</p><p>Our certified technicians arrive fully equipped with modern diagnostic tools to resolve issues cleanly on the first visit, preventing costly secondary property damage.</p>`,
-        processSteps: [
-          { title: "Direct Local Dispatch", desc: `Call our team for fast coordination to your ${cityData.city} location.` },
-          { title: "Upfront Evaluation", desc: "We diagnose the issue thoroughly and provide clear, flat-rate options." },
-          { title: "Guaranteed Resolution", desc: "Work completed cleanly according to local building codes with parts warranty." },
-        ],
-        faqs: [
-          { question: `How fast can you dispatch to ${cityData.city}?`, answer: `We typically arrive within 45 to 60 minutes for priority calls across ${cityData.city} and ${cityData.county} County.` },
-          { question: `Are your technicians licensed in ${cityData.stateId}?`, answer: `Yes, all work is performed by state-licensed technicians adhering strictly to municipal safety codes.` },
-          { question: `Do you provide upfront pricing for ${cityData.city} residents?`, answer: "Always. We evaluate your job on-site and present transparent flat-rate pricing before starting any work." },
-        ],
-      };
+        const cleanJson = rawText.replace(/```json|```/gi, "").trim();
+        const parsed = JSON.parse(cleanJson);
+        if (parsed.h1) strategy.h1 = parsed.h1;
+        if (parsed.metaTitle) strategy.metaTitle = parsed.metaTitle;
+        if (parsed.metaDescription) strategy.metaDescription = parsed.metaDescription;
+        if (parsed.introParagraph) strategy.introParagraph = parsed.introParagraph;
+        if (parsed.angleSectionHeadline) strategy.regionalClimateHeadline = parsed.angleSectionHeadline;
+        if (parsed.angleSectionContent) strategy.regionalClimateContent = parsed.angleSectionContent;
+      } catch (aiErr) {
+        console.warn("[Location Engine] AI call skipped or failed, using robust rule-based content strategy:", aiErr);
+      }
     }
 
     const resolvedHero = resolvePageImage(
@@ -142,16 +244,22 @@ Angle: ${assignedAngle}`;
       distanceOffset: cityData.distanceOffset,
       zipCodes: cityData.zipCodes,
       localNotes: cityData.localNotes,
-      angleUsed: assignedAngle,
-      h1: aiResult.h1 || `${mainService} in ${cityData.city}, ${cityData.stateId}`,
-      metaTitle: aiResult.metaTitle || `${mainService} in ${cityData.city}, ${cityData.stateId}`,
-      metaDescription: aiResult.metaDescription || `Professional ${mainService.toLowerCase()} in ${cityData.city}.`,
-      introParagraph: aiResult.introParagraph || "",
-      angleSectionHeadline: aiResult.angleSectionHeadline || "Local Service Standards",
-      angleSectionContent: aiResult.angleSectionContent || "",
-      servicesIncluded: servicesList.length > 0 ? servicesList.slice(0, 6) : ["Repairs", "Maintenance", "Emergency Service"],
-      processSteps: aiResult.processSteps || [],
-      faqs: aiResult.faqs || [],
+      angleUsed: strategy.assignedAngle,
+      searchIntent: strategy.searchIntent,
+      h1: strategy.h1,
+      metaTitle: strategy.metaTitle,
+      metaDescription: strategy.metaDescription,
+      introParagraph: strategy.introParagraph,
+      angleSectionHeadline: strategy.regionalClimateHeadline,
+      angleSectionContent: strategy.regionalClimateContent,
+      commonProblemsTitle: strategy.commonProblemsTitle,
+      commonProblems: strategy.commonProblems,
+      whenToCall: strategy.whenToCall,
+      customerPrepSteps: strategy.customerPrepSteps,
+      serviceScopeTitle: strategy.serviceScopeTitle,
+      servicesIncluded: servicesList.length > 0 ? servicesList.slice(0, 6) : strategy.servicesOfferedInCity,
+      processSteps: strategy.serviceScope,
+      faqs: strategy.faqs,
       heroImage: {
         url: resolvedHero.url,
         fallbackUrl: resolvedHero.fallbackUrl,
@@ -161,7 +269,7 @@ Angle: ${assignedAngle}`;
       },
     };
 
-    const locationBodyHtml = renderLocationPage(
+    let locationBodyHtml = renderLocationPage(
       context,
       businessInfo as SiteInfoJSON,
       theme,
@@ -172,13 +280,48 @@ Angle: ${assignedAngle}`;
     const slug = `${mainService.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${cityData.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${cityData.stateId.toLowerCase()}.html`;
     const schemaHtml = buildLocationPageSchema(context, businessInfo as SiteInfoJSON, domain, slug);
 
+    // Run Quality & Uniqueness Audit against sibling pages
+    let qualityScore = auditLocationPageQuality(locationBodyHtml, context, existingPages);
+
+    // If similarity is too high (> 0.65), auto-diversify angle and re-render
+    if (qualityScore.similarityMetrics.maxSimilarity > 0.65 && existingPages.length > 0) {
+      console.log(`[Location Engine] Similarity (${Math.round(qualityScore.similarityMetrics.maxSimilarity * 100)}%) exceeded threshold. Auto-diversifying angle...`);
+      strategy = buildLocationContentStrategy({
+        serviceName: mainService,
+        cityData,
+        businessInfo: businessInfo as SiteInfoJSON,
+        angleIndex: angleIndex + 2, // Rotate to distinct technical angle
+        allSelectedCities,
+      });
+
+      context.angleUsed = strategy.assignedAngle;
+      context.angleSectionHeadline = strategy.regionalClimateHeadline;
+      context.angleSectionContent = strategy.regionalClimateContent;
+      context.commonProblems = strategy.commonProblems;
+      context.processSteps = strategy.serviceScope;
+      context.faqs = strategy.faqs;
+
+      locationBodyHtml = renderLocationPage(
+        context,
+        businessInfo as SiteInfoJSON,
+        theme,
+        allSelectedCities,
+        { lat: cityData.lat, lng: cityData.lng }
+      );
+
+      qualityScore = auditLocationPageQuality(locationBodyHtml, context, existingPages);
+    }
+
     return NextResponse.json({
       success: true,
       slug,
       context,
       locationBodyHtml,
       schemaHtml,
-      angleUsed: assignedAngle,
+      angleUsed: context.angleUsed,
+      strategy,
+      qualityScore,
+      status: qualityScore.status,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

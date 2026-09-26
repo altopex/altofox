@@ -69,18 +69,19 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   },
   custom: {
     id: "custom",
-    name: "Custom (Local / Ollama)",
-    description: "Connect Ollama, LM Studio, vLLM, or any OpenAI-compatible API endpoint",
-    defaultBaseUrl: "http://localhost:11434/v1",
-    defaultModel: "llama3",
+    name: "Custom (OpenAI-compatible)",
+    description: "Connect Ollama, LM Studio, vLLM, Together, or any OpenAI-compatible API endpoint",
+    defaultBaseUrl: "https://example.com/v1",
+    defaultModel: "model-name",
     popularModels: [
-      { id: "llama3", label: "Llama 3 (Ollama)" },
-      { id: "qwen2.5-coder", label: "Qwen 2.5 Coder" },
-      { id: "mistral", label: "Mistral" },
+      { id: "llama-3.3-70b", label: "Llama 3.3 70B" },
+      { id: "mistral-large-latest", label: "Mistral Large" },
+      { id: "deepseek-chat", label: "DeepSeek V3" },
+      { id: "gpt-4o", label: "GPT-4o Compatible" },
     ],
     requiresBaseUrl: true,
-    placeholderKey: "ollama (or API key)",
-    docsUrl: "https://github.com/ollama/ollama",
+    placeholderKey: "sk-... or your custom key",
+    docsUrl: "https://platform.openai.com/docs/api-reference",
   },
 };
 
@@ -95,6 +96,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   const [keyInput, setKeyInput] = useState("");
   const [baseUrlInput, setBaseUrlInput] = useState("");
   const [modelInput, setModelInput] = useState("");
+  const [providerNameInput, setProviderNameInput] = useState("My Custom AI");
+  const [orgIdInput, setOrgIdInput] = useState("");
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -112,7 +115,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
       const keys: Record<string, string> = {};
       const providers = ["gemini", "openai", "openrouter", "custom"];
       for (const p of providers) {
-        const stored = localStorage.getItem(`altofox_key_${p}`);
+        const stored = localStorage.getItem(`altofox_key_${p}`) || localStorage.getItem(`ranklocal_key_${p}`);
         if (stored) keys[p] = stored;
       }
       setSavedKeys(keys);
@@ -121,11 +124,27 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
       setKeyInput(currentStoredKey);
 
       const preset = PROVIDER_PRESETS_MAP[selectedProvider];
-      const storedModel = localStorage.getItem(`altofox_model_${selectedProvider}`);
+      const storedModel =
+        localStorage.getItem(`altofox_model_${selectedProvider}`) ||
+        localStorage.getItem(`ranklocal_model_${selectedProvider}`);
       setModelInput(storedModel || preset?.defaultModel || "");
 
-      const storedBaseUrl = localStorage.getItem(`altofox_base_url_${selectedProvider}`);
+      const storedBaseUrl =
+        localStorage.getItem(`altofox_base_url_${selectedProvider}`) ||
+        localStorage.getItem(`ranklocal_base_url_${selectedProvider}`);
       setBaseUrlInput(storedBaseUrl || preset?.defaultBaseUrl || "");
+
+      const storedOrgId =
+        localStorage.getItem("altofox_org_id_custom") ||
+        localStorage.getItem("ranklocal_org_id_custom") ||
+        "";
+      setOrgIdInput(storedOrgId);
+
+      const storedName =
+        localStorage.getItem("altofox_provider_name_custom") ||
+        localStorage.getItem("ranklocal_provider_name_custom") ||
+        "My Custom AI";
+      setProviderNameInput(storedName);
 
       setTestResult(null);
       setStatusMessage(null);
@@ -161,6 +180,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
           apiKey: keyToTest,
           baseUrl: baseUrlInput.trim() || undefined,
           model: modelInput.trim() || currentPreset.defaultModel,
+          organizationId: selectedProvider === "custom" ? orgIdInput.trim() || undefined : undefined,
+          providerName: selectedProvider === "custom" ? providerNameInput.trim() || undefined : undefined,
         }),
       });
       const data = await res.json();
@@ -189,16 +210,31 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
 
     const keyToPersist = cleanKey || currentSavedKey;
     localStorage.setItem(`altofox_key_${selectedProvider}`, keyToPersist);
+    localStorage.setItem(`ranklocal_key_${selectedProvider}`, keyToPersist);
     if (modelInput.trim()) {
       localStorage.setItem(`altofox_model_${selectedProvider}`, modelInput.trim());
+      localStorage.setItem(`ranklocal_model_${selectedProvider}`, modelInput.trim());
     }
     if (baseUrlInput.trim()) {
       localStorage.setItem(`altofox_base_url_${selectedProvider}`, baseUrlInput.trim());
+      localStorage.setItem(`ranklocal_base_url_${selectedProvider}`, baseUrlInput.trim());
+    }
+    if (selectedProvider === "custom") {
+      if (orgIdInput.trim()) {
+        localStorage.setItem("altofox_org_id_custom", orgIdInput.trim());
+        localStorage.setItem("ranklocal_org_id_custom", orgIdInput.trim());
+      }
+      if (providerNameInput.trim()) {
+        localStorage.setItem("altofox_provider_name_custom", providerNameInput.trim());
+        localStorage.setItem("ranklocal_provider_name_custom", providerNameInput.trim());
+      }
     }
 
     // Set as active provider and model
     localStorage.setItem("altofox_active_provider", selectedProvider);
+    localStorage.setItem("ranklocal_active_provider", selectedProvider);
     localStorage.setItem("altofox_active_model", modelInput.trim() || currentPreset.defaultModel);
+    localStorage.setItem("ranklocal_active_model", modelInput.trim() || currentPreset.defaultModel);
 
     setSavedKeys((prev) => ({ ...prev, [selectedProvider]: keyToPersist }));
 
@@ -211,6 +247,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
         apiKey: keyToPersist,
         baseUrl: baseUrlInput.trim() || undefined,
         defaultModel: modelInput.trim() || undefined,
+        organizationId: selectedProvider === "custom" ? orgIdInput.trim() || undefined : undefined,
+        providerName: selectedProvider === "custom" ? providerNameInput.trim() || undefined : undefined,
       }),
     }).catch(() => {});
 
@@ -224,8 +262,17 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   // Clear Key
   const handleClearKey = () => {
     localStorage.removeItem(`altofox_key_${selectedProvider}`);
+    localStorage.removeItem(`ranklocal_key_${selectedProvider}`);
     localStorage.removeItem(`altofox_model_${selectedProvider}`);
+    localStorage.removeItem(`ranklocal_model_${selectedProvider}`);
     localStorage.removeItem(`altofox_base_url_${selectedProvider}`);
+    localStorage.removeItem(`ranklocal_base_url_${selectedProvider}`);
+    if (selectedProvider === "custom") {
+      localStorage.removeItem("altofox_org_id_custom");
+      localStorage.removeItem("ranklocal_org_id_custom");
+      localStorage.removeItem("altofox_provider_name_custom");
+      localStorage.removeItem("ranklocal_provider_name_custom");
+    }
 
     setSavedKeys((prev) => {
       const copy = { ...prev };
@@ -357,6 +404,22 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
               </p>
             </div>
 
+            {/* Provider Name (if custom) */}
+            {selectedProvider === "custom" && (
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                  Provider Name
+                </label>
+                <input
+                  type="text"
+                  value={providerNameInput}
+                  onChange={(e) => setProviderNameInput(e.target.value)}
+                  placeholder="My Custom AI"
+                  className="input-base"
+                />
+              </div>
+            )}
+
             {/* Base URL (if custom) */}
             {currentPreset.requiresBaseUrl && (
               <div>
@@ -367,8 +430,24 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
                   type="text"
                   value={baseUrlInput}
                   onChange={(e) => setBaseUrlInput(e.target.value)}
-                  placeholder="http://localhost:11434/v1"
-                  className="input-base"
+                  placeholder="https://example.com/v1"
+                  className="input-base font-mono text-xs"
+                />
+              </div>
+            )}
+
+            {/* Organization ID (if custom) */}
+            {selectedProvider === "custom" && (
+              <div>
+                <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                  Organization ID <span className="text-[#64748B] font-normal">(Optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={orgIdInput}
+                  onChange={(e) => setOrgIdInput(e.target.value)}
+                  placeholder="org-... (only if required by provider)"
+                  className="input-base font-mono text-xs"
                 />
               </div>
             )}

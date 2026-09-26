@@ -14,10 +14,12 @@ export async function POST(req: NextRequest) {
       businessType,
       city,
       state,
-      provider = "gemini",
-      model = "gemini-1.5-pro",
+      provider,
+      model,
       apiKey,
       baseUrl,
+      organizationId,
+      providerName,
     } = body;
 
     if (!currentHtml || !primaryKeyword) {
@@ -66,26 +68,30 @@ ${currentHtml.slice(0, 18000)}`;
           provider as ProviderType,
           apiKey,
           baseUrl,
-          model
+          model,
+          organizationId,
+          providerName
         );
       } catch {
         // Fallback to direct key or env
       }
 
-      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "gemini";
-      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "custom";
+      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.CUSTOM_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
 
       if (!activeKey) {
-        throw new Error("No active AI API key found for page optimization.");
+        throw new Error("No AI provider is configured. Please configure an AI provider in Settings.");
       }
 
       const aiProvider = getProvider(activeProviderType);
       const resp = await aiProvider.generate({
-        model: resolvedCreds?.defaultModel || model || "gemini-1.5-pro",
+        model: resolvedCreds?.defaultModel || model || (activeProviderType === "custom" ? "llama3" : "gpt-4o-mini"),
         prompt: userPrompt,
         systemPrompt,
         apiKey: activeKey,
         baseUrl: resolvedCreds?.baseUrl || baseUrl,
+        organizationId: resolvedCreds?.organizationId || organizationId,
+        providerName: resolvedCreds?.providerName || providerName,
         jsonMode: true,
       });
 

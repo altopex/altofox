@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
       model,
       apiKey,
       baseUrl,
+      organizationId,
+      providerName,
       formData,
       demo = false,
       pexelsKey,
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
     // 1. Get credentials for the provider
     let creds;
     try {
-      creds = await getProviderCredentials(providerType, apiKey, baseUrl, model);
+      creds = await getProviderCredentials(providerType, apiKey, baseUrl, model, organizationId, providerName);
     } catch (err) {
       // If no API key configured, use default trade content JSON and assemble seamlessly
       console.warn("No API key configured. Generating with section template engine:", err);
@@ -226,6 +228,8 @@ export async function POST(req: NextRequest) {
         systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
         maxTokens: 12000,
         baseUrl: creds.baseUrl,
+        organizationId: creds.organizationId,
+        providerName: creds.providerName,
       });
 
       try {
@@ -243,6 +247,8 @@ export async function POST(req: NextRequest) {
           systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
           maxTokens: 12000,
           baseUrl: creds.baseUrl,
+          organizationId: creds.organizationId,
+          providerName: creds.providerName,
         });
 
         const retryParsed = extractAndParseJSON(retryRaw);
@@ -269,6 +275,8 @@ export async function POST(req: NextRequest) {
           systemPrompt: QUALITY_REVIEW_SYSTEM_PROMPT,
           maxTokens: 12000,
           baseUrl: creds.baseUrl,
+          organizationId: creds.organizationId,
+          providerName: creds.providerName,
         });
 
         const parsedReview = extractAndParseJSON(reviewRaw);

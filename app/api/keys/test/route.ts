@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { provider, apiKey, baseUrl, model } = body;
+    const { provider, apiKey, baseUrl, model, organizationId, providerName } = body;
 
     if (!provider) {
       return NextResponse.json(
@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
     let keyToTest = (apiKey || "").trim();
     let urlToTest = (baseUrl || "").trim();
     let modelToTest = (model || "").trim();
+    let orgToTest = (organizationId || "").trim();
+    let nameToTest = (providerName || "").trim();
 
     if (!keyToTest) {
       try {
@@ -28,16 +30,20 @@ export async function POST(req: NextRequest) {
           provider as ProviderType,
           undefined,
           baseUrl,
-          model
+          model,
+          organizationId,
+          providerName
         );
         keyToTest = credentials.apiKey;
         urlToTest = credentials.baseUrl || urlToTest;
         modelToTest = credentials.defaultModel || modelToTest;
+        orgToTest = credentials.organizationId || orgToTest;
+        nameToTest = credentials.providerName || nameToTest;
       } catch (credErr) {
         return NextResponse.json(
           {
             success: false,
-            message: credErr instanceof Error ? credErr.message : "No API key found to test.",
+            message: credErr instanceof Error ? credErr.message : "No AI provider is configured. Please add your credentials in Settings.",
           },
           { status: 400 }
         );
@@ -47,8 +53,10 @@ export async function POST(req: NextRequest) {
     const result = await testConnection({
       provider,
       apiKey: keyToTest,
-      baseUrl: urlToTest,
-      model: modelToTest,
+      baseUrl: urlToTest || undefined,
+      model: modelToTest || undefined,
+      organizationId: orgToTest || undefined,
+      providerName: nameToTest || undefined,
     });
 
     return NextResponse.json(result);

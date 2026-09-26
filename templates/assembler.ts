@@ -10,6 +10,7 @@ import * as Sections from "./sections";
 import { renderServiceAreasHub, ServiceAreaCityItem } from "./sections/serviceAreasHub";
 import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "./sections/locationPage";
 import { getNearestSelectedCities } from "../lib/data/us-cities";
+import { buildLocationContentStrategy, ROTATING_ANGLES } from "../lib/location/quality-engine";
 import { runQualityChecksAndAutoFix, QualityReport, AssembleFile } from "../lib/quality/quality-checker";
 import {
   PageRegistry,
@@ -241,7 +242,7 @@ export async function assembleWebsite(
     /^https?:\/\//,
     ""
   );
-  const mainTrade = data.schema?.type || data.site.businessName || "Local Service";
+  const mainTrade = data.schema?.type || (data.site as any).niche || (data.site as any).primaryTrade || (data.site as any).trade || data.site.businessName || "Local Service";
   const tradeSlug = mainTrade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const tradeCategory = detectTradeCategory(mainTrade);
   const linkStyle: LinkStyle = options?.linkStyle || "web";
@@ -611,14 +612,6 @@ ${mobileCallBarHtml}
     });
 
     // B. Dedicated Location Landing Page per City
-    const ROTATING_ANGLES = [
-      "Common seasonal challenges and climate conditions affecting local homes in this region",
-      "What local homeowners can expect during our dispatch, diagnosis, and arrival",
-      "Scheduling, travel, and how we coordinate same-day emergency coverage",
-      "How to choose an honest, licensed trade contractor in this specific community",
-      "Service-specific maintenance and prevention guide tailored to regional architecture",
-    ];
-
     for (let i = 0; i < effectiveAreaCities.length; i++) {
       const c = effectiveAreaCities[i];
       const cityClean = c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -659,6 +652,24 @@ ${mobileCallBarHtml}
         4
       );
 
+      const strategy = buildLocationContentStrategy({
+        serviceName: mainTrade,
+        cityData: {
+          city: c.city,
+          stateId: c.stateId,
+          stateName: c.stateId,
+          county: c.county || "Regional",
+          population: c.population,
+          distanceOffset: c.distanceOffset,
+          localNotes: c.localNotes,
+          lat: c.lat,
+          lng: c.lng,
+        },
+        businessInfo: data.site,
+        angleIndex: i,
+        allSelectedCities: nearestCities,
+      });
+
       const locCtx: LocationPageContext = {
         city: c.city,
         stateId: c.stateId,
@@ -667,28 +678,22 @@ ${mobileCallBarHtml}
         population: c.population,
         distanceOffset: c.distanceOffset,
         localNotes: c.localNotes,
-        angleUsed: assignedAngle,
+        angleUsed: strategy.assignedAngle,
         nearestCities,
-        h1: `${mainTrade} in ${c.city}, ${c.stateId}`,
-        metaTitle: `${mainTrade} in ${c.city}, ${c.stateId} | ${data.site.businessName}`,
-        metaDescription: `Prompt, licensed ${mainTrade.toLowerCase()} in ${c.city}, ${c.stateId}. Upfront pricing and satisfaction guaranteed. Call now!`,
-        introParagraph: `When you need dependable, prompt ${mainTrade.toLowerCase()} in ${c.city} and throughout ${c.county} County, our experienced technicians provide upfront estimates and fast dispatch. We understand the specific plumbing and utility configurations across local properties.`,
-        angleSectionHeadline: `Professional Standards & Regional Service in ${c.city}`,
-        angleSectionContent: `<p>Homes and commercial facilities in ${c.city} face unique demands through changing regional seasons. From sudden seasonal shifts to heavy utility usage, ensuring reliable performance requires prompt local expertise.</p><p>Our certified technicians arrive fully equipped with modern diagnostic tools to resolve issues cleanly on the first visit, preventing costly secondary property damage.</p>`,
-        servicesIncluded:
-          data.site.serviceAreas && data.site.serviceAreas.length > 0
-            ? data.site.serviceAreas.slice(0, 6)
-            : ["24/7 Emergency Repairs", "Diagnostic Inspection", "System Maintenance & Replacement"],
-        processSteps: [
-          { title: "Direct Local Dispatch", desc: `Call our team for fast coordination to your ${c.city} location.` },
-          { title: "Upfront Evaluation", desc: "We diagnose the issue thoroughly and provide clear, flat-rate options." },
-          { title: "Guaranteed Resolution", desc: "Work completed cleanly according to local building codes with parts warranty." },
-        ],
-        faqs: [
-          { question: `How fast can you dispatch to ${c.city}?`, answer: `We typically arrive within 45 to 60 minutes for priority calls across ${c.city} and ${c.county} County.` },
-          { question: `Are your technicians licensed in ${c.stateId}?`, answer: `Yes, all work is performed by state-licensed technicians adhering strictly to municipal safety codes.` },
-          { question: `Do you provide upfront pricing for ${c.city} residents?`, answer: "Always. We evaluate your job on-site and present transparent flat-rate pricing before starting any work." },
-        ],
+        h1: strategy.h1,
+        metaTitle: strategy.metaTitle,
+        metaDescription: strategy.metaDescription,
+        introParagraph: strategy.introParagraph,
+        angleSectionHeadline: strategy.regionalClimateHeadline,
+        angleSectionContent: strategy.regionalClimateContent,
+        commonProblemsTitle: strategy.commonProblemsTitle,
+        commonProblems: strategy.commonProblems,
+        whenToCall: strategy.whenToCall,
+        customerPrepSteps: strategy.customerPrepSteps,
+        serviceScopeTitle: strategy.serviceScopeTitle,
+        servicesIncluded: strategy.servicesOfferedInCity,
+        processSteps: strategy.serviceScope,
+        faqs: strategy.faqs,
         heroImage: locHeroPlanned ? {
           localPath: locHeroPlanned.localPath,
           url: locHeroPlanned.remoteUrl || locHeroPlanned.fallbackUrl,

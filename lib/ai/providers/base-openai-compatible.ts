@@ -12,6 +12,8 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
   protected apiKey: string;
   protected baseUrl: string;
   protected defaultModel: string;
+  protected organizationId?: string;
+  protected providerName: string;
   protected extraHeaders?: Record<string, string>;
 
   constructor(
@@ -25,6 +27,8 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
     this.apiKey = config.apiKey;
     this.baseUrl = (config.baseUrl || defaultBaseUrl).replace(/\/+$/, "");
     this.defaultModel = config.defaultModel || defaultModel;
+    this.organizationId = config.organizationId;
+    this.providerName = config.providerName || (name === "custom" ? "Custom AI" : name.toUpperCase());
     this.extraHeaders = extraHeaders;
   }
 
@@ -54,18 +58,28 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${this.apiKey}`,
+      ...(this.organizationId ? { "OpenAI-Organization": this.organizationId } : {}),
       ...this.extraHeaders,
     };
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
-    });
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(120000),
+      });
+    } catch (netErr: any) {
+      if (netErr.name === "AbortError" || netErr.name === "TimeoutError") {
+        throw new Error(`Request to ${this.providerName} timed out after 120s.`);
+      }
+      throw new Error(`Could not connect to API endpoint (${endpoint}): ${netErr.message || "Network error"}`);
+    }
 
     if (!res.ok) {
       const errText = await res.text();
-      let errorMsg = `${this.name.toUpperCase()} API error (${res.status}): ${res.statusText}`;
+      let errorMsg = `${this.providerName} API error (${res.status}): ${res.statusText}`;
       try {
         const parsed = JSON.parse(errText);
         if (parsed.error?.message) {
@@ -76,11 +90,37 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
       } catch {
         errorMsg = errText || errorMsg;
       }
+
+      const lower = errorMsg.toLowerCase();
+      if (res.status === 401) {
+        throw new Error(`Invalid ${this.providerName} API key (401 Unauthorized). Please check credentials.`);
+      } else if (res.status === 402 || lower.includes("quota") || lower.includes("credit") || lower.includes("billing")) {
+        throw new Error(`Insufficient credits or quota exceeded for ${this.providerName} (402).`);
+      } else if (res.status === 404) {
+        if (lower.includes("model")) {
+          throw new Error(`Model '${model}' not found on ${this.providerName} (404).`);
+        }
+        throw new Error(`API endpoint not found (404) at ${endpoint}.`);
+      } else if (res.status === 429) {
+        throw new Error(`Rate limit exceeded for ${this.providerName} (429).`);
+      } else if (res.status >= 500) {
+        throw new Error(`Provider unavailable (HTTP ${res.status}: ${res.statusText}).`);
+      }
+
       throw new Error(errorMsg);
     }
 
-    const data = await res.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Malformed response from ${this.providerName}: Response is not valid JSON.`);
+    }
+
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error(`Malformed response from ${this.providerName}: Empty message content.`);
+    }
 
     return {
       text: content,
@@ -103,45 +143,76 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
+        ...(this.organizationId ? { "OpenAI-Organization": this.organizationId } : {}),
         ...this.extraHeaders,
       };
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: testModel,
-          messages: [{ role: "user", content: "Reply with the single word 'OK'" }],
-          max_tokens: 5,
-        }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            model: testModel,
+            messages: [{ role: "user", content: "Reply with the single word 'OK'" }],
+            max_tokens: 5,
+          }),
+          signal: AbortSignal.timeout(15000),
+        });
+      } catch (netErr: any) {
+        if (netErr.name === "AbortError" || netErr.name === "TimeoutError") {
+          return { success: false, message: "Connection timed out after 15s. Endpoint did not respond." };
+        }
+        return { success: false, message: `Could not connect to ${endpoint}: ${netErr.message || "Network error"}` };
+      }
 
       const latencyMs = Date.now() - start;
 
       if (!res.ok) {
         const errText = await res.text();
+        let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
         try {
           const parsed = JSON.parse(errText);
-          return {
-            success: false,
-            message:
-              parsed.error?.message ||
-              parsed.message ||
-              `HTTP ${res.status}: ${res.statusText}`,
-          };
-        } catch {
-          return {
-            success: false,
-            message: `Connection failed (${res.status}): ${res.statusText}`,
-          };
+          if (parsed.error?.message) errorMsg = parsed.error.message;
+          else if (parsed.message) errorMsg = parsed.message;
+        } catch {}
+
+        const lower = errorMsg.toLowerCase();
+        if (res.status === 401) {
+          return { success: false, message: `Invalid API key (401 Unauthorized). Please check credentials.` };
+        } else if (res.status === 402 || lower.includes("quota") || lower.includes("credit")) {
+          return { success: false, message: `Insufficient credits or quota exceeded (402).` };
+        } else if (res.status === 404) {
+          if (lower.includes("model")) {
+            return { success: false, message: `Model '${testModel}' not found on provider (404).` };
+          }
+          return { success: false, message: `API endpoint not found (404) at ${endpoint}.` };
+        } else if (res.status === 429) {
+          return { success: false, message: `Rate limit exceeded (429).` };
+        } else if (res.status >= 500) {
+          return { success: false, message: `Provider unavailable (HTTP ${res.status}: ${res.statusText}).` };
         }
+
+        return { success: false, message: errorMsg };
+      }
+
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        return { success: false, message: "Malformed response: Provider did not return valid JSON." };
+      }
+
+      const content = data.choices?.[0]?.message?.content;
+      if (typeof content !== "string" || !content.trim()) {
+        return { success: false, message: "Malformed response: Provider returned empty choices/content." };
       }
 
       // Try fetching models if endpoint exists
       let availableModels: string[] | undefined;
       try {
         const modelsEndpoint = this.baseUrl.replace(/\/chat\/completions$/, "") + "/models";
-        const modelsRes = await fetch(modelsEndpoint, { headers });
+        const modelsRes = await fetch(modelsEndpoint, { headers, signal: AbortSignal.timeout(5000) });
         if (modelsRes.ok) {
           const modelsData = await modelsRes.json();
           availableModels = (modelsData.data || [])
@@ -154,7 +225,7 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
 
       return {
         success: true,
-        message: `Successfully connected to ${this.name} (${testModel})`,
+        message: `Successfully connected to ${this.providerName} (${testModel}) in ${latencyMs}ms`,
         latencyMs,
         availableModels,
       };
@@ -172,9 +243,10 @@ export class BaseOpenAICompatibleProvider implements IAIProvider {
       const modelsEndpoint = this.baseUrl.replace(/\/chat\/completions$/, "") + "/models";
       const headers: Record<string, string> = {
         Authorization: `Bearer ${this.apiKey}`,
+        ...(this.organizationId ? { "OpenAI-Organization": this.organizationId } : {}),
         ...this.extraHeaders,
       };
-      const res = await fetch(modelsEndpoint, { headers });
+      const res = await fetch(modelsEndpoint, { headers, signal: AbortSignal.timeout(6000) });
       if (!res.ok) return [];
       const data = await res.json();
       return (data.data || []).map((m: { id: string }) => m.id);

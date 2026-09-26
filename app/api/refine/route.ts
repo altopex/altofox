@@ -12,7 +12,17 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { projectId, files: directFiles, instruction, provider, model, apiKey } = body;
+    const {
+      projectId,
+      files: directFiles,
+      instruction,
+      provider,
+      model,
+      apiKey,
+      baseUrl,
+      organizationId,
+      providerName,
+    } = body;
 
     if (!instruction || !instruction.trim()) {
       return NextResponse.json(
@@ -22,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     let filesToRefine: { path: string; content: string }[] = [];
-    let providerType: ProviderType = (provider || "gemini") as ProviderType;
+    let providerType: ProviderType = (provider || "custom") as ProviderType;
     let targetModel = model;
 
     // 1. Resolve files to edit (prefer directly provided files from client state)
@@ -53,7 +63,14 @@ export async function POST(req: NextRequest) {
 
     let creds;
     try {
-      creds = await getAnyConfiguredProviderCredentials(providerType, apiKey);
+      creds = await getAnyConfiguredProviderCredentials(
+        providerType,
+        apiKey,
+        baseUrl,
+        targetModel,
+        organizationId,
+        providerName
+      );
       providerType = creds.provider;
     } catch (err) {
       return NextResponse.json(
@@ -62,19 +79,21 @@ export async function POST(req: NextRequest) {
           error:
             err instanceof Error
               ? err.message
-              : `No API key configured for ${PROVIDER_PRESETS[providerType]?.name || providerType}. Please add your API key in Settings.`,
+              : "No AI provider is configured. Please configure an AI provider in Settings.",
         },
         { status: 401 }
       );
     }
 
     const finalModel =
-      targetModel || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel;
+      targetModel || creds.defaultModel || (providerType === "custom" ? "llama3" : PROVIDER_PRESETS[providerType]?.defaultModel);
 
     const ai = createAIProvider(providerType, {
       apiKey: creds.apiKey,
       baseUrl: creds.baseUrl,
       defaultModel: finalModel,
+      organizationId: creds.organizationId,
+      providerName: creds.providerName,
     });
 
     // 2. Format existing files for context

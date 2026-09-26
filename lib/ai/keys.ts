@@ -8,6 +8,8 @@ export interface StoredKeyInfo {
   maskedKey: string;
   baseUrl?: string | null;
   defaultModel?: string | null;
+  organizationId?: string | null;
+  providerName?: string | null;
   updatedAt?: Date;
 }
 
@@ -15,14 +17,25 @@ export async function getProviderCredentials(
   provider: ProviderType,
   directKey?: string,
   directBaseUrl?: string,
-  directModel?: string
-): Promise<{ apiKey: string; baseUrl?: string; defaultModel?: string; resolvedProvider?: ProviderType }> {
+  directModel?: string,
+  directOrgId?: string,
+  directProviderName?: string
+): Promise<{
+  apiKey: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  organizationId?: string;
+  providerName?: string;
+  resolvedProvider?: ProviderType;
+}> {
   // 1. If direct key provided, use it
   if (directKey && directKey.trim()) {
     return {
       apiKey: directKey.trim(),
       baseUrl: directBaseUrl?.trim() || PROVIDER_PRESETS[provider]?.defaultBaseUrl,
       defaultModel: directModel?.trim() || PROVIDER_PRESETS[provider]?.defaultModel,
+      organizationId: directOrgId?.trim() || undefined,
+      providerName: directProviderName?.trim() || PROVIDER_PRESETS[provider]?.name || provider,
       resolvedProvider: provider,
     };
   }
@@ -44,6 +57,8 @@ export async function getProviderCredentials(
           apiKey: decrypted.trim(),
           baseUrl: record.baseUrl || PROVIDER_PRESETS[provider]?.defaultBaseUrl,
           defaultModel: record.defaultModel || directModel || PROVIDER_PRESETS[provider]?.defaultModel,
+          organizationId: record.organizationId || directOrgId || undefined,
+          providerName: record.providerName || directProviderName || PROVIDER_PRESETS[provider]?.name || provider,
           resolvedProvider: provider,
         };
       }
@@ -68,21 +83,23 @@ export async function getProviderCredentials(
     return {
       apiKey: envKey.trim(),
       baseUrl: process.env.CUSTOM_AI_BASE_URL || PROVIDER_PRESETS[provider]?.defaultBaseUrl,
-      defaultModel: directModel || PROVIDER_PRESETS[provider]?.defaultModel,
+      defaultModel: directModel || process.env.CUSTOM_AI_MODEL || PROVIDER_PRESETS[provider]?.defaultModel,
+      organizationId: process.env.CUSTOM_AI_ORG_ID || directOrgId || undefined,
+      providerName: process.env.CUSTOM_AI_PROVIDER_NAME || directProviderName || PROVIDER_PRESETS[provider]?.name || provider,
       resolvedProvider: provider,
     };
   }
 
   // 4. Intelligent Cross-Provider Fallback:
-  // If the requested provider (e.g. OpenAI) has no key, check if ANY other provider has a valid key configured in DB or env!
+  // If the requested provider has no key, check if ANY other provider has a valid key configured in DB or env
   const allProviders: ProviderType[] = [
+    "custom",
     "gemini",
     "openai",
     "anthropic",
     "groq",
     "openrouter",
     "deepseek",
-    "custom",
   ];
 
   for (const altProvider of allProviders) {
@@ -105,6 +122,8 @@ export async function getProviderCredentials(
             apiKey: decrypted.trim(),
             baseUrl: altRecord.baseUrl || PROVIDER_PRESETS[altProvider]?.defaultBaseUrl,
             defaultModel: altRecord.defaultModel || PROVIDER_PRESETS[altProvider]?.defaultModel,
+            organizationId: altRecord.organizationId || undefined,
+            providerName: altRecord.providerName || PROVIDER_PRESETS[altProvider]?.name || altProvider,
             resolvedProvider: altProvider,
           };
         }
@@ -120,15 +139,16 @@ export async function getProviderCredentials(
       return {
         apiKey: altEnv.trim(),
         baseUrl: process.env.CUSTOM_AI_BASE_URL || PROVIDER_PRESETS[altProvider]?.defaultBaseUrl,
-        defaultModel: PROVIDER_PRESETS[altProvider]?.defaultModel,
+        defaultModel: process.env.CUSTOM_AI_MODEL || PROVIDER_PRESETS[altProvider]?.defaultModel,
+        organizationId: process.env.CUSTOM_AI_ORG_ID || undefined,
+        providerName: process.env.CUSTOM_AI_PROVIDER_NAME || PROVIDER_PRESETS[altProvider]?.name || altProvider,
         resolvedProvider: altProvider,
       };
     }
   }
 
-  throw new Error(
-    `No API key configured for ${PROVIDER_PRESETS[provider]?.name || provider}. Please add your API key in Settings.`
-  );
+  // Generic message when no valid provider is available
+  throw new Error("No AI provider is configured. Please configure an AI provider in Settings.");
 }
 
 /**
@@ -138,15 +158,33 @@ export async function getAnyConfiguredProviderCredentials(
   preferredProvider?: ProviderType,
   directKey?: string,
   directBaseUrl?: string,
-  directModel?: string
-): Promise<{ provider: ProviderType; apiKey: string; baseUrl?: string; defaultModel?: string }> {
-  const targetProvider = preferredProvider || "gemini";
-  const creds = await getProviderCredentials(targetProvider, directKey, directBaseUrl, directModel);
+  directModel?: string,
+  directOrgId?: string,
+  directProviderName?: string
+): Promise<{
+  provider: ProviderType;
+  apiKey: string;
+  baseUrl?: string;
+  defaultModel?: string;
+  organizationId?: string;
+  providerName?: string;
+}> {
+  const targetProvider = preferredProvider || "custom";
+  const creds = await getProviderCredentials(
+    targetProvider,
+    directKey,
+    directBaseUrl,
+    directModel,
+    directOrgId,
+    directProviderName
+  );
   return {
     provider: creds.resolvedProvider || targetProvider,
     apiKey: creds.apiKey,
     baseUrl: creds.baseUrl,
     defaultModel: creds.defaultModel,
+    organizationId: creds.organizationId,
+    providerName: creds.providerName,
   };
 }
 
@@ -154,7 +192,9 @@ export async function saveProviderKey(
   provider: ProviderType,
   apiKey: string,
   baseUrl?: string,
-  defaultModel?: string
+  defaultModel?: string,
+  organizationId?: string,
+  providerName?: string
 ): Promise<void> {
   const encrypted = encryptApiKey(apiKey.trim());
 
@@ -166,6 +206,8 @@ export async function saveProviderKey(
       tag: encrypted.tag,
       baseUrl: baseUrl?.trim() || null,
       defaultModel: defaultModel?.trim() || null,
+      organizationId: organizationId?.trim() || null,
+      providerName: providerName?.trim() || null,
     },
     create: {
       provider,
@@ -174,6 +216,8 @@ export async function saveProviderKey(
       tag: encrypted.tag,
       baseUrl: baseUrl?.trim() || null,
       defaultModel: defaultModel?.trim() || null,
+      organizationId: organizationId?.trim() || null,
+      providerName: providerName?.trim() || null,
     },
   });
 }
@@ -189,13 +233,13 @@ export async function listConfiguredProviders(): Promise<StoredKeyInfo[]> {
   const dbMap = new Map(dbKeys.map((k) => [k.provider, k]));
 
   const providers: ProviderType[] = [
+    "custom",
     "openai",
     "anthropic",
     "gemini",
     "groq",
     "deepseek",
     "openrouter",
-    "custom",
   ];
 
   return providers.map((provider) => {
@@ -219,6 +263,8 @@ export async function listConfiguredProviders(): Promise<StoredKeyInfo[]> {
         maskedKey: masked,
         baseUrl: dbRecord.baseUrl,
         defaultModel: dbRecord.defaultModel,
+        organizationId: dbRecord.organizationId,
+        providerName: dbRecord.providerName || (provider === "custom" ? "Custom (OpenAI-compatible)" : PROVIDER_PRESETS[provider]?.name),
         updatedAt: dbRecord.updatedAt,
       };
     }
@@ -239,8 +285,10 @@ export async function listConfiguredProviders(): Promise<StoredKeyInfo[]> {
         provider,
         hasKey: true,
         maskedKey: maskApiKey(envKey) + " (env)",
-        baseUrl: process.env.CUSTOM_AI_BASE_URL,
-        defaultModel: PROVIDER_PRESETS[provider]?.defaultModel,
+        baseUrl: process.env.CUSTOM_AI_BASE_URL || PROVIDER_PRESETS[provider]?.defaultBaseUrl,
+        defaultModel: process.env.CUSTOM_AI_MODEL || PROVIDER_PRESETS[provider]?.defaultModel,
+        organizationId: process.env.CUSTOM_AI_ORG_ID,
+        providerName: process.env.CUSTOM_AI_PROVIDER_NAME || (provider === "custom" ? "Custom (OpenAI-compatible)" : PROVIDER_PRESETS[provider]?.name),
       };
     }
 
@@ -250,6 +298,8 @@ export async function listConfiguredProviders(): Promise<StoredKeyInfo[]> {
       maskedKey: "",
       baseUrl: PROVIDER_PRESETS[provider]?.defaultBaseUrl,
       defaultModel: PROVIDER_PRESETS[provider]?.defaultModel,
+      organizationId: null,
+      providerName: provider === "custom" ? "Custom (OpenAI-compatible)" : PROVIDER_PRESETS[provider]?.name,
     };
   });
 }

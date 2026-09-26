@@ -22,6 +22,7 @@ import {
   Lock,
   Palette,
   Languages,
+  Server,
   Image as ImageIcon,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
@@ -181,6 +182,18 @@ export function SettingsPanel({
     Record<string, { success: boolean; message: string }>
   >({});
 
+  // Custom OpenAI-compatible Provider states
+  const [providerTypeMode, setProviderTypeMode] = useState<"existing" | "custom">("existing");
+  const [customProviderName, setCustomProviderName] = useState<string>("My Custom AI");
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>("https://example.com/v1");
+  const [customApiKey, setCustomApiKey] = useState<string>("");
+  const [customModelName, setCustomModelName] = useState<string>("model-name");
+  const [customOrgId, setCustomOrgId] = useState<string>("");
+  const [showCustomKey, setShowCustomKey] = useState<boolean>(false);
+  const [isEditingCustomKey, setIsEditingCustomKey] = useState<boolean>(false);
+  const [customTestResult, setCustomTestResult] = useState<{ success: boolean; message: string; latencyMs?: number } | null>(null);
+  const [isTestingCustom, setIsTestingCustom] = useState<boolean>(false);
+
   // Image Sources states
   const [savedPexelsKey, setSavedPexelsKey] = useState("");
   const [pexelsKeyInput, setPexelsKeyInput] = useState("");
@@ -235,6 +248,36 @@ export function SettingsPanel({
       statuses[p.id] = storedKey ? "connected" : "not_connected";
     }
 
+    // Load custom provider settings
+    const storedCustomKey =
+      localStorage.getItem("altofox_key_custom") || localStorage.getItem("ranklocal_key_custom") || "";
+    const storedCustomBaseUrl =
+      localStorage.getItem("altofox_base_url_custom") ||
+      localStorage.getItem("ranklocal_base_url_custom") ||
+      "https://example.com/v1";
+    const storedCustomModel =
+      localStorage.getItem("altofox_model_custom") ||
+      localStorage.getItem("ranklocal_model_custom") ||
+      "model-name";
+    const storedCustomOrg =
+      localStorage.getItem("altofox_org_id_custom") || localStorage.getItem("ranklocal_org_id_custom") || "";
+    const storedCustomName =
+      localStorage.getItem("altofox_provider_name_custom") ||
+      localStorage.getItem("ranklocal_provider_name_custom") ||
+      "My Custom AI";
+
+    setCustomApiKey(storedCustomKey);
+    setCustomBaseUrl(storedCustomBaseUrl);
+    setCustomModelName(storedCustomModel);
+    setCustomOrgId(storedCustomOrg);
+    setCustomProviderName(storedCustomName);
+    setIsEditingCustomKey(!storedCustomKey);
+
+    if (storedCustomKey) {
+      keys["custom"] = storedCustomKey;
+      statuses["custom"] = "connected";
+    }
+
     setSavedKeys(keys);
     setKeyInputs(keys);
     setSelectedModels(models);
@@ -243,12 +286,22 @@ export function SettingsPanel({
 
     // Active default provider & model
     const storedActiveProvider =
-      (localStorage.getItem("altofox_active_provider") as ProviderType) || "gemini";
+      (localStorage.getItem("altofox_active_provider") as ProviderType) ||
+      (localStorage.getItem("ranklocal_active_provider") as ProviderType) ||
+      (storedCustomKey ? "custom" : "gemini");
+
+    if (storedActiveProvider === "custom") {
+      setProviderTypeMode("custom");
+    }
+
     const storedActiveModel =
       localStorage.getItem("altofox_active_model") ||
-      keys[storedActiveProvider]
+      localStorage.getItem("ranklocal_active_model") ||
+      (storedActiveProvider === "custom"
+        ? storedCustomModel
+        : keys[storedActiveProvider]
         ? localStorage.getItem(`altofox_model_${storedActiveProvider}`) || "gemini-1.5-pro"
-        : "gemini-1.5-pro";
+        : "gemini-1.5-pro");
 
     setDefaultProvider(storedActiveProvider);
     setDefaultModel(storedActiveModel);
@@ -308,21 +361,47 @@ export function SettingsPanel({
 
   // Connected providers list for Default AI dropdown
   const connectedProviders = useMemo(() => {
-    return PROVIDERS.filter((p) => !!savedKeys[p.id]);
-  }, [savedKeys]);
+    const list: Array<{ id: ProviderType; name: string; defaultModel: string }> = PROVIDERS.filter(
+      (p) => !!savedKeys[p.id]
+    ).map((p) => ({
+      id: p.id,
+      name: p.name,
+      defaultModel:
+        selectedModels[p.id] === "__custom__"
+          ? customModelInputs[p.id] || p.defaultModel
+          : selectedModels[p.id] || p.defaultModel,
+    }));
+
+    if (savedKeys["custom"]) {
+      list.push({
+        id: "custom",
+        name: customProviderName || "Custom OpenAI-compatible",
+        defaultModel: customModelName || "custom-model",
+      });
+    }
+
+    return list;
+  }, [savedKeys, selectedModels, customModelInputs, customProviderName, customModelName]);
 
   // Save Default AI for generating
   const handleDefaultAIChange = (providerId: ProviderType) => {
     setDefaultProvider(providerId);
-    const chosenModel =
-      selectedModels[providerId] === "__custom__"
-        ? customModelInputs[providerId] || PROVIDERS.find((p) => p.id === providerId)?.defaultModel || ""
-        : selectedModels[providerId] || PROVIDERS.find((p) => p.id === providerId)?.defaultModel || "";
+    let chosenModel = "";
+    if (providerId === "custom") {
+      chosenModel = customModelName || "custom-model";
+    } else {
+      chosenModel =
+        selectedModels[providerId] === "__custom__"
+          ? customModelInputs[providerId] || PROVIDERS.find((p) => p.id === providerId)?.defaultModel || ""
+          : selectedModels[providerId] || PROVIDERS.find((p) => p.id === providerId)?.defaultModel || "";
+    }
 
     setDefaultModel(chosenModel);
 
     localStorage.setItem("altofox_active_provider", providerId);
+    localStorage.setItem("ranklocal_active_provider", providerId);
     localStorage.setItem("altofox_active_model", chosenModel);
+    localStorage.setItem("ranklocal_active_model", chosenModel);
     onSettingsUpdated();
   };
 
@@ -471,6 +550,190 @@ export function SettingsPanel({
       } else {
         localStorage.removeItem("altofox_active_provider");
         localStorage.removeItem("altofox_active_model");
+      }
+    }
+
+    onSettingsUpdated();
+  };
+
+  // Test Custom OpenAI-compatible Connection
+  const handleTestCustomConnection = async () => {
+    const keyToTest = customApiKey.trim() || savedKeys["custom"];
+    if (!keyToTest) {
+      setCustomTestResult({ success: false, message: "Please enter an API key first." });
+      return;
+    }
+    if (!customBaseUrl.trim()) {
+      setCustomTestResult({ success: false, message: "Please enter an API Base URL." });
+      return;
+    }
+    if (!customModelName.trim()) {
+      setCustomTestResult({ success: false, message: "Please enter a Model name." });
+      return;
+    }
+
+    setIsTestingCustom(true);
+    setCustomTestResult(null);
+
+    try {
+      const res = await fetch("/api/keys/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "custom",
+          apiKey: keyToTest,
+          baseUrl: customBaseUrl.trim(),
+          model: customModelName.trim(),
+          organizationId: customOrgId.trim() || undefined,
+          providerName: customProviderName.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCustomTestResult({
+          success: true,
+          message: data.message || "Connected successfully! Key and model are valid.",
+          latencyMs: data.latencyMs,
+        });
+        setProviderStatuses((prev) => ({ ...prev, custom: "connected" }));
+      } else {
+        setCustomTestResult({
+          success: false,
+          message: data.message || "Connection failed. Please verify endpoint, key, or model.",
+          latencyMs: data.latencyMs,
+        });
+        setProviderStatuses((prev) => ({ ...prev, custom: "error" }));
+      }
+    } catch (err) {
+      setCustomTestResult({
+        success: false,
+        message: err instanceof Error ? err.message : "Network error testing connection.",
+      });
+      setProviderStatuses((prev) => ({ ...prev, custom: "error" }));
+    } finally {
+      setIsTestingCustom(false);
+    }
+  };
+
+  // Save Custom OpenAI-compatible Provider
+  const handleSaveCustomProvider = async () => {
+    const rawKey = customApiKey.trim() || savedKeys["custom"];
+    if (!rawKey) {
+      setCustomTestResult({ success: false, message: "Please enter an API key before saving." });
+      return;
+    }
+    if (!customBaseUrl.trim()) {
+      setCustomTestResult({ success: false, message: "Please enter an API Base URL before saving." });
+      return;
+    }
+    if (!customModelName.trim()) {
+      setCustomTestResult({ success: false, message: "Please enter a Model name before saving." });
+      return;
+    }
+
+    const trimmedBaseUrl = customBaseUrl.trim();
+    const trimmedModel = customModelName.trim();
+    const trimmedOrgId = customOrgId.trim();
+    const trimmedName = customProviderName.trim() || "My Custom AI";
+
+    localStorage.setItem("altofox_key_custom", rawKey);
+    localStorage.setItem("ranklocal_key_custom", rawKey);
+    localStorage.setItem("altofox_base_url_custom", trimmedBaseUrl);
+    localStorage.setItem("ranklocal_base_url_custom", trimmedBaseUrl);
+    localStorage.setItem("altofox_model_custom", trimmedModel);
+    localStorage.setItem("ranklocal_model_custom", trimmedModel);
+    localStorage.setItem("altofox_org_id_custom", trimmedOrgId);
+    localStorage.setItem("ranklocal_org_id_custom", trimmedOrgId);
+    localStorage.setItem("altofox_provider_name_custom", trimmedName);
+    localStorage.setItem("ranklocal_provider_name_custom", trimmedName);
+
+    try {
+      await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "custom",
+          apiKey: rawKey,
+          baseUrl: trimmedBaseUrl,
+          defaultModel: trimmedModel,
+          organizationId: trimmedOrgId || undefined,
+          providerName: trimmedName,
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to sync custom key to server DB:", e);
+    }
+
+    // Set as active default provider
+    localStorage.setItem("altofox_active_provider", "custom");
+    localStorage.setItem("ranklocal_active_provider", "custom");
+    localStorage.setItem("altofox_active_model", trimmedModel);
+    localStorage.setItem("ranklocal_active_model", trimmedModel);
+
+    setDefaultProvider("custom");
+    setDefaultModel(trimmedModel);
+    setSavedKeys((prev) => ({ ...prev, custom: rawKey }));
+    setIsEditingCustomKey(false);
+    setProviderStatuses((prev) => ({ ...prev, custom: "connected" }));
+    setCustomTestResult({
+      success: true,
+      message: "Custom provider saved and set as default AI!",
+    });
+
+    onSettingsUpdated();
+  };
+
+  // Remove Custom Provider Key
+  const handleRemoveCustomProvider = async () => {
+    localStorage.removeItem("altofox_key_custom");
+    localStorage.removeItem("ranklocal_key_custom");
+    localStorage.removeItem("altofox_base_url_custom");
+    localStorage.removeItem("ranklocal_base_url_custom");
+    localStorage.removeItem("altofox_model_custom");
+    localStorage.removeItem("ranklocal_model_custom");
+    localStorage.removeItem("altofox_org_id_custom");
+    localStorage.removeItem("ranklocal_org_id_custom");
+    localStorage.removeItem("altofox_provider_name_custom");
+    localStorage.removeItem("ranklocal_provider_name_custom");
+
+    try {
+      await fetch("/api/keys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "custom" }),
+      });
+    } catch (e) {
+      console.warn("Failed to delete custom key from server DB:", e);
+    }
+
+    setSavedKeys((prev) => {
+      const copy = { ...prev };
+      delete copy["custom"];
+      return copy;
+    });
+    setCustomApiKey("");
+    setIsEditingCustomKey(true);
+    setProviderStatuses((prev) => ({ ...prev, custom: "not_connected" }));
+    setCustomTestResult(null);
+
+    if (defaultProvider === "custom") {
+      const remaining = PROVIDERS.filter((p) => localStorage.getItem(`altofox_key_${p.id}`));
+      if (remaining.length > 0) {
+        const nextProvider = remaining[0].id;
+        const nextModel = localStorage.getItem(`altofox_model_${nextProvider}`) || remaining[0].defaultModel;
+        localStorage.setItem("altofox_active_provider", nextProvider);
+        localStorage.setItem("ranklocal_active_provider", nextProvider);
+        localStorage.setItem("altofox_active_model", nextModel);
+        localStorage.setItem("ranklocal_active_model", nextModel);
+        setDefaultProvider(nextProvider);
+        setDefaultModel(nextModel);
+      } else {
+        localStorage.removeItem("altofox_active_provider");
+        localStorage.removeItem("ranklocal_active_provider");
+        localStorage.removeItem("altofox_active_model");
+        localStorage.removeItem("ranklocal_active_model");
+        setDefaultProvider("gemini");
+        setDefaultModel("gemini-1.5-pro");
       }
     }
 
@@ -819,20 +1082,14 @@ export function SettingsPanel({
                         onChange={(e) => handleDefaultAIChange(e.target.value as ProviderType)}
                         className="input-base text-xs font-semibold"
                       >
-                        {connectedProviders.map((p) => {
-                          const model =
-                            selectedModels[p.id] === "__custom__"
-                              ? customModelInputs[p.id] || p.defaultModel
-                              : selectedModels[p.id] || p.defaultModel;
-                          return (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({model})
-                            </option>
-                          );
-                        })}
+                        {connectedProviders.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} ({p.defaultModel})
+                          </option>
+                        ))}
                       </select>
                       <p className="text-[11px] text-[#64748B]">
-                        This model will build your static website when you click &quot;Generate Website&quot;.
+                        This model will build and optimize your static website when you run generation or SEO improvements.
                       </p>
                     </div>
                   ) : (
@@ -846,234 +1103,490 @@ export function SettingsPanel({
                 <div className="flex items-center space-x-2 text-[11px] text-[#64748B] bg-slate-50 p-2.5 rounded-[10px] border border-[#E2E8F0]">
                   <Lock className="w-3.5 h-3.5 text-[#10B981] shrink-0" />
                   <span>
-                    Your keys are stored only in this browser (localStorage). They are never saved to our servers.
+                    Your keys are stored only in this browser (localStorage). They are never saved to external servers.
                   </span>
                 </div>
 
-                {/* Provider Cards List */}
-                <div className="space-y-4">
-                  {PROVIDERS.map((provider) => {
-                    const isConnected = !!savedKeys[provider.id];
-                    const status = providerStatuses[provider.id] || (isConnected ? "connected" : "not_connected");
-                    const isEditing = isEditingKey[provider.id];
-                    const rawKey = keyInputs[provider.id] || "";
-                    const isTesting = testingProvider === provider.id;
-                    const testResult = testResults[provider.id];
-                    const selectedModelVal = selectedModels[provider.id] || provider.defaultModel;
-                    const isCustomModel = selectedModelVal === "__custom__";
+                {/* Provider Type Toggle: Existing vs Custom OpenAI-compatible */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-[#0F172A]">
+                    Provider Type
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-[10px] border border-[#E2E8F0]">
+                    <button
+                      type="button"
+                      onClick={() => setProviderTypeMode("existing")}
+                      className={`py-2 px-3 text-xs font-semibold rounded-[8px] transition flex items-center justify-center space-x-1.5 ${
+                        providerTypeMode === "existing"
+                          ? "bg-white text-[#0F172A] shadow-xs"
+                          : "text-[#64748B] hover:text-[#0F172A]"
+                      }`}
+                    >
+                      <Cpu className="w-3.5 h-3.5" />
+                      <span>Existing Providers</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProviderTypeMode("custom")}
+                      className={`py-2 px-3 text-xs font-semibold rounded-[8px] transition flex items-center justify-center space-x-1.5 ${
+                        providerTypeMode === "custom"
+                          ? "bg-white text-[#4F46E5] shadow-xs"
+                          : "text-[#64748B] hover:text-[#0F172A]"
+                      }`}
+                    >
+                      <Server className="w-3.5 h-3.5" />
+                      <span>Custom OpenAI-compatible</span>
+                      {savedKeys["custom"] && (
+                        <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+                      )}
+                    </button>
+                  </div>
+                </div>
 
-                    return (
-                      <div
-                        key={provider.id}
-                        className={`rounded-[12px] border transition overflow-hidden ${
-                          isConnected
-                            ? "bg-white border-[#CBD5E1] shadow-xs"
-                            : "bg-white border-[#E2E8F0]"
-                        }`}
-                      >
-                        {/* Provider Header */}
-                        <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
-                          <div className="flex items-center space-x-2.5">
-                            {provider.icon}
+                {providerTypeMode === "existing" ? (
+                  /* Provider Cards List */
+                  <div className="space-y-4">
+                    {PROVIDERS.map((provider) => {
+                      const isConnected = !!savedKeys[provider.id];
+                      const status = providerStatuses[provider.id] || (isConnected ? "connected" : "not_connected");
+                      const isEditing = isEditingKey[provider.id];
+                      const rawKey = keyInputs[provider.id] || "";
+                      const isTesting = testingProvider === provider.id;
+                      const testResult = testResults[provider.id];
+                      const selectedModelVal = selectedModels[provider.id] || provider.defaultModel;
+                      const isCustomModel = selectedModelVal === "__custom__";
+
+                      return (
+                        <div
+                          key={provider.id}
+                          className={`rounded-[12px] border transition overflow-hidden ${
+                            isConnected
+                              ? "bg-white border-[#CBD5E1] shadow-xs"
+                              : "bg-white border-[#E2E8F0]"
+                          }`}
+                        >
+                          {/* Provider Header */}
+                          <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                            <div className="flex items-center space-x-2.5">
+                              {provider.icon}
+                              <div>
+                                <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                                  {provider.name}
+                                </h3>
+                                <a
+                                  href={provider.docsUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                                >
+                                  <span>Where do I get an API key?</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              </div>
+                            </div>
+
+                            {/* Status Badge */}
                             <div>
-                              <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
-                                {provider.name}
-                              </h3>
-                              <a
-                                href={provider.docsUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                              {status === "connected" && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                                  <span>Connected</span>
+                                </span>
+                              )}
+                              {status === "not_connected" && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                                  <span>Not connected</span>
+                                </span>
+                              )}
+                              {status === "error" && (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                  <span>Error</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Provider Body */}
+                          <div className="p-3.5 sm:p-4 space-y-3">
+                            {/* API Key Field */}
+                            <div>
+                              <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                                API Key
+                              </label>
+
+                              {isConnected && !isEditing ? (
+                                <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
+                                  <span className="font-mono text-xs text-[#0F172A]">
+                                    {maskApiKey(savedKeys[provider.id])}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsEditingKey((prev) => ({ ...prev, [provider.id]: true }));
+                                      setKeyInputs((prev) => ({ ...prev, [provider.id]: savedKeys[provider.id] }));
+                                    }}
+                                    className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                                  >
+                                    <Edit2 className="w-3 h-3" />
+                                    <span>Change</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <input
+                                    type={showKeys[provider.id] ? "text" : "password"}
+                                    value={rawKey}
+                                    onChange={(e) =>
+                                      setKeyInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))
+                                    }
+                                    placeholder={provider.placeholderKey}
+                                    className="input-base pr-10 font-mono text-xs"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setShowKeys((prev) => ({ ...prev, [provider.id]: !prev[provider.id] }))
+                                    }
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
+                                    aria-label="Toggle password visibility"
+                                  >
+                                    {showKeys[provider.id] ? (
+                                      <EyeOff className="w-4 h-4" />
+                                    ) : (
+                                      <Eye className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Model Field */}
+                            <div>
+                              <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                                Model
+                              </label>
+                              <select
+                                value={selectedModelVal}
+                                onChange={(e) =>
+                                  setSelectedModels((prev) => ({ ...prev, [provider.id]: e.target.value }))
+                                }
+                                className="input-base text-xs"
                               >
-                                <span>Where do I get an API key?</span>
-                                <ExternalLink className="w-2.5 h-2.5" />
-                              </a>
-                            </div>
-                          </div>
+                                {provider.popularModels.map((m) => (
+                                  <option key={m.id} value={m.id}>
+                                    {m.label}
+                                  </option>
+                                ))}
+                                <option value="__custom__">Custom model name...</option>
+                              </select>
 
-                          {/* Status Badge */}
-                          <div>
-                            {status === "connected" && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
-                                <span>Connected</span>
-                              </span>
-                            )}
-                            {status === "not_connected" && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
-                                <span>Not connected</span>
-                              </span>
-                            )}
-                            {status === "error" && (
-                              <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                                <span>Error</span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Provider Body */}
-                        <div className="p-3.5 sm:p-4 space-y-3">
-                          {/* API Key Field */}
-                          <div>
-                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
-                              API Key
-                            </label>
-
-                            {isConnected && !isEditing ? (
-                              <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
-                                <span className="font-mono text-xs text-[#0F172A]">
-                                  {maskApiKey(savedKeys[provider.id])}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setIsEditingKey((prev) => ({ ...prev, [provider.id]: true }));
-                                    setKeyInputs((prev) => ({ ...prev, [provider.id]: savedKeys[provider.id] }));
-                                  }}
-                                  className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                  <span>Change</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="relative">
-                                <input
-                                  type={showKeys[provider.id] ? "text" : "password"}
-                                  value={rawKey}
-                                  onChange={(e) =>
-                                    setKeyInputs((prev) => ({ ...prev, [provider.id]: e.target.value }))
-                                  }
-                                  placeholder={provider.placeholderKey}
-                                  className="input-base pr-10 font-mono text-xs"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setShowKeys((prev) => ({ ...prev, [provider.id]: !prev[provider.id] }))
-                                  }
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
-                                  aria-label="Toggle password visibility"
-                                >
-                                  {showKeys[provider.id] ? (
-                                    <EyeOff className="w-4 h-4" />
-                                  ) : (
-                                    <Eye className="w-4 h-4" />
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Model Field */}
-                          <div>
-                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
-                              Model
-                            </label>
-                            <select
-                              value={selectedModelVal}
-                              onChange={(e) =>
-                                setSelectedModels((prev) => ({ ...prev, [provider.id]: e.target.value }))
-                              }
-                              className="input-base text-xs"
-                            >
-                              {provider.popularModels.map((m) => (
-                                <option key={m.id} value={m.id}>
-                                  {m.label}
-                                </option>
-                              ))}
-                              <option value="__custom__">Custom model name...</option>
-                            </select>
-
-                            {/* Custom Model Input if Selected */}
-                            {isCustomModel && (
-                              <div className="mt-2">
-                                <input
-                                  type="text"
-                                  value={customModelInputs[provider.id] || ""}
-                                  onChange={(e) =>
-                                    setCustomModelInputs((prev) => ({
-                                      ...prev,
-                                      [provider.id]: e.target.value,
-                                    }))
-                                  }
-                                  placeholder="e.g. mistralai/mistral-large-2411"
-                                  className="input-base text-xs font-mono"
-                                />
-                                <span className="text-[10px] text-[#64748B] mt-0.5 block">
-                                  Enter the exact model ID supported by {provider.name}.
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Inline Test Result Message */}
-                          {testResult && (
-                            <div
-                              className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
-                                testResult.success
-                                  ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                  : "bg-rose-50 text-rose-800 border border-rose-200"
-                              }`}
-                            >
-                              {testResult.success ? (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                              ) : (
-                                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                              {/* Custom Model Input if Selected */}
+                              {isCustomModel && (
+                                <div className="mt-2">
+                                  <input
+                                    type="text"
+                                    value={customModelInputs[provider.id] || ""}
+                                    onChange={(e) =>
+                                      setCustomModelInputs((prev) => ({
+                                        ...prev,
+                                        [provider.id]: e.target.value,
+                                      }))
+                                    }
+                                    placeholder="e.g. mistralai/mistral-large-2411"
+                                    className="input-base text-xs font-mono"
+                                  />
+                                  <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                                    Enter the exact model ID supported by {provider.name}.
+                                  </span>
+                                </div>
                               )}
-                              <span className="flex-1 break-words">{testResult.message}</span>
                             </div>
-                          )}
 
-                          {/* Action Buttons: Test, Save, Remove */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <button
-                              type="button"
-                              onClick={() => handleTestConnection(provider.id)}
-                              disabled={isTesting}
-                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
-                            >
-                              {isTesting ? (
-                                <>
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  <span>Testing...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
-                                  <span>Test connection</span>
-                                </>
-                              )}
-                            </button>
+                            {/* Inline Test Result Message */}
+                            {testResult && (
+                              <div
+                                className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                                  testResult.success
+                                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                    : "bg-rose-50 text-rose-800 border border-rose-200"
+                                }`}
+                              >
+                                {testResult.success ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                                ) : (
+                                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                )}
+                                <span className="flex-1 break-words">{testResult.message}</span>
+                              </div>
+                            )}
 
-                            <button
-                              type="button"
-                              onClick={() => handleSaveProvider(provider.id)}
-                              className="inline-flex items-center space-x-1 px-3.5 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold transition shadow-2xs"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              <span>Save</span>
-                            </button>
-
-                            {isConnected && (
+                            {/* Action Buttons: Test, Save, Remove */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
                               <button
                                 type="button"
-                                onClick={() => handleRemoveProvider(provider.id)}
-                                className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                                onClick={() => handleTestConnection(provider.id)}
+                                disabled={isTesting}
+                                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Remove</span>
+                                {isTesting ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Testing...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
+                                    <span>Test connection</span>
+                                  </>
+                                )}
                               </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSaveProvider(provider.id)}
+                                className="inline-flex items-center space-x-1 px-3.5 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold transition shadow-2xs"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Save</span>
+                              </button>
+
+                              {isConnected && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveProvider(provider.id)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>Remove</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* Custom OpenAI-Compatible Card */
+                  <div className="rounded-[12px] border bg-white border-[#CBD5E1] shadow-xs overflow-hidden">
+                    {/* Header */}
+                    <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                      <div className="flex items-center space-x-2.5">
+                        <div className="w-8 h-8 rounded-[8px] bg-slate-800 text-white flex items-center justify-center shadow-xs">
+                          <Server className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                            Custom OpenAI-compatible
+                          </h3>
+                          <p className="text-[11px] text-[#64748B]">
+                            Connect any endpoint supporting the OpenAI API format
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Status Badge */}
+                      <div>
+                        {savedKeys["custom"] ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                            <span>Connected</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            <span>Not connected</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="p-3.5 sm:p-4 space-y-3.5">
+                      {/* Provider Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                          Provider Name
+                        </label>
+                        <input
+                          type="text"
+                          value={customProviderName}
+                          onChange={(e) => setCustomProviderName(e.target.value)}
+                          placeholder="My Custom AI"
+                          className="input-base text-xs"
+                        />
+                        <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                          Display name for your custom provider (e.g. My Custom AI, Local Ollama, Together AI).
+                        </span>
+                      </div>
+
+                      {/* API Base URL */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                          API Base URL
+                        </label>
+                        <input
+                          type="text"
+                          value={customBaseUrl}
+                          onChange={(e) => setCustomBaseUrl(e.target.value)}
+                          placeholder="https://example.com/v1"
+                          className="input-base text-xs font-mono"
+                        />
+                        <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                          Root URL for the OpenAI-compatible endpoint (e.g. <code className="bg-slate-100 px-1 py-0.5 rounded">https://example.com/v1</code> or <code className="bg-slate-100 px-1 py-0.5 rounded">http://localhost:11434/v1</code>).
+                        </span>
+                      </div>
+
+                      {/* API Key */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                          API Key
+                        </label>
+                        {savedKeys["custom"] && !isEditingCustomKey ? (
+                          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
+                            <span className="font-mono text-xs text-[#0F172A]">
+                              {maskApiKey(savedKeys["custom"])}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsEditingCustomKey(true);
+                                setCustomApiKey(savedKeys["custom"]);
+                              }}
+                              className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>Change</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="relative">
+                            <input
+                              type={showCustomKey ? "text" : "password"}
+                              value={customApiKey}
+                              onChange={(e) => setCustomApiKey(e.target.value)}
+                              placeholder="sk-... or your secret token"
+                              className="input-base pr-10 font-mono text-xs"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCustomKey(!showCustomKey)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
+                              aria-label="Toggle password visibility"
+                            >
+                              {showCustomKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        )}
+                        <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                          Authorization token passed via <code className="bg-slate-100 px-1 py-0.5 rounded">Bearer</code> header. Never exposed in generated code or downloads.
+                        </span>
+                      </div>
+
+                      {/* Model Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                          Model Name
+                        </label>
+                        <input
+                          type="text"
+                          value={customModelName}
+                          onChange={(e) => setCustomModelName(e.target.value)}
+                          placeholder="model-name"
+                          className="input-base text-xs font-mono"
+                        />
+                        <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                          Model identifier expected by your endpoint (e.g. <code className="bg-slate-100 px-1 py-0.5 rounded">llama-3.3-70b</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">mistral-large-latest</code>, <code className="bg-slate-100 px-1 py-0.5 rounded">custom-model-v1</code>).
+                        </span>
+                      </div>
+
+                      {/* Organization ID (Optional) */}
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                          Organization ID <span className="text-[#64748B] font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customOrgId}
+                          onChange={(e) => setCustomOrgId(e.target.value)}
+                          placeholder="org-... (only if required by provider)"
+                          className="input-base text-xs font-mono"
+                        />
+                        <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                          Included in the <code className="bg-slate-100 px-1 py-0.5 rounded">OpenAI-Organization</code> header if specified.
+                        </span>
+                      </div>
+
+                      {/* Inline Test Result Message */}
+                      {customTestResult && (
+                        <div
+                          className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                            customTestResult.success
+                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                              : "bg-rose-50 text-rose-800 border border-rose-200"
+                          }`}
+                        >
+                          {customTestResult.success ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                          )}
+                          <div className="flex-1 break-words">
+                            <span>{customTestResult.message}</span>
+                            {customTestResult.latencyMs !== undefined && (
+                              <span className="ml-1.5 font-mono text-[11px] opacity-75">
+                                ({customTestResult.latencyMs}ms)
+                              </span>
                             )}
                           </div>
                         </div>
+                      )}
+
+                      {/* Action Buttons: Test, Save, Remove */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleTestCustomConnection}
+                          disabled={isTestingCustom}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
+                        >
+                          {isTestingCustom ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testing...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
+                              <span>Test connection</span>
+                            </>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveCustomProvider}
+                          className="inline-flex items-center space-x-1 px-3.5 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold transition shadow-2xs"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Provider</span>
+                        </button>
+
+                        {savedKeys["custom"] && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveCustomProvider}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remove</span>
+                          </button>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

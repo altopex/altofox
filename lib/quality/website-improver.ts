@@ -34,6 +34,8 @@ export interface ImproveOptions {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
+  organizationId?: string;
+  providerName?: string;
   targetPages?: string[];
   onProgress?: (step: string, current: number, total: number) => void;
 }

@@ -33,7 +33,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { provider, apiKey, baseUrl, defaultModel } = body;
+    const { provider, apiKey, baseUrl, defaultModel, organizationId, providerName } = body;
 
     if (!provider || !apiKey) {
       return NextResponse.json(
@@ -53,12 +53,15 @@ export async function POST(req: NextRequest) {
       provider as ProviderType,
       apiKey.trim(),
       baseUrl?.trim(),
-      defaultModel?.trim()
+      defaultModel?.trim(),
+      organizationId?.trim(),
+      providerName?.trim()
     );
 
+    const displayName = providerName || PROVIDER_PRESETS[provider as ProviderType]?.name || provider;
     return NextResponse.json({
       success: true,
-      message: `Successfully connected ${PROVIDER_PRESETS[provider as ProviderType]?.name || provider}!`,
+      message: `Successfully connected ${displayName}!`,
     });
   } catch (error) {
     console.error("Error saving key:", error);

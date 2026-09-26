@@ -13,6 +13,8 @@ export interface ProviderGenerateOptions {
   systemPrompt?: string;
   apiKey?: string;
   baseUrl?: string;
+  organizationId?: string;
+  providerName?: string;
   maxTokens?: number;
   jsonMode?: boolean;
 }
@@ -24,11 +26,13 @@ export function getProvider(providerType: ProviderType = "gemini") {
       const text = await generateWebsite({
         provider: providerType,
         apiKey: apiKey || "dummy-key-for-test",
-        model: options.model || (providerType === "gemini" ? "gemini-1.5-pro" : "gpt-4o-mini"),
+        model: options.model || (providerType === "gemini" ? "gemini-1.5-pro" : providerType === "custom" ? "llama3" : "gpt-4o-mini"),
         prompt: options.prompt,
         systemPrompt: options.systemPrompt,
         maxTokens: options.maxTokens || 8192,
         baseUrl: options.baseUrl,
+        organizationId: options.organizationId,
+        providerName: options.providerName,
       });
       return { text, content: text };
     },
