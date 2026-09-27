@@ -34,6 +34,10 @@ import {
   scanHtmlForForbiddenTokens,
   GenerationAuditEntry,
 } from "../lib/generator/strict-section-schemas";
+import {
+  enrichWebsiteConnectivity,
+  ConnectivityAuditReport,
+} from "../lib/seo/connectivity-engine";
 
 export interface AssembleOptions {
   domain?: string;
@@ -69,6 +73,7 @@ export interface AssembledWebsite {
   qualityReport?: QualityReport;
   registry?: PageRegistry;
   generationLog?: GenerationAuditEntry[];
+  connectivityAudit?: ConnectivityAuditReport;
 }
 
 /**
@@ -344,7 +349,7 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
   }
 
   const combinedCss = `${buildThemeVariables(theme)}\n${baseCss}`;
-  const files: AssembledWebsite["files"] = [];
+  let files: AssembledWebsite["files"] = [];
   const generationLog: GenerationAuditEntry[] = [];
 
   // Add bundled CSS and JS files
@@ -416,8 +421,9 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
         : { ...s, content: s.content || {}, images: s.images || [] }
     );
 
-    // Header & Navigation from Registry
-    const headerHtml = Sections.renderHeader(data.site, "standard", registry, currentPage, linkStyle);
+    // Header & Navigation from Registry (respects theme headerVariant)
+    const headerVariant = theme.layoutStructure?.headerVariant || "standard";
+    const headerHtml = Sections.renderHeader(data.site, headerVariant, registry, currentPage, linkStyle);
 
     // Breadcrumbs for inner pages
     let breadcrumbsHtml = "";
@@ -427,6 +433,31 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
     }
 
     const isHomePage = page.slug === "index" || page.slug === "";
+
+    // Re-order homepage sections according to theme layout structure
+    if (isHomePage && theme.layoutStructure?.sectionOrder && theme.layoutStructure.sectionOrder.length > 0) {
+      const order = theme.layoutStructure.sectionOrder;
+      activeSections.sort((a, b) => {
+        let idxA = order.indexOf(a.type);
+        let idxB = order.indexOf(b.type);
+        if (idxA === -1) idxA = 99;
+        if (idxB === -1) idxB = 99;
+        return idxA - idxB;
+      });
+    }
+
+    // Apply theme section layout variants
+    if (theme.layoutStructure) {
+      for (const sec of activeSections) {
+        if (sec.type === "hero" && theme.layoutStructure.heroLayout) {
+          sec.variant = theme.layoutStructure.heroLayout;
+        } else if (sec.type === "services" && theme.layoutStructure.serviceCardVariant) {
+          sec.variant = theme.layoutStructure.serviceCardVariant;
+        } else if (sec.type === "trustBar" && theme.layoutStructure.trustVariant) {
+          sec.variant = theme.layoutStructure.trustVariant;
+        }
+      }
+    }
 
     // On homepage, guarantee the final section before footer is the Final CTA + Small Location Map section
     if (isHomePage) {
@@ -830,6 +861,16 @@ ${mobileCallBarHtml}
     }
   }
 
+  // 4.5 Master Internal Linking & Connectivity Pass
+  // Guarantees zero orphans, natural contextual linking, intra-cluster connections, and crawl accessibility
+  const connectivityRes = enrichWebsiteConnectivity(files, {
+    businessName: data.site.businessName,
+    primaryTrade: data.schema?.type || data.site.tagline || "Local Services",
+    domain,
+    serviceAreaCities: effectiveAreaCities,
+  });
+  files = connectivityRes.files;
+
   // 5. Generate sitemap.xml including ALL generated HTML pages
   const allHtmlFiles = files.filter((f) => f.path.endsWith(".html"));
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -886,5 +927,6 @@ ${allHtmlFiles
     qualityReport: qualityResult.report,
     registry,
     generationLog,
+    connectivityAudit: connectivityRes.auditReport,
   };
 }

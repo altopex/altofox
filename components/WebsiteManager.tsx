@@ -15,7 +15,9 @@ import { FindReplaceModal } from "./FindReplaceModal";
 import { SearchConsoleHub } from "./SearchConsoleHub";
 import { AddNewPageModal, AddNewPageInitialData } from "./AddNewPageModal";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
-import { Theme, THEMES } from "../lib/themes";
+import { Theme, THEMES, getThemeById } from "../lib/themes";
+import { ThemeMiniPreview } from "./ThemeMiniPreview";
+import { ThemePreviewModal } from "./ThemePreviewModal";
 import { parseKeywordList, formatKeywordsForStorage } from "../lib/keywords/keyword-parser";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
 import { ErrorBoundary } from "./ErrorBoundary";
@@ -53,7 +55,12 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Key,
+  Palette,
+  Check,
+  X,
+  Network,
 } from "lucide-react";
+import { InternalLinkingDashboard } from "./InternalLinkingDashboard";
 import { useProjectPresence } from "@/lib/supabase/presence";
 import { ConflictModal } from "./editor/ConflictModal";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -143,7 +150,7 @@ export function WebsiteManager({
   }, [initialProject, normalizeProject]);
 
   const [activeTab, setActiveTab] = useState<
-    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles" | "rank-rent"
+    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles" | "rank-rent" | "internal-linking"
   >("pages");
 
   // Modals
@@ -234,6 +241,39 @@ export function WebsiteManager({
   const [metaDescription, setMetaDescription] = useState("");
   const [pageH1, setPageH1] = useState("");
   const [activeHtmlContent, setActiveHtmlContent] = useState("");
+
+  // Theme Switching & Preview State
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [themePreviewTarget, setThemePreviewTarget] = useState<Theme | null>(null);
+  const [isThemePreviewOpen, setIsThemePreviewOpen] = useState(false);
+  const [isSwitchingTheme, setIsSwitchingTheme] = useState(false);
+
+  const handleSwitchTheme = async (newThemeId: string) => {
+    setIsSwitchingTheme(true);
+    try {
+      const res = await fetch("/api/themes/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project,
+          newThemeId,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.project) {
+        setProject(data.project);
+        onProjectUpdated(data.project);
+        await saveProjectToDB(data.project);
+        setIsThemeModalOpen(false);
+      } else {
+        alert("Could not switch theme: " + (data.error || "Unknown error"));
+      }
+    } catch (err: any) {
+      alert("Error switching theme: " + (err?.message || "Network error"));
+    } finally {
+      setIsSwitchingTheme(false);
+    }
+  };
 
   const isDirtyRef = React.useRef(false);
   const isSavingRef = React.useRef(false);
@@ -858,6 +898,19 @@ export function WebsiteManager({
             >
               <ImageIcon className="w-4 h-4" />
               <span>Images</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("internal-linking")}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
+                activeTab === "internal-linking"
+                  ? "bg-indigo-600 text-white font-bold"
+                  : "hover:bg-slate-800 text-slate-400"
+              }`}
+            >
+              <Network className="w-4 h-4" />
+              <span>Internal Linking</span>
             </button>
 
             <button
@@ -1578,6 +1631,101 @@ export function WebsiteManager({
             </div>
           )}
 
+          {/* TAB 7: SETTINGS & THEME TAB */}
+          {activeTab === "settings" && (
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+                    <Palette className="w-5 h-5 text-indigo-600" />
+                    <span>Website &amp; Theme Settings</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Manage your site&apos;s visual design theme, typography, color tokens, and conversion layout.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsThemeModalOpen(true)}
+                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+                >
+                  <Palette className="w-4 h-4" />
+                  <span>Change Theme</span>
+                </button>
+              </div>
+
+              {/* Current Active Theme Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current Theme</span>
+                      <span className="text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        <span>Active Theme</span>
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-extrabold text-slate-900">{project.theme?.name || "Modern Local Pro"}</h3>
+                    <p className="text-xs text-slate-600 max-w-xl">{project.theme?.description}</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsThemeModalOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition shrink-0"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Switch Design Theme</span>
+                  </button>
+                </div>
+
+                {/* Theme Visual Preview Box */}
+                <div className="max-w-md border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                  <ThemeMiniPreview theme={project.theme || THEMES[0]} colors={project.theme?.colors} />
+                </div>
+
+                {/* Theme Metadata: Fonts, Colors, Characteristics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs">
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Typography Pair</span>
+                    <div className="font-bold text-slate-800">{project.theme?.fonts?.heading || "Plus Jakarta Sans"}</div>
+                    <div className="text-slate-500 font-mono text-[11px]">+ {project.theme?.fonts?.body || "Inter"}</div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Color Palette</span>
+                    <div className="flex items-center space-x-2 pt-1">
+                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.primary }} title="Primary" />
+                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.secondary }} title="Secondary" />
+                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.accent }} title="Accent" />
+                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.background }} title="Background" />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
+                    <span className="text-[10px] font-bold uppercase text-slate-400">Layout &amp; Radius</span>
+                    <div className="font-bold text-slate-800">{project.theme?.heroStyle || "Split Hero"}</div>
+                    <div className="text-slate-500 text-[11px]">Radius: {project.theme?.borderRadius || "12px"}</div>
+                  </div>
+                </div>
+
+                {project.theme?.designCharacteristics && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[11px] font-bold text-slate-700 block mb-1.5">Design &amp; Layout Characteristics:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {project.theme.designCharacteristics.map((char, i) => (
+                        <span key={i} className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium">
+                          ✓ {char}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* TAB 8: RANK & RENT COMMAND CENTER */}
           {activeTab === "rank-rent" && (
             <div className="flex-1 overflow-y-auto bg-slate-50">
@@ -1596,8 +1744,146 @@ export function WebsiteManager({
               </ErrorBoundary>
             </div>
           )}
+
+          {/* TAB 9: INTERNAL LINKING & CONNECTIVITY ENGINE */}
+          {activeTab === "internal-linking" && (
+            <InternalLinkingDashboard
+              project={project}
+              onProjectUpdated={(updated) => {
+                setProject(updated);
+                onProjectUpdated(updated);
+              }}
+              onSelectPage={(pagePath) => {
+                setSelectedPagePath(pagePath);
+                setActiveTab("pages");
+              }}
+            />
+          )}
         </main>
       </div>
+
+      {/* Theme Switching Modal */}
+      {isThemeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  <Palette className="w-5 h-5 text-indigo-600" />
+                  <span>Choose a New Theme</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select any of the 10 distinct layouts. All existing page content, SEO metadata, phone numbers, and location pages are preserved.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsThemeModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {isSwitchingTheme && (
+                <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center space-x-3 text-indigo-900 text-xs font-semibold animate-pulse">
+                  <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                  <span>Re-rendering website sections and design tokens with selected theme…</span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {THEMES.filter((t) => !t.isLegacy).map((theme) => {
+                  const isCurrent = project.theme?.id === theme.id;
+                  return (
+                    <div
+                      key={theme.id}
+                      className={`border rounded-xl p-4 flex flex-col justify-between transition-all ${
+                        isCurrent
+                          ? "border-indigo-600 ring-2 ring-indigo-500/20 bg-indigo-50/20"
+                          : "border-slate-200 hover:border-slate-300 bg-white hover:shadow-xs"
+                      }`}
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-bold text-slate-900">{theme.name}</h4>
+                          {isCurrent && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              Active
+                            </span>
+                          )}
+                        </div>
+
+                        <ThemeMiniPreview theme={theme} colors={theme.colors} />
+
+                        <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{theme.description}</p>
+
+                        {theme.designCharacteristics && (
+                          <div className="text-[11px] text-slate-500 space-y-0.5 pt-1">
+                            {theme.designCharacteristics.slice(0, 2).map((char, i) => (
+                              <div key={i} className="flex items-center gap-1.5 truncate">
+                                <span className="w-1 h-1 rounded-full bg-indigo-500" />
+                                <span className="truncate">{char}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setThemePreviewTarget(theme);
+                            setIsThemePreviewOpen(true);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-300 text-xs font-semibold text-slate-700 hover:text-indigo-600 flex items-center gap-1 bg-white transition"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isCurrent || isSwitchingTheme}
+                          onClick={() => handleSwitchTheme(theme.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            isCurrent
+                              ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                              : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs"
+                          }`}
+                        >
+                          {isCurrent ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                              <span>Current</span>
+                            </>
+                          ) : (
+                            <span>Apply Theme</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Theme Live Preview Modal */}
+      <ThemePreviewModal
+        theme={themePreviewTarget}
+        isOpen={isThemePreviewOpen}
+        onClose={() => {
+          setIsThemePreviewOpen(false);
+          setThemePreviewTarget(null);
+        }}
+        onSelectTheme={(themeId) => handleSwitchTheme(themeId)}
+        isSelected={project.theme?.id === themePreviewTarget?.id}
+      />
 
       {/* Monthly Optimization Cycle Modal */}
       {isCycleModalOpen && (

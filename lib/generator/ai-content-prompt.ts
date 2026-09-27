@@ -1,6 +1,7 @@
 import { WebsiteFormData, TargetPage, computeTargetPages, slugify, getBusinessKeywordSlug } from "./prompt";
 import { SiteContentJSON } from "./content-schema";
 import { detectTradeCategory } from "../photos/photo-service";
+import { generateDynamicImageQuery } from "../photos/image-provider";
 import { findNicheByIndustry } from "../../niches";
 
 export const AI_CONTENT_SYSTEM_PROMPT = `You are an expert local-business copywriter and local SEO strategist. You write website content for local service businesses (plumbers, electricians, tree services, etc.) that ranks in local Google search and turns visitors into phone calls.
@@ -538,6 +539,18 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
                 slug: "services",
               })),
             },
+            images: servicesList.map((s, idx) => ({
+              slot: "service",
+              query: generateDynamicImageQuery({
+                trade: tradeCategory,
+                serviceName: s.title,
+                city,
+                state,
+                slot: "service",
+                index: idx,
+              }).query,
+              alt: `${s.title} in ${city} by ${bizName}`,
+            })),
           },
           {
             type: "stats",
@@ -661,7 +674,14 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           images: [
             {
               slot: "main",
-              query: niche.imageQueries.services[0] || `${tradeCategory} ${pageTitle}`,
+              query: generateDynamicImageQuery({
+                trade: tradeCategory,
+                serviceName: pageTitle,
+                city,
+                state,
+                slot: "hero",
+                pageType: "service",
+              }).query,
               alt: `${pageTitle} by ${bizName}`,
             },
           ],

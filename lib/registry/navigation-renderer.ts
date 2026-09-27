@@ -7,7 +7,7 @@ export interface HeaderRenderOptions {
   currentPage: RegistryPage;
   site: SiteInfoJSON;
   linkStyle?: LinkStyle;
-  variant?: "standard" | "centered";
+  variant?: "standard" | "centered" | "split-phone" | "minimal" | "emergency-bar" | "bold-call";
 }
 
 /**
@@ -146,9 +146,26 @@ export function renderHeaderFromRegistry(options: HeaderRenderOptions): string {
 
   const contactHref = contactPage ? linkTo(currentPage, contactPage, linkStyle) : "#";
 
+  const isEmergency = variant === "emergency-bar";
+  const emergencyTopBarHtml = isEmergency
+    ? `
+    <!-- 24/7 Emergency Dispatch Top Bar -->
+    <div class="header-emergency-topbar">
+      <div class="container header-emergency-inner">
+        <span class="emergency-badge">⚡ 24/7 Priority Emergency Service</span>
+        <a href="tel:${cleanPhone}" class="emergency-call-link">
+          <span>Immediate Dispatch:</span> <strong>${phone}</strong>
+        </a>
+      </div>
+    </div>`
+    : "";
+
+  const variantClass = variant && variant !== "standard" ? `header-${variant}` : "";
+
   return `
   <!-- Site Header -->
-  <header class="site-header ${variant === "centered" ? "header-centered" : ""}" id="site-header">
+  ${emergencyTopBarHtml}
+  <header class="site-header ${variant === "centered" ? "header-centered" : ""} ${variantClass}" id="site-header">
     <div class="header-container container">
       ${renderBrandLogo({
         businessName: bizName,

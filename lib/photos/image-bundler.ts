@@ -101,15 +101,21 @@ export function createImagePlan(
         slotType = "service";
         defaultWidth = 800;
         defaultHeight = 533;
-        count = 3;
+        const itemsList = Array.isArray(section?.content?.items)
+          ? section.content.items
+          : (Array.isArray(section?.content?.services) ? section.content.services : []);
+        count = itemsList.length > 0 ? itemsList.length : 3;
       }
 
       for (let i = 0; i < count; i++) {
         let specificServiceName = serviceName;
         let itemTitle: string | undefined;
 
-        if (slotType === "service" && section?.content?.services && Array.isArray(section.content.services)) {
-          const sItem = section.content.services[i];
+        if (slotType === "service") {
+          const itemsList = Array.isArray(section?.content?.items)
+            ? section.content.items
+            : (Array.isArray(section?.content?.services) ? section.content.services : []);
+          const sItem = itemsList[i];
           if (sItem) {
             itemTitle = typeof sItem === "string" ? sItem : (sItem.title || sItem.name || sItem.heading);
             if (itemTitle) {

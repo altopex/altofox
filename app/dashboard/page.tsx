@@ -38,6 +38,7 @@ import {
   Theme,
 } from "@/lib/themes";
 import { ThemeMiniPreview } from "@/components/ThemeMiniPreview";
+import { ThemePreviewModal } from "@/components/ThemePreviewModal";
 import {
   findNicheByIndustry,
   generateKeywordsForNiche,
@@ -83,6 +84,7 @@ import {
   FolderKanban,
   FileEdit,
   Search,
+  Eye,
 } from "lucide-react";
 import type { SelectedServiceCity } from "@/components/ServiceAreaPicker";
 import type { KeywordMapEntry } from "@/components/KeywordMapModal";
@@ -411,8 +413,10 @@ export default function DashboardPage() {
   const [separateAreaPages, setSeparateAreaPages] = useState(false);
 
   // Step 4 Theme Fields
-  const [selectedThemeId, setSelectedThemeId] = useState<string>("modern-pro");
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("modern-local-pro");
   const [customThemeColors, setCustomThemeColors] = useState<CustomThemeOverrides>({});
+  const [previewModalTheme, setPreviewModalTheme] = useState<Theme | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   // Step Validation Errors
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
@@ -1486,7 +1490,19 @@ export default function DashboardPage() {
 
   const renderModals = () => (
     <>
-{/* Keyword Map & Optimization Modal */}
+      {/* Theme Live Preview Modal */}
+      <ThemePreviewModal
+        theme={previewModalTheme}
+        isOpen={isPreviewModalOpen}
+        onClose={() => {
+          setIsPreviewModalOpen(false);
+          setPreviewModalTheme(null);
+        }}
+        onSelectTheme={(themeId) => setSelectedThemeId(themeId)}
+        isSelected={previewModalTheme?.id === selectedThemeId}
+      />
+
+      {/* Keyword Map & Optimization Modal */}
       {currentProject && (
         <KeywordMapModal
           isOpen={keywordMapOpen}
@@ -2884,7 +2900,7 @@ export default function DashboardPage() {
 
                   {/* Theme Gallery Cards: 3 columns desktop, 2 tablet, 1 mobile */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {THEMES.map((theme) => {
+                    {THEMES.filter((t) => !t.isLegacy).map((theme) => {
                       const isSelected = selectedThemeId === theme.id;
                       const isRecommended = recommendedThemeIds.includes(theme.id);
                       const previewColors = isSelected ? activeColors : theme.colors;
@@ -2893,7 +2909,7 @@ export default function DashboardPage() {
                         <div
                           key={theme.id}
                           onClick={() => setSelectedThemeId(theme.id)}
-                          className={`rounded-[14px] border p-3.5 text-left cursor-pointer transition-all flex flex-col justify-between relative group ${
+                          className={`rounded-[16px] border p-4 text-left cursor-pointer transition-all flex flex-col justify-between relative group ${
                             isSelected
                               ? "border-[#4F46E5] bg-white ring-2 ring-[#4F46E5] shadow-md transform -translate-y-0.5"
                               : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1] hover:shadow-xs"
@@ -2927,7 +2943,7 @@ export default function DashboardPage() {
                           </div>
 
                           {/* Theme Name & Description */}
-                          <div className="space-y-1.5 flex-1 flex flex-col justify-between">
+                          <div className="space-y-2 flex-1 flex flex-col justify-between">
                             <div>
                               <div className="flex items-center justify-between gap-1">
                                 <h3 className="text-sm font-bold text-[#0F172A]">{theme.name}</h3>
@@ -2941,6 +2957,23 @@ export default function DashboardPage() {
                                 {theme.description}
                               </p>
                             </div>
+
+                            {/* Key Design Characteristics */}
+                            {theme.designCharacteristics && theme.designCharacteristics.length > 0 && (
+                              <div className="pt-2 border-t border-slate-100 space-y-1">
+                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                                  Key Features:
+                                </span>
+                                <ul className="text-[11px] text-slate-600 space-y-0.5">
+                                  {theme.designCharacteristics.slice(0, 3).map((char, i) => (
+                                    <li key={i} className="flex items-center gap-1.5 truncate">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                      <span className="truncate">{char}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
 
                             <div className="pt-2 border-t border-slate-100 space-y-1.5">
                               {/* Typography Pair */}
@@ -2962,6 +2995,44 @@ export default function DashboardPage() {
                                   </span>
                                 ))}
                               </div>
+                            </div>
+
+                            {/* Preview & Select Buttons */}
+                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2 mt-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewModalTheme(theme);
+                                  setIsPreviewModalOpen(true);
+                                }}
+                                className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 bg-white hover:bg-indigo-50/50 text-slate-700 hover:text-indigo-600 text-xs font-semibold transition"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Preview</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedThemeId(theme.id);
+                                }}
+                                className={`inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                                  isSelected
+                                    ? "bg-emerald-600 text-white shadow-2xs"
+                                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs"
+                                }`}
+                              >
+                                {isSelected ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                    <span>Selected</span>
+                                  </>
+                                ) : (
+                                  <span>Select Theme</span>
+                                )}
+                              </button>
                             </div>
                           </div>
                         </div>

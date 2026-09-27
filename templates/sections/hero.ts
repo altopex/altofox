@@ -113,9 +113,300 @@ export function renderHero(
       .join("\n            ");
   };
 
-  // Variant 1: Split (Text Left / Photo Right)
-  if (variant === "split") {
+  // 1. VARIANT: COMPACT-BOLD (Bold Conversion Theme)
+  if (variant === "compact-bold") {
     return `
+  <!-- Hero Section: Compact Bold Variant -->
+  <section class="hero hero-compact-bold">
+    <div class="container hero-compact-grid">
+      <div class="hero-text-col reveal">
+        <div class="urgent-dispatch-banner">
+          <span class="pulsing-dot"></span>
+          <span>Available Now for Immediate Local Dispatch in ${site?.address?.city || "Your Area"}</span>
+        </div>
+        <h1>${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary btn-pulsing" aria-label="Call Now: ${phone}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>CALL NOW: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-secondary btn-large btn-mobile-full">${secondaryCta}</a>
+        </div>
+        <div class="trust-badges-row">
+          ${renderTrustBadges()}
+        </div>
+      </div>
+      <div class="hero-image-wrap reveal">
+        ${renderStaticImageTag({
+          src: mainImage.url || mainImage.localPath || "",
+          alt: mainImage.alt || h1,
+          fallbackUrl: mainImage.fallbackUrl,
+          allFallbacks: mainImage.allFallbacks,
+          localSvg: mainImage.localSvgFallback,
+          width: 1920,
+          height: 1080,
+          loading: "eager",
+          fetchpriority: "high",
+          className: "img-hero img-hero-compact",
+        })}
+        ${floatingCardHtml}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 2. VARIANT: SPLIT-FULL (Split Hero Theme)
+  if (variant === "split-full") {
+    return `
+  <!-- Hero Section: Split Full Variant -->
+  <section class="hero hero-split hero-split-full">
+    <div class="container hero-split-grid">
+      <div class="hero-text-col reveal">
+        <span class="badge">${eyebrow}</span>
+        <h1>${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>Call Now: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-secondary btn-large btn-mobile-full">${secondaryCta}</a>
+        </div>
+        <div class="trust-badges-row">
+          ${renderTrustBadges()}
+        </div>
+      </div>
+      <div class="hero-image-wrap hero-image-full-height reveal">
+        ${renderStaticImageTag({
+          src: mainImage.url || mainImage.localPath || "",
+          alt: mainImage.alt || h1,
+          fallbackUrl: mainImage.fallbackUrl,
+          allFallbacks: mainImage.allFallbacks,
+          localSvg: mainImage.localSvgFallback,
+          width: 1920,
+          height: 1080,
+          loading: "eager",
+          fetchpriority: "high",
+          className: "img-hero img-hero-fullheight",
+        })}
+        ${floatingCardHtml}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 3. VARIANT: ASYMMETRIC (Premium Local & Editorial Modern)
+  if (variant === "asymmetric") {
+    return `
+  <!-- Hero Section: Asymmetric Variant -->
+  <section class="hero hero-asymmetric">
+    <div class="container hero-asymmetric-grid">
+      <div class="hero-text-col reveal">
+        <span class="badge badge-refined">${eyebrow}</span>
+        <h1 class="heading-editorial">${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>Speak With a Specialist: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-outline btn-large btn-mobile-full">${secondaryCta}</a>
+        </div>
+        <div class="trust-badges-row">
+          ${renderTrustBadges()}
+        </div>
+      </div>
+      <div class="hero-image-wrap hero-image-asymmetric reveal">
+        <div class="asymmetric-frame">
+          ${renderStaticImageTag({
+            src: mainImage.url || mainImage.localPath || "",
+            alt: mainImage.alt || h1,
+            fallbackUrl: mainImage.fallbackUrl,
+            allFallbacks: mainImage.allFallbacks,
+            localSvg: mainImage.localSvgFallback,
+            width: 1920,
+            height: 1080,
+            loading: "eager",
+            fetchpriority: "high",
+            className: "img-hero img-hero-asymmetric",
+          })}
+        </div>
+        ${floatingCardHtml}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 4. VARIANT: SERVICE-FIRST (Modern Service Grid)
+  if (variant === "service-first") {
+    return `
+  <!-- Hero Section: Service First Variant -->
+  <section class="hero hero-service-first">
+    <div class="container">
+      <div class="hero-compact-header reveal">
+        <span class="badge">${eyebrow}</span>
+        <h1>${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>Call For Instant Dispatch: ${phone}</span>
+          </a>
+          <a href="#services" class="btn btn-secondary btn-large btn-mobile-full">Browse All Services ↓</a>
+        </div>
+        <!-- Quick 3-Step Reassurance Strip -->
+        <div class="hero-quick-strip">
+          <div class="quick-strip-item">⚡ <strong>1. Quick Call</strong> — Live Dispatch</div>
+          <div class="quick-strip-item">🛡️ <strong>2. Upfront Price</strong> — Zero Surprises</div>
+          <div class="quick-strip-item">✅ <strong>3. Guaranteed Fix</strong> — 100% Guaranteed</div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 5. VARIANT: SOFT (Contemporary Soft)
+  if (variant === "soft") {
+    return `
+  <!-- Hero Section: Soft Variant -->
+  <section class="hero hero-soft">
+    <div class="container hero-split-grid">
+      <div class="hero-text-col reveal">
+        <span class="badge badge-pill">${eyebrow}</span>
+        <h1>${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-pill btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>Call Today: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-outline btn-large btn-pill btn-mobile-full">${secondaryCta}</a>
+        </div>
+        <div class="trust-badges-row">
+          ${renderTrustBadges()}
+        </div>
+      </div>
+      <div class="hero-image-wrap reveal">
+        ${renderStaticImageTag({
+          src: mainImage.url || mainImage.localPath || "",
+          alt: mainImage.alt || h1,
+          fallbackUrl: mainImage.fallbackUrl,
+          allFallbacks: mainImage.allFallbacks,
+          localSvg: mainImage.localSvgFallback,
+          width: 1920,
+          height: 1080,
+          loading: "eager",
+          fetchpriority: "high",
+          className: "img-hero img-hero-soft",
+        })}
+        ${floatingCardHtml}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 6. VARIANT: HIGH CONTRAST (High Contrast Modern)
+  if (variant === "high-contrast") {
+    return `
+  <!-- Hero Section: High Contrast Variant -->
+  <section class="hero hero-high-contrast">
+    <div class="container hero-split-grid">
+      <div class="hero-text-col reveal">
+        <span class="badge badge-high-contrast">${eyebrow}</span>
+        <h1 class="heading-high-contrast">${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+            <span>CALL DIRECT: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-secondary btn-large btn-mobile-full">${secondaryCta}</a>
+        </div>
+        <div class="trust-badges-row">
+          ${renderTrustBadges()}
+        </div>
+      </div>
+      <div class="hero-image-wrap reveal">
+        ${renderStaticImageTag({
+          src: mainImage.url || mainImage.localPath || "",
+          alt: mainImage.alt || h1,
+          fallbackUrl: mainImage.fallbackUrl,
+          allFallbacks: mainImage.allFallbacks,
+          localSvg: mainImage.localSvgFallback,
+          width: 1920,
+          height: 1080,
+          loading: "eager",
+          fetchpriority: "high",
+          className: "img-hero img-hero-contrast",
+        })}
+        ${floatingCardHtml}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 7. VARIANT: MINIMAL (Clean Minimal)
+  if (variant === "minimal") {
+    return `
+  <!-- Hero Section: Clean Minimal Variant -->
+  <section class="hero hero-minimal">
+    <div class="container hero-minimal-grid reveal">
+      <div class="hero-text-col">
+        <span class="badge badge-minimal">${eyebrow}</span>
+        <h1 class="heading-minimal">${h1}</h1>
+        <p class="hero-subheadline">${subheadline}</p>
+        <div class="hero-actions">
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+            <span>Call Now: ${phone}</span>
+          </a>
+          <a href="${secondaryUrl}" class="btn btn-outline btn-large btn-mobile-full">${secondaryCta}</a>
+        </div>
+      </div>
+      <div class="hero-image-wrap reveal">
+        ${renderStaticImageTag({
+          src: mainImage.url || mainImage.localPath || "",
+          alt: mainImage.alt || h1,
+          fallbackUrl: mainImage.fallbackUrl,
+          allFallbacks: mainImage.allFallbacks,
+          localSvg: mainImage.localSvgFallback,
+          width: 1920,
+          height: 1080,
+          loading: "eager",
+          fetchpriority: "high",
+          className: "img-hero img-hero-minimal",
+        })}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 8. VARIANT: FULL IMAGE (Photo Background with Dark Gradient Overlay - Legacy)
+  if (variant === "fullImage") {
+    return `
+  <!-- Hero Section: Full Image Variant -->
+  <section class="hero hero-full-image" style="background-image: url('${mainImage.url || mainImage.localPath}');" data-bg-remote="${mainImage.url || ''}" data-fallbacks="${(mainImage.allFallbacks || []).join(',')}" data-local-svg="${mainImage.localSvgFallback || ''}">
+    <div class="hero-overlay"></div>
+    <div class="container reveal">
+      <span class="badge" style="background: rgba(255, 255, 255, 0.15); color: #FFFFFF;">${eyebrow}</span>
+      <h1>${h1}</h1>
+      <p class="hero-subheadline">${subheadline}</p>
+      <div class="hero-actions">
+        <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+          <span>Call Now: ${phone}</span>
+        </a>
+        <a href="${secondaryUrl}" class="btn btn-outline btn-large btn-mobile-full" style="color: #FFFFFF; border-color: #FFFFFF;">${secondaryCta}</a>
+      </div>
+      <div class="trust-badges-row">
+        ${renderTrustBadges()}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // 9. DEFAULT / VARIANT: SPLIT (Modern Local Pro)
+  return `
   <!-- Hero Section: Split Variant -->
   <section class="hero hero-split">
     <div class="container hero-split-grid">
@@ -148,93 +439,6 @@ export function renderHero(
           className: "img-hero img-hero-split",
         })}
         ${floatingCardHtml}
-      </div>
-    </div>
-  </section>`;
-  }
-
-  // Variant 2: Full Image (Photo Background with Dark Gradient Overlay)
-  if (variant === "fullImage") {
-    return `
-  <!-- Hero Section: Full Image Variant -->
-  <section class="hero hero-full-image" style="background-image: url('${mainImage.url || mainImage.localPath}');" data-bg-remote="${mainImage.url || ''}" data-fallbacks="${(mainImage.allFallbacks || []).join(',')}" data-local-svg="${mainImage.localSvgFallback || ''}">
-    <div class="hero-overlay"></div>
-    <div class="container reveal">
-      <span class="badge" style="background: rgba(255, 255, 255, 0.15); color: #FFFFFF;">${eyebrow}</span>
-      <h1>${h1}</h1>
-      <p class="hero-subheadline">${subheadline}</p>
-      <div class="hero-actions">
-        <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-          <span>Call Now: ${phone}</span>
-        </a>
-        <a href="${secondaryUrl}" class="btn btn-outline btn-large btn-mobile-full" style="color: #FFFFFF; border-color: #FFFFFF;">${secondaryCta}</a>
-      </div>
-      <div class="trust-badges-row">
-        ${renderTrustBadges()}
-      </div>
-    </div>
-  </section>`;
-  }
-
-  // Variant 3: Centered with Photo Collage Below
-  const secondImage = images[1] || mainImage;
-  const thirdImage = images[2] || mainImage;
-
-  return `
-  <!-- Hero Section: Centered Variant -->
-  <section class="hero hero-centered">
-    <div class="container">
-      <div class="hero-content-centered reveal">
-        <span class="badge">${eyebrow}</span>
-        <h1>${h1}</h1>
-        <p class="hero-subheadline">${subheadline}</p>
-        <div class="hero-actions">
-          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large btn-mobile-full btn-call-primary" aria-label="Call Now: ${phone}">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-            <span>Call Now: ${phone}</span>
-          </a>
-          <a href="${secondaryUrl}" class="btn btn-secondary btn-large btn-mobile-full">${secondaryCta}</a>
-        </div>
-        <div class="trust-badges-row" style="justify-content: center;">
-          ${renderTrustBadges()}
-        </div>
-      </div>
-      <div class="hero-collage-grid reveal">
-        ${renderStaticImageTag({
-          src: mainImage.url || mainImage.localPath || "",
-          alt: mainImage.alt || h1,
-          fallbackUrl: mainImage.fallbackUrl,
-          allFallbacks: mainImage.allFallbacks,
-          localSvg: mainImage.localSvgFallback,
-          width: 1920,
-          height: 1080,
-          loading: "eager",
-          fetchpriority: "high",
-          className: "img-card",
-        })}
-        ${renderStaticImageTag({
-          src: secondImage.url || secondImage.localPath || "",
-          alt: secondImage.alt || h1,
-          fallbackUrl: secondImage.fallbackUrl,
-          allFallbacks: secondImage.allFallbacks,
-          localSvg: secondImage.localSvgFallback,
-          width: 800,
-          height: 600,
-          loading: "lazy",
-          className: "img-card",
-        })}
-        ${renderStaticImageTag({
-          src: thirdImage.url || thirdImage.localPath || "",
-          alt: thirdImage.alt || h1,
-          fallbackUrl: thirdImage.fallbackUrl,
-          allFallbacks: thirdImage.allFallbacks,
-          localSvg: thirdImage.localSvgFallback,
-          width: 800,
-          height: 600,
-          loading: "lazy",
-          className: "img-card",
-        })}
       </div>
     </div>
   </section>`;

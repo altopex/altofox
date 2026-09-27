@@ -12,6 +12,8 @@ import {
   ImageDeduplicationTracker,
   generateDynamicImageQuery,
   resolveValidatedPageImage,
+  determineImageIntent,
+  evaluateImageRelevance,
 } from "../lib/photos/image-provider";
 import { createImagePlan, resolveImagePlanWithValidation } from "../lib/photos/image-bundler";
 import { assembleWebsite } from "../templates/assembler";
@@ -244,10 +246,67 @@ Hope this helps! Let me know if you need anything else.`;
   assert.ok(leakQuery.toLowerCase().includes("leak"), "Leak query must include leak subject");
   pass("Dynamic image queries are subject-specific for hero, drain cleaning, water heater, leak detection, about, gallery");
 
+  // 4.2 Explicit Image Intent Extraction
+  const drainIntent = determineImageIntent({
+    trade: "Plumber",
+    slot: "service",
+    serviceName: "Drain Cleaning",
+    city: "Altoona",
+  });
+  assert.strictEqual(drainIntent.subject, "Drain Cleaning");
+  assert.strictEqual(drainIntent.purpose, "service");
+  assert.ok(drainIntent.searchKeywords.includes("drain"));
+
+  const innerServiceHeroIntent = determineImageIntent({
+    trade: "Plumber",
+    slot: "hero",
+    pageTitle: "Water Heater Repair",
+    pageType: "service",
+    city: "Altoona",
+  });
+  assert.strictEqual(innerServiceHeroIntent.subject, "Water Heater Repair");
+  assert.strictEqual(innerServiceHeroIntent.purpose, "hero");
+  assert.ok(innerServiceHeroIntent.searchKeywords.includes("heater"));
+  pass("determineImageIntent correctly extracts subject, purpose, keywords, and alt per slot");
+
+  // 4.3 Image Relevance Scoring (Valid != Relevant)
+  const relevantHeaterCandidate = {
+    url: "https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c",
+    alt: "Technician installing residential water heater tank",
+    source: "Unsplash",
+  };
+  const heaterScore = evaluateImageRelevance(relevantHeaterCandidate, innerServiceHeroIntent);
+  assert.strictEqual(heaterScore.isRelevant, true);
+  assert.ok(heaterScore.score >= 70, `Expected heater score >= 70, got ${heaterScore.score}`);
+
+  const irrelevantHeaterCandidate = {
+    url: "https://images.unsplash.com/photo-1558904541-efa8c4a08931",
+    alt: "Lawn mowing and landscaping garden",
+    source: "Unsplash",
+  };
+  const irrelevantScore = evaluateImageRelevance(irrelevantHeaterCandidate, innerServiceHeroIntent);
+  assert.strictEqual(irrelevantScore.isRelevant, false);
+  assert.ok(irrelevantScore.score < 50, `Expected irrelevant score < 50, got ${irrelevantScore.score}`);
+
+  const genericPortraitCandidate = {
+    url: "https://images.unsplash.com/photo-1540555700478-4be289fbecef",
+    alt: "Smiling person portrait headshot without tools",
+    source: "Unsplash",
+  };
+  const drainCleaningIntent = determineImageIntent({
+    trade: "Plumber",
+    slot: "service",
+    serviceName: "Drain Cleaning",
+    city: "Altoona",
+  });
+  const portraitScore = evaluateImageRelevance(genericPortraitCandidate, drainCleaningIntent);
+  assert.strictEqual(portraitScore.isRelevant, false);
+  pass("evaluateImageRelevance enforces Valid != Relevant and rejects mismatched topics and pure portraits");
+
   // ==============================================================
-  // PART 5: Image Deduplication Tracker & Resolution
+  // PART 5: Image Deduplication Tracker & Cross-Page Deduplication
   // ==============================================================
-  console.log("\n[SECTION 5: Image Deduplication Tracker]");
+  console.log("\n[SECTION 5: Image Deduplication Tracker & Cross-Page]");
 
   const tracker = new ImageDeduplicationTracker();
 
@@ -261,34 +320,40 @@ Hope this helps! Let me know if you need anything else.`;
   assert.strictEqual(tracker.isUrlUsed(testUrlB), false);
   pass("ImageDeduplicationTracker accurately registers and detects used URLs");
 
-  // Test resolveValidatedPageImage with deduplication
-  const image1 = await resolveValidatedPageImage({
-    niche: "Plumber",
-    sectionType: "hero",
-    city: "Altoona",
-    deduplicationTracker: tracker,
-  });
+  // Test Cross-Page Hero Deduplication across distinct service & location pages
+  const crossPageTracker = new ImageDeduplicationTracker();
+  const pageConfigs = [
+    { pageSlug: "index", pageTitle: "Home", slot: "hero" as const, pageType: "home", trade: "Plumber", city: "Austin" },
+    { pageSlug: "drain-cleaning", pageTitle: "Drain Cleaning", slot: "hero" as const, pageType: "service", serviceName: "Drain Cleaning", trade: "Plumber", city: "Austin" },
+    { pageSlug: "water-heater-repair", pageTitle: "Water Heater Repair", slot: "hero" as const, pageType: "service", serviceName: "Water Heater Repair", trade: "Plumber", city: "Austin" },
+    { pageSlug: "pipe-repair", pageTitle: "Pipe Repair", slot: "hero" as const, pageType: "service", serviceName: "Pipe Repair", trade: "Plumber", city: "Austin" },
+    { pageSlug: "plumber-austin", pageTitle: "Austin Plumber", slot: "hero" as const, pageType: "location", trade: "Plumber", city: "Austin" },
+    { pageSlug: "plumber-round-rock", pageTitle: "Round Rock Plumber", slot: "hero" as const, pageType: "location", trade: "Plumber", city: "Round Rock" },
+  ];
 
-  const image2 = await resolveValidatedPageImage({
-    niche: "Plumber",
-    sectionType: "services",
-    serviceName: "Drain Cleaning",
-    city: "Altoona",
-    deduplicationTracker: tracker,
-  });
+  const resolvedHeros = await Promise.all(
+    pageConfigs.map((cfg) =>
+      resolveValidatedPageImage(cfg, {
+        deduplicationTracker: crossPageTracker,
+        validateNetwork: false,
+      })
+    )
+  );
 
-  const image3 = await resolveValidatedPageImage({
-    niche: "Plumber",
-    sectionType: "services",
-    serviceName: "Water Heater Repair",
-    city: "Altoona",
-    deduplicationTracker: tracker,
-  });
+  const heroUrls = resolvedHeros.map((r) => r.url);
+  const uniqueHeroUrls = new Set(heroUrls);
+  assert.strictEqual(
+    uniqueHeroUrls.size,
+    heroUrls.length,
+    `All ${heroUrls.length} pages must have distinct hero images (got ${uniqueHeroUrls.size} unique)`
+  );
 
-  assert.notStrictEqual(image1.url, image2.url, "Hero and Drain Cleaning must have distinct image URLs");
-  assert.notStrictEqual(image2.url, image3.url, "Drain Cleaning and Water Heater must have distinct image URLs");
-  assert.notStrictEqual(image1.url, image3.url, "Hero and Water Heater must have distinct image URLs");
-  pass("resolveValidatedPageImage prevents URL collisions across sections via deduplication tracker");
+  // Verify metadata records were logged
+  const usageRecords = crossPageTracker.getUsageRecords();
+  assert.strictEqual(usageRecords.length, pageConfigs.length);
+  assert.ok(usageRecords.some((r) => r.subject?.includes("Drain")));
+  assert.ok(usageRecords.some((r) => r.subject?.includes("Heater")));
+  pass("Cross-page deduplication ensures 6 distinct subject-specific hero images across index, service, and location pages");
 
   // ==============================================================
   // PART 6: End-to-End Multi-Section Plan Resolution Deduplication

@@ -13,6 +13,7 @@ import { generateWebsite } from "../ai/generate-website";
 import { SYSTEM_PROMPT } from "./prompt";
 import { generateSchemaJsonLd } from "../seo/export-seo-optimizer";
 import { SearchIntentType } from "../seo/opportunity-engine";
+import { integrateNewPageIntoProject } from "../seo/connectivity-engine";
 
 export interface CreateNewPageOptions {
   primaryQuery: string;
@@ -553,104 +554,74 @@ Respond with ONLY valid JSON:
     content: newPageContent,
   };
 
-  // 3. Intelligent Internal Linking
-  const updatedFilesMap = new Map<string, GeneratedFile>();
-  const linkedFromPages: string[] = [];
-
-  // Determine candidate parent pages to link FROM
-  // Priority: 1. services.html, 2. city location page, 3. index.html
-  const candidatePages = existingFiles.filter((f) => {
-    if (!f.path.endsWith(".html")) return false;
-    if (f.path === normSlug) return false;
-    if (f.path === "services.html" || f.path === "index.html") return true;
-    if (options.locationCity && f.path.includes(options.locationCity.toLowerCase().replace(/\s+/g, "-"))) return true;
-    return false;
-  });
-
-  const anchorText = `${options.serviceName}${options.locationCity ? ` in ${options.locationCity}` : ""}`;
-  const contextNote = `Complete inspection, repairs, and installations backed by our satisfaction warranty.`;
-
-  for (const page of candidatePages.slice(0, 3)) {
-    let currentHtml = page.content;
-
-    // Optional navigation insertion if user chose main_nav or service_submenu or footer_only
-    if (optionsWithNormSlug.navPlacement && optionsWithNormSlug.navPlacement !== "contextual_only") {
-      currentHtml = injectNavLinkIntoHtml(
-        currentHtml,
-        normSlug,
-        options.serviceName,
-        optionsWithNormSlug.navPlacement
-      );
-    }
-
-    // Contextual internal link
-    const { updatedHtml, injected } = injectContextualInternalLink(
-      currentHtml,
-      normSlug,
-      anchorText,
-      contextNote
-    );
-
-    if (injected || currentHtml !== page.content) {
-      updatedFilesMap.set(page.path, {
-        ...page,
-        content: updatedHtml,
-      });
-      linkedFromPages.push(page.path);
-    }
-  }
-
-  // Also update index.html nav if user specifically requested nav placement
-  if (
-    optionsWithNormSlug.navPlacement &&
-    optionsWithNormSlug.navPlacement !== "contextual_only" &&
-    !updatedFilesMap.has("index.html") &&
-    indexFile
-  ) {
-    const updatedIndex = injectNavLinkIntoHtml(
-      indexFile.content,
-      normSlug,
-      options.serviceName,
-      optionsWithNormSlug.navPlacement
-    );
-    if (updatedIndex !== indexFile.content) {
-      updatedFilesMap.set("index.html", {
-        ...indexFile,
-        content: updatedIndex,
-      });
-      if (!linkedFromPages.includes("index.html")) {
-        linkedFromPages.push("index.html");
-      }
-    }
-  }
-
-  // 4. Update Sitemap
+  // 3. Intelligent Internal Linking via PageConnectivityEngine
   const domain = (formData.websiteDomain || "www.example.com").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
-  const existingSitemap = existingFiles.find((f) => f.path === "sitemap.xml");
-  const allHtmlPaths = [
-    ...existingFiles.filter((f) => f.path.endsWith(".html") && f.path !== normSlug).map((f) => f.path),
-    normSlug,
-  ];
-
-  const updatedSitemapContent = updateSitemapWithNewPage(
-    existingSitemap?.content,
-    allHtmlPaths,
-    domain
+  const integrationResult = integrateNewPageIntoProject(
+    {
+      newPagePath: normSlug,
+      newPageTitle: options.title,
+      newPageContent,
+      primaryQuery: options.primaryQuery,
+      serviceName: options.serviceName,
+      locationCity: options.locationCity || formData.city,
+      locationState: options.locationState || formData.stateRegion,
+      searchIntent: options.searchIntent,
+    },
+    existingFiles,
+    {
+      businessName: formData.businessName || "Local Service Pros",
+      primaryTrade: formData.businessType || options.serviceName,
+      domain,
+    }
   );
 
+  // Apply optional navigation insertion if user chose main_nav or service_submenu or footer_only
+  const updatedExistingFiles: GeneratedFile[] = [];
+  const linkedFromPages: string[] = [...integrationResult.incomingLinksAdded];
+
+  for (const f of integrationResult.updatedFiles) {
+    if (f.path === normSlug) continue; // New page itself
+    if (f.path === "sitemap.xml") continue; // Sitemap handled separately
+
+    let content = typeof f.content === "string" ? f.content : f.content.toString("utf-8");
+    if (
+      optionsWithNormSlug.navPlacement &&
+      optionsWithNormSlug.navPlacement !== "contextual_only" &&
+      (f.path === "index.html" || f.path === "services.html")
+    ) {
+      content = injectNavLinkIntoHtml(content, normSlug, options.serviceName, optionsWithNormSlug.navPlacement);
+      if (!linkedFromPages.includes(f.path)) {
+        linkedFromPages.push(f.path);
+      }
+    }
+
+    // Only add to updatedExistingFiles if it was actually changed
+    const original = existingFiles.find((ef) => ef.path === f.path);
+    if (original && (original.content !== content || linkedFromPages.includes(f.path))) {
+      updatedExistingFiles.push({
+        path: f.path,
+        content,
+      });
+    }
+  }
+
+  const sitemapFileItem = integrationResult.updatedFiles.find((f) => f.path === "sitemap.xml");
   const sitemapFile: GeneratedFile = {
     path: "sitemap.xml",
-    content: updatedSitemapContent,
+    content: sitemapFileItem
+      ? typeof sitemapFileItem.content === "string"
+        ? sitemapFileItem.content
+        : sitemapFileItem.content.toString("utf-8")
+      : "",
   };
 
-  // Count incoming & outgoing links
   const incomingLinksCount = linkedFromPages.length;
   const outgoingLinksMatches = newPageContent.match(/href=["'](?!#|tel:|mailto:|https?:)[^"']+\.html["']/gi) || [];
   const outgoingLinksCount = outgoingLinksMatches.length;
 
   return {
     newPageFile,
-    updatedExistingFiles: Array.from(updatedFilesMap.values()),
+    updatedExistingFiles,
     sitemapFile,
     incomingLinksCount,
     outgoingLinksCount,

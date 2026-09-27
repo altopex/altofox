@@ -5,6 +5,7 @@ export function renderTrustBar(
   site?: SiteContentJSON["site"]
 ): string {
   const content = section?.content || {};
+  const variant = section?.variant || "standard";
 
   // Build items strictly from user-confirmed facts (Google Policy Compliance)
   const items: { icon: string; title: string; subtitle: string }[] = [];
@@ -97,6 +98,55 @@ export function renderTrustBar(
 
   const finalItems = items.slice(0, 4);
 
+  // VARIANT: TRUST FIRST GRID (Trust First Theme)
+  if (variant === "trust-first-grid") {
+    return `
+  <!-- Trust Bar Section: Expanded Credibility Grid Variant -->
+  <section class="trust-bar trust-bar-expanded" aria-label="Key Trust Signals & Warranties">
+    <div class="container">
+      <div class="trust-grid-enhanced">
+        ${finalItems
+          .map(
+            (item) => `
+        <div class="trust-card-enhanced reveal">
+          <div class="trust-icon-box">${item.icon}</div>
+          <div>
+            <div class="trust-title-text">${item.title}</div>
+            <div class="trust-subtitle-text">${item.subtitle}</div>
+          </div>
+        </div>`
+          )
+          .join("\n        ")}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // VARIANT: GUARANTEE HIGHLIGHT (Bold Conversion, Split Hero, High Contrast)
+  if (variant === "guarantee-highlight") {
+    return `
+  <!-- Trust Bar Section: Guarantee Highlight Variant -->
+  <section class="trust-bar trust-bar-guarantee" aria-label="Key Trust Signals">
+    <div class="container">
+      <div class="trust-bar-grid">
+        ${finalItems
+          .map(
+            (item) => `
+        <div class="trust-bar-item trust-item-highlight">
+          <div class="trust-icon-wrap">${item.icon}</div>
+          <div>
+            <div style="color: #FFFFFF; font-weight: 800; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 0.02em;">${item.title}</div>
+            <div style="color: rgba(255, 255, 255, 0.85); font-size: 0.8rem; font-weight: 500;">${item.subtitle}</div>
+          </div>
+        </div>`
+          )
+          .join("\n        ")}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // STANDARD TRUST BAR (Modern Local Pro, Clean Minimal, Premium Local, etc.)
   return `
   <!-- Trust Bar Section -->
   <section class="trust-bar" aria-label="Key Trust Signals">

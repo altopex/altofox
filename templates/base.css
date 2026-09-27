@@ -2083,3 +2083,816 @@ input:focus, select:focus, textarea:focus {
     transform: translateY(-8px) rotate(-45deg);
   }
 }
+
+/* ==========================================================================
+   RANKLOCAL 10-THEME SYSTEM CSS EXTENSION
+   Distinct layout, hero composition, navigation, cards, typography & conversion
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   A. Header Variants
+   -------------------------------------------------------------------------- */
+.header-emergency-topbar {
+  background-color: #0B132B;
+  color: #FFFFFF;
+  padding: 6px 0;
+  border-bottom: 2px solid var(--color-primary, #EA580C);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.header-emergency-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.emergency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #FBBF24;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.emergency-call-link {
+  color: #FFFFFF;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.emergency-call-link strong {
+  color: var(--color-primary, #EA580C);
+  font-size: 0.95rem;
+}
+
+.emergency-call-link:hover {
+  text-decoration: underline;
+}
+
+.header-centered .header-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .header-centered .header-container {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.header-minimal {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: #FFFFFF;
+}
+
+.header-split-phone .header-cta-desktop .btn {
+  font-size: 0.95rem;
+  padding: 0.65rem 1.25rem;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);
+}
+
+.header-bold-call {
+  border-bottom: 2px solid var(--color-secondary, #020617);
+}
+
+/* --------------------------------------------------------------------------
+   B. Hero Variants
+   -------------------------------------------------------------------------- */
+/* 1. Hero Compact Bold (Bold Conversion) */
+.hero-compact-bold {
+  padding: 3rem 0 2.5rem 0;
+  background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.hero-compact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .hero-compact-grid {
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 3.5rem;
+  }
+}
+
+.urgent-dispatch-banner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  font-size: 0.825rem;
+  font-weight: 700;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9999px;
+  margin-bottom: 1rem;
+}
+
+.pulsing-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #DC2626;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+  animation: pulse-ring 1.8s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+.btn-pulsing {
+  position: relative;
+  overflow: hidden;
+}
+
+.img-hero-compact {
+  width: 100%;
+  height: 100%;
+  min-height: 380px;
+  max-height: 480px;
+  object-fit: cover;
+  border-radius: 6px;
+  box-shadow: 0 10px 25px -5px rgba(11, 19, 43, 0.15);
+}
+
+/* 2. Hero Split Full (Split Hero) */
+.hero-split-full .hero-image-full-height {
+  height: 100%;
+  min-height: 460px;
+  display: flex;
+}
+
+.img-hero-fullheight {
+  width: 100%;
+  height: 100%;
+  min-height: 460px;
+  object-fit: cover;
+  border-radius: var(--radius, 8px);
+  box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.18);
+}
+
+/* 3. Hero Asymmetric (Premium Local & Editorial Modern) */
+.hero-asymmetric {
+  padding: 4rem 0 3.5rem 0;
+  background: var(--color-background, #FAFAF9);
+}
+
+.hero-asymmetric-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2.5rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .hero-asymmetric-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 4rem;
+  }
+}
+
+.heading-editorial {
+  font-family: var(--font-heading);
+  letter-spacing: -0.015em;
+  font-weight: 700;
+  line-height: 1.12;
+}
+
+.badge-refined {
+  background: rgba(217, 119, 6, 0.12);
+  color: #B45309;
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.asymmetric-frame {
+  position: relative;
+  padding: 8px;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius, 4px);
+  box-shadow: 0 14px 34px -8px rgba(28, 25, 23, 0.14);
+}
+
+.img-hero-asymmetric {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+
+/* 4. Hero Service-First (Modern Service Grid) */
+.hero-service-first {
+  padding: 2.5rem 0 2rem 0;
+  background: linear-gradient(180deg, #F0F9FF 0%, #FFFFFF 100%);
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.hero-compact-header {
+  max-width: 820px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.hero-compact-header h1 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  margin-bottom: 0.85rem;
+}
+
+.hero-compact-header .hero-actions {
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.hero-quick-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.25rem;
+  font-size: 0.875rem;
+  color: #334155;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.quick-strip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* 5. Hero Soft (Contemporary Soft) */
+.hero-soft {
+  padding: 3.5rem 0;
+  background: linear-gradient(180deg, #F0FDFA 0%, #FFFFFF 100%);
+}
+
+.badge-pill {
+  border-radius: 9999px;
+  padding: 0.35rem 0.95rem;
+  background: #CCFBF1;
+  color: #0F766E;
+  font-weight: 700;
+}
+
+.btn-pill {
+  border-radius: 9999px !important;
+}
+
+.img-hero-soft {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 16px 32px -8px rgba(13, 148, 136, 0.15);
+}
+
+/* 6. Hero High Contrast */
+.hero-high-contrast {
+  padding: 3.5rem 0;
+  background: #FFFFFF;
+  border-bottom: 2px solid #0F172A;
+}
+
+.badge-high-contrast {
+  background: #0F172A;
+  color: #FFFFFF;
+  font-weight: 800;
+  border: 1px solid #0F172A;
+  border-radius: 4px;
+}
+
+.img-hero-contrast {
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  object-fit: cover;
+  border: 2px solid #0F172A;
+  border-radius: 8px;
+  box-shadow: 6px 6px 0px #0F172A;
+}
+
+/* 7. Hero Minimal */
+.hero-minimal {
+  padding: 4.5rem 0 3.5rem 0;
+  background: #FFFFFF;
+}
+
+.hero-minimal-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .hero-minimal-grid {
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 4.5rem;
+  }
+}
+
+.heading-minimal {
+  font-family: var(--font-heading);
+  letter-spacing: -0.03em;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.badge-minimal {
+  background: #F4F4F5;
+  color: #18181B;
+  border: 1px solid #E4E4E7;
+  font-weight: 700;
+}
+
+.img-hero-minimal {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  object-fit: cover;
+  border: 1px solid #E4E4E7;
+  border-radius: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   C. Service Variants
+   -------------------------------------------------------------------------- */
+/* Compact Services Grid (Bold Conversion) */
+.services-compact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .services-compact-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .services-compact-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.service-compact-card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #FFFFFF;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.service-compact-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+}
+
+.service-compact-img-wrap {
+  width: 100%;
+  height: 180px;
+  overflow: hidden;
+  background: #F1F5F9;
+}
+
+.img-card-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.service-compact-content {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.service-compact-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.service-badge-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  background: #FEF3C7;
+  color: #B45309;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.service-compact-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+/* Soft Grid (Contemporary Soft) */
+.services-soft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.75rem;
+}
+
+.card-soft {
+  border-radius: 20px !important;
+  border: 1px solid #CCFBF1;
+  background: #FFFFFF;
+  box-shadow: 0 10px 25px -4px rgba(13, 148, 136, 0.08);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.img-card-soft {
+  border-radius: 20px 20px 0 0;
+  width: 100%;
+  height: 220px;
+  object-fit: cover;
+}
+
+.service-tag-soft {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0D9488;
+  margin-bottom: 0.5rem;
+}
+
+/* Alternating Rows (Editorial Modern) */
+.services-alternating {
+  display: flex;
+  flex-direction: column;
+  gap: 3.5rem;
+}
+
+.service-alt-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .service-alt-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 3.5rem;
+  }
+
+  .service-alt-row.reverse {
+    direction: rtl;
+  }
+
+  .service-alt-row.reverse .service-alt-text {
+    direction: ltr;
+  }
+}
+
+.editorial-image-frame {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 30px -6px rgba(15, 23, 42, 0.15);
+}
+
+.editorial-image-frame img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+}
+
+/* Minimal Grid (Clean Minimal) */
+.services-minimal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.card-minimal {
+  border: 1px solid #E4E4E7 !important;
+  border-radius: 4px !important;
+  padding: 1.75rem !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+  transition: border-color 0.2s ease;
+}
+
+.card-minimal:hover {
+  border-color: #09090B !important;
+}
+
+/* --------------------------------------------------------------------------
+   D. Trust Bar Variants
+   -------------------------------------------------------------------------- */
+.trust-bar-expanded {
+  background: #FFFFFF;
+  padding: 2.5rem 0;
+  border-top: 1px solid #E2E8F0;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.trust-grid-enhanced {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.trust-card-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+}
+
+.trust-icon-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #E0F2FE;
+  color: #0284C7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.trust-title-text {
+  font-weight: 700;
+  color: #0F172A;
+  font-size: 0.95rem;
+}
+
+.trust-subtitle-text {
+  font-size: 0.8rem;
+  color: #64748B;
+}
+
+.trust-bar-guarantee {
+  background: #0B132B;
+  border-top: 2px solid var(--color-primary, #EA580C);
+  border-bottom: 2px solid var(--color-primary, #EA580C);
+}
+
+.trust-item-highlight {
+  border-left: 2px solid var(--color-primary, #EA580C);
+  padding-left: 1rem;
+}
+
+/* --------------------------------------------------------------------------
+   E. Theme Scoped Styling (10 Themes)
+   -------------------------------------------------------------------------- */
+
+/* 1. Theme: Modern Local Pro (.theme-modern-local-pro, .theme-modern-pro) */
+.theme-modern-local-pro .btn-primary,
+.theme-modern-pro .btn-primary {
+  background-color: #1D4ED8;
+  color: #FFFFFF;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.25);
+}
+
+.theme-modern-local-pro .service-card,
+.theme-modern-pro .service-card {
+  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+/* 2. Theme: Split Hero (.theme-split-hero) */
+.theme-split-hero .hero-split-grid {
+  align-items: stretch;
+}
+
+.theme-split-hero .btn-primary {
+  background-color: #2563EB;
+  color: #FFFFFF;
+  border-radius: 8px;
+}
+
+.theme-split-hero .card {
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+}
+
+/* 3. Theme: Bold Conversion (.theme-bold-conversion, .theme-bold-trade) */
+.theme-bold-conversion h1,
+.theme-bold-trade h1,
+.theme-bold-conversion h2,
+.theme-bold-trade h2 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.theme-bold-conversion .btn-primary,
+.theme-bold-trade .btn-primary {
+  background-color: #EA580C;
+  color: #FFFFFF;
+  border-radius: 6px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+}
+
+.theme-bold-conversion .card,
+.theme-bold-trade .card {
+  border-radius: 6px;
+  border: 1px solid #CBD5E1;
+}
+
+/* 4. Theme: Premium Local (.theme-premium-local, .theme-luxury-elegant) */
+.theme-premium-local body,
+.theme-luxury-elegant body {
+  background-color: #FAFAF9;
+}
+
+.theme-premium-local h1,
+.theme-luxury-elegant h1,
+.theme-premium-local h2,
+.theme-luxury-elegant h2 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+}
+
+.theme-premium-local .btn-primary,
+.theme-luxury-elegant .btn-primary {
+  background-color: #1C1917;
+  color: #FFFFFF;
+  border: 1px solid #D97706;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.theme-premium-local .card,
+.theme-luxury-elegant .card {
+  border-radius: 4px;
+  border: 1px solid rgba(217, 119, 6, 0.2);
+  background: #FFFFFF;
+}
+
+/* 5. Theme: Editorial Modern (.theme-editorial-modern) */
+.theme-editorial-modern h1,
+.theme-editorial-modern h2 {
+  font-family: 'DM Serif Display', serif;
+  font-weight: 400;
+}
+
+.theme-editorial-modern .btn-primary {
+  background-color: #0F172A;
+  color: #FFFFFF;
+  border-radius: 10px;
+}
+
+.theme-editorial-modern .card {
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+}
+
+/* 6. Theme: Clean Minimal (.theme-clean-minimal, .theme-minimal-mono) */
+.theme-clean-minimal body,
+.theme-minimal-mono body {
+  background-color: #FFFFFF;
+}
+
+.theme-clean-minimal h1,
+.theme-minimal-mono h1,
+.theme-clean-minimal h2,
+.theme-minimal-mono h2 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.theme-clean-minimal .btn-primary,
+.theme-minimal-mono .btn-primary {
+  background-color: #09090B;
+  color: #FFFFFF;
+  border-radius: 4px;
+  box-shadow: none;
+}
+
+.theme-clean-minimal .card,
+.theme-minimal-mono .card {
+  border-radius: 4px;
+  border: 1px solid #E4E4E7;
+  box-shadow: none;
+}
+
+/* 7. Theme: Trust First (.theme-trust-first) */
+.theme-trust-first .btn-primary {
+  background-color: #0369A1;
+  color: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(3, 105, 161, 0.25);
+}
+
+.theme-trust-first .card {
+  border-radius: 12px;
+  border: 1px solid #BAE6FD;
+}
+
+/* 8. Theme: Modern Service Grid (.theme-modern-service-grid) */
+.theme-modern-service-grid .btn-primary {
+  background-color: #0284C7;
+  color: #FFFFFF;
+  border-radius: 10px;
+}
+
+.theme-modern-service-grid .card {
+  border-radius: 10px;
+  border: 1px solid #E2E8F0;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.theme-modern-service-grid .card:hover {
+  transform: translateY(-3px);
+  border-color: #0284C7;
+}
+
+/* 9. Theme: Contemporary Soft (.theme-contemporary-soft, .theme-clean-medical, .theme-warm-friendly) */
+.theme-contemporary-soft body,
+.theme-clean-medical body {
+  background-color: #F0FDFA;
+}
+
+.theme-contemporary-soft .btn-primary,
+.theme-clean-medical .btn-primary {
+  background-color: #0D9488;
+  color: #FFFFFF;
+  border-radius: 9999px;
+  box-shadow: 0 4px 14px rgba(13, 148, 136, 0.2);
+}
+
+.theme-contemporary-soft .card,
+.theme-clean-medical .card {
+  border-radius: 20px;
+  border: 1px solid #CCFBF1;
+  box-shadow: 0 8px 24px -4px rgba(13, 148, 136, 0.06);
+}
+
+/* 10. Theme: High Contrast Modern (.theme-high-contrast-modern, .theme-vibrant-modern) */
+.theme-high-contrast-modern body {
+  background-color: #FFFFFF;
+}
+
+.theme-high-contrast-modern h1,
+.theme-high-contrast-modern h2 {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+}
+
+.theme-high-contrast-modern .btn-primary {
+  background-color: #0F172A;
+  color: #FFFFFF;
+  border: 2px solid #0F172A;
+  border-radius: 8px;
+  font-weight: 800;
+  box-shadow: 4px 4px 0px #EA580C;
+}
+
+.theme-high-contrast-modern .card {
+  border-radius: 8px;
+  border: 2px solid #0F172A;
+  box-shadow: 4px 4px 0px rgba(15, 23, 42, 0.1);
+}
+
