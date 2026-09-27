@@ -4,15 +4,10 @@ import { renderGoogleMapEmbed } from "../../lib/location/map-embed";
 export function renderContactForm(
   section: SectionJSON,
   site: SiteContentJSON["site"],
-  mapEmbed?: string
+  mapEmbed?: string,
+  isHomePage: boolean = false
 ): string {
   const content = section.content || {};
-  const eyebrow = content.eyebrow || "Get In Touch";
-  const headline = content.headline || "Request a Free Inspection & Upfront Quote";
-  const subheadline =
-    content.subheadline ||
-    "Contact our friendly dispatch coordinators. We respond to all inquiries within minutes.";
-
   const phone = site.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const email = site.email || "";
@@ -22,6 +17,69 @@ export function renderContactForm(
     .filter(Boolean)
     .join(", ");
   const hours = site.hours || ["Mon - Sun: 24/7 Priority Emergency Service"];
+
+  // Homepage Variant: Short, compact, visually secondary (phone call remains primary)
+  if (isHomePage) {
+    return `
+  <!-- Secondary Contact Form (Short & Compact) -->
+  <section class="section contact-section-secondary" id="contact" style="padding: 3rem 0; background: var(--color-background, #F8FAFC);">
+    <div class="container">
+      <div class="contact-secondary-card card" style="max-width: 860px; margin: 0 auto; padding: 2rem 2.25rem; border: 1px solid var(--color-border); border-radius: var(--radius-lg, 16px);">
+        <div class="contact-secondary-grid" style="display: grid; grid-template-columns: 1fr; gap: 2rem;">
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); padding-bottom: 0.75rem;">
+              <div>
+                <span class="badge" style="background: rgba(15, 23, 42, 0.06); color: var(--color-muted); font-size: 0.75rem; text-transform: uppercase;">Optional Message</span>
+                <h3 style="margin-top: 0.25rem; font-size: 1.25rem; color: var(--color-secondary);">Prefer to Send a Quick Note?</h3>
+              </div>
+              <div style="font-size: 0.875rem; color: var(--color-muted);">
+                ⚡ Fastest response: <a href="tel:${cleanPhone}" style="color: var(--color-primary); font-weight: 700;">Call ${phone}</a>
+              </div>
+            </div>
+
+            <p style="font-size: 0.9rem; color: var(--color-muted); margin-bottom: 1.25rem;">
+              Phone calls receive immediate priority dispatch. If you prefer to reach us online, leave a short message below.
+            </p>
+
+            <form data-ajax-form>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="contact-name" style="font-size: 0.85rem; font-weight: 600;">Name *</label>
+                  <input type="text" id="contact-name" name="name" required placeholder="Your Full Name" style="padding: 0.65rem 0.85rem; font-size: 0.95rem;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label for="contact-phone" style="font-size: 0.85rem; font-weight: 600;">Phone *</label>
+                  <input type="tel" id="contact-phone" name="phone" required placeholder="${phone}" style="padding: 0.65rem 0.85rem; font-size: 0.95rem;">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-bottom: 1rem;">
+                <label for="contact-message" style="font-size: 0.85rem; font-weight: 600;">Message</label>
+                <textarea id="contact-message" name="message" rows="2" placeholder="Briefly describe what you need..." style="padding: 0.65rem 0.85rem; font-size: 0.95rem;"></textarea>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
+                <button type="submit" class="btn btn-outline" style="border-color: var(--color-border); color: var(--color-secondary); padding: 0.6rem 1.5rem; font-size: 0.9rem;">
+                  <span>Send Online Message</span>
+                </button>
+                <span style="font-size: 0.8rem; color: var(--color-muted);">We never sell or share your contact info.</span>
+              </div>
+              <div class="form-status-msg" style="display:none; margin-top: 1rem; padding: 0.75rem 1rem; border-radius: var(--radius-md, 8px); font-size: 0.9rem;"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // Standard Variant (for dedicated contact.html page)
+  const eyebrow = content.eyebrow || "Get In Touch";
+  const headline = content.headline || "Contact Dispatch & Customer Support";
+  const subheadline =
+    content.subheadline ||
+    "Call us directly for fastest emergency service, or submit your details below.";
 
   return `
   <!-- Contact Form & Details Section -->
@@ -36,14 +94,14 @@ export function renderContactForm(
         <!-- Contact Details Column -->
         <div class="reveal">
           <h3>Immediate Dispatch & Office Hours</h3>
-          <p>Whether you need emergency repairs or scheduled trade service, we are ready to assist you.</p>
+          <p>For fastest response and emergency scheduling, please call our 24/7 dispatch desk directly.</p>
 
           <div class="contact-info-list">
             <div class="contact-info-item">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
               <div>
-                <strong>Direct Phone (24/7):</strong>
-                <div><a href="tel:${cleanPhone}" style="color: var(--color-primary); font-weight: 700; font-size: 1.15rem;">${phone}</a></div>
+                <strong>Direct Phone (Primary CTA):</strong>
+                <div><a href="tel:${cleanPhone}" style="color: var(--color-primary); font-weight: 800; font-size: 1.25rem;">${phone}</a></div>
               </div>
             </div>
 
@@ -101,7 +159,7 @@ export function renderContactForm(
               city: address.city,
               state: address.state,
               businessName: site.businessName,
-              height: 320,
+              height: 280,
             })}
           </div>`
               : ""
@@ -110,13 +168,13 @@ export function renderContactForm(
 
         <!-- Form Column -->
         <div class="card reveal" style="padding: 2.25rem;">
-          <h3>Send Us a Direct Message</h3>
-          <p style="margin-bottom: 1.5rem;">Fill out this quick form and a local team member will call you shortly.</p>
+          <h3 style="font-size: 1.35rem;">Send an Online Inquiry</h3>
+          <p style="margin-bottom: 1.5rem; font-size: 0.95rem; color: var(--color-muted);">For fastest service, please call directly. You may also leave your contact information below.</p>
 
           <form data-ajax-form>
             <div class="form-group">
               <label for="contact-name">Full Name *</label>
-              <input type="text" id="contact-name" name="name" required placeholder="John Smith">
+              <input type="text" id="contact-name" name="name" required placeholder="Your Name">
             </div>
 
             <div class="form-group">
@@ -125,17 +183,12 @@ export function renderContactForm(
             </div>
 
             <div class="form-group">
-              <label for="contact-service">Service Needed</label>
-              <input type="text" id="contact-service" name="service" placeholder="e.g. Emergency Repair, Inspection, Installation">
+              <label for="contact-message">Message</label>
+              <textarea id="contact-message" name="message" rows="3" placeholder="Briefly describe what you need..."></textarea>
             </div>
 
-            <div class="form-group">
-              <label for="contact-message">How can we help? (Optional)</label>
-              <textarea id="contact-message" name="message" rows="4" placeholder="Briefly describe what you are experiencing..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary btn-large" style="width: 100%;">
-              <span>Submit Request</span>
+            <button type="submit" class="btn btn-outline btn-large" style="width: 100%; border-color: var(--color-border); color: var(--color-secondary);">
+              <span>Submit Inquiry</span>
               <span>→</span>
             </button>
             <div class="form-status-msg" style="display:none; margin-top: 1rem; padding: 0.875rem 1.25rem; border-radius: var(--radius-md, 8px); font-size: 0.95rem; font-weight: 500;"></div>

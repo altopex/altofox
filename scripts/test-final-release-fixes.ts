@@ -178,10 +178,12 @@ async function runTests() {
   const iframeCount = (indexHtml.match(/<iframe/gi) || []).length;
   assert(iframeCount === 1, `Homepage has EXACTLY ONE map iframe (Found: ${iframeCount})`);
 
-  // Verify the one map is in the footer
+  // Verify the one map is in the Final CTA / Location section immediately above the footer, not in footer
   const footerIndex = indexHtml.indexOf('<footer class="site-footer"');
   const iframeIndex = indexHtml.indexOf("<iframe");
-  assert(footerIndex !== -1 && iframeIndex > footerIndex, "The sole Google Map is located inside the site-footer / location area");
+  const finalCtaIndex = indexHtml.indexOf('class="section final-cta-section"');
+  assert(footerIndex !== -1 && iframeIndex < footerIndex && iframeIndex > finalCtaIndex, "The sole Google Map is located immediately above the footer in the Final CTA section");
+  assert(!indexHtml.substring(footerIndex).includes("<iframe"), "The footer contains ZERO maps");
 
   // Verify the service-areas section on the homepage has NO map
   const serviceAreaSectionStart = indexHtml.indexOf('id="service-areas"');

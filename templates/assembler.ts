@@ -398,6 +398,25 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
       breadcrumbsHtml = bRes.html;
     }
 
+    const isHomePage = page.slug === "index" || page.slug === "";
+
+    // On homepage, guarantee the final section before footer is the Final CTA + Small Location Map section
+    if (isHomePage) {
+      const ctaIndex = activeSections.findIndex((s) => s.type === "ctaBanner");
+      if (ctaIndex !== -1) {
+        const [ctaSec] = activeSections.splice(ctaIndex, 1);
+        ctaSec.variant = "locationMap";
+        activeSections.push(ctaSec);
+      } else {
+        activeSections.push({
+          type: "ctaBanner",
+          variant: "locationMap",
+          content: {},
+          images: [],
+        });
+      }
+    }
+
     const renderedSectionsHtml: string[] = [];
     const niche = findNicheByIndustry(data.schema?.type || data.site.businessName || data.site.tagline || "");
 
@@ -452,7 +471,7 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderTrustBar(section, data.site));
           break;
         case "services":
-          renderedSectionsHtml.push(Sections.renderServices(section, sectionImages));
+          renderedSectionsHtml.push(Sections.renderServices(section, sectionImages, data.site.phone));
           break;
         case "stats":
           renderedSectionsHtml.push(Sections.renderStats(section));
@@ -489,12 +508,19 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderFaq(section));
           break;
         case "ctaBanner":
-          renderedSectionsHtml.push(Sections.renderCtaBanner(section, data.site.phone, sectionImages));
+          const mapInput =
+            options?.mapEmbed ||
+            (data.site as any).googleMaps ||
+            (data.site.address?.street
+              ? `${data.site.address.street}, ${data.site.address?.city || ""}, ${data.site.address?.state || ""}`
+              : data.site.address?.city);
+          renderedSectionsHtml.push(
+            Sections.renderCtaBanner(section, data.site.phone, sectionImages, data.site, mapInput)
+          );
           break;
         case "contactForm":
-          // The homepage has its sole dedicated map in the footer/location area.
+          // Homepage has its sole dedicated map in the Final CTA section immediately above footer.
           // Omit duplicate contactForm map on homepage so only ONE map exists.
-          const isHomePage = page.slug === "index" || page.slug === "";
           const contactMapEmbed = isHomePage
             ? undefined
             : options?.mapEmbed ||
@@ -502,7 +528,9 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
               (data.site.address?.city
                 ? `${data.site.address?.city}${data.site.address?.state ? `, ${data.site.address.state}` : ""}`
                 : undefined);
-          renderedSectionsHtml.push(Sections.renderContactForm(section, data.site, contactMapEmbed));
+          renderedSectionsHtml.push(
+            Sections.renderContactForm(section, data.site, contactMapEmbed, isHomePage)
+          );
           break;
         default:
           break;

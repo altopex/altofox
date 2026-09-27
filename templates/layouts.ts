@@ -33,8 +33,8 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "serviceAreas" },
       { type: "testimonials", variant: "grid" },
       { type: "faq" },
-      { type: "ctaBanner", variant: "gradient" },
       { type: "contactForm" },
+      { type: "ctaBanner", variant: "locationMap" },
     ],
   },
   about: {

@@ -3,10 +3,13 @@ import { ResolvedImage } from "../../lib/photos/photo-service";
 
 export function renderServices(
   section: SectionJSON,
-  images: ResolvedImage[] = []
+  images: ResolvedImage[] = [],
+  sitePhone?: string
 ): string {
   const content = section.content || {};
   const variant = section.variant || "cards";
+  const phone = content.phone || sitePhone || "";
+  const cleanPhone = phone.replace(/[^\d+]/g, "");
 
   const eyebrow = content.eyebrow || "What We Do";
   const headline = content.headline || "Comprehensive Local Services";
@@ -50,10 +53,13 @@ export function renderServices(
           <div class="service-card-body">
             <h3>${item.title}</h3>
             <p>${item.description}</p>
-            <a href="${linkHref}" class="btn btn-outline btn-sm" style="margin-top: 1rem; align-self: flex-start;">
-              <span>Learn More</span>
-              <span>→</span>
-            </a>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 1rem;">
+              ${cleanPhone ? `<a href="tel:${cleanPhone}" class="btn btn-primary btn-sm btn-service-call" style="font-weight: 700;"><span>Call for Service</span></a>` : ""}
+              <a href="${linkHref}" class="btn btn-outline btn-sm">
+                <span>Learn More</span>
+                <span>→</span>
+              </a>
+            </div>
           </div>
         </div>`;
           })
@@ -129,8 +135,10 @@ export function renderServices(
           <div class="service-alt-text">
             <span class="badge">Specialty ${idx + 1}</span>
             <h3>${item.title}</h3>
-            <p>${item.description}</p>
-            <a href="${linkHref}" class="btn btn-primary" style="margin-top: 1rem;">Schedule Service →</a>
+            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem;">
+              ${cleanPhone ? `<a href="tel:${cleanPhone}" class="btn btn-primary">Call for Service →</a>` : ""}
+              <a href="${linkHref}" class="btn btn-outline">Learn More</a>
+            </div>
           </div>
         </div>`;
           })
