@@ -470,7 +470,8 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderGallery(section, sectionImages));
           break;
         case "serviceAreas":
-          renderedSectionsHtml.push(Sections.renderServiceAreas(section, data.site.serviceAreas, options?.mapEmbed));
+          const areaMapEmbed = options?.mapEmbed || (data.site as any).googleMaps || data.site.address?.city;
+          renderedSectionsHtml.push(Sections.renderServiceAreas(section, data.site.serviceAreas, areaMapEmbed));
           break;
         case "testimonials":
           const testHtml = Sections.renderTestimonials(section, data.site);
@@ -485,7 +486,8 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderCtaBanner(section, data.site.phone, sectionImages));
           break;
         case "contactForm":
-          renderedSectionsHtml.push(Sections.renderContactForm(section, data.site, options?.mapEmbed));
+          const contactMapEmbed = options?.mapEmbed || (data.site as any).googleMaps || (data.site.address?.city ? `${data.site.address?.city}${data.site.address?.state ? `, ${data.site.address.state}` : ""}` : undefined);
+          renderedSectionsHtml.push(Sections.renderContactForm(section, data.site, contactMapEmbed));
           break;
         default:
           break;

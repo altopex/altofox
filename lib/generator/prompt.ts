@@ -111,6 +111,7 @@ export interface WebsiteFormData {
   businessHours?: string;
   websiteDomain?: string;
   targetKeywords: string;
+  keywords?: string[];
   pagesToCreate?: string[];
   separateServicePages?: boolean;
   separateAreaPages?: boolean;

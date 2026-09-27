@@ -15,6 +15,7 @@ import { validateContentJSON, SiteContentJSON } from "@/lib/generator/content-sc
 import { extractAndParseJSON } from "@/lib/generator/validator";
 import { assembleWebsite } from "@/templates/assembler";
 import { THEMES, Theme } from "@/lib/themes";
+import { parseKeywordList, formatKeywordsForStorage } from "@/lib/keywords/keyword-parser";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
@@ -82,7 +83,12 @@ export async function POST(req: NextRequest) {
       email: (formData?.email || "").trim(),
       businessHours: (formData?.businessHours || "").trim(),
       websiteDomain: (formData?.websiteDomain || "").trim(),
-      targetKeywords: (formData?.targetKeywords || focusKeywords || targetKeywords || "").trim(),
+      targetKeywords: formatKeywordsForStorage(
+        parseKeywordList(formData?.keywords || formData?.targetKeywords || focusKeywords || targetKeywords || "")
+      ),
+      keywords: parseKeywordList(
+        formData?.keywords || formData?.targetKeywords || focusKeywords || targetKeywords || ""
+      ),
       pagesToCreate: Array.isArray(formData?.pagesToCreate) && formData.pagesToCreate.length > 0
         ? formData.pagesToCreate
         : ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"],
@@ -118,7 +124,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (!websiteData.targetKeywords) {
+    if (!websiteData.targetKeywords || (websiteData.keywords && websiteData.keywords.length === 0)) {
       return NextResponse.json(
         { success: false, error: "At least one target keyword is required." },
         { status: 400 }

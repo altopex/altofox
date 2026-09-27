@@ -16,6 +16,7 @@ import { SearchConsoleHub } from "./SearchConsoleHub";
 import { AddNewPageModal, AddNewPageInitialData } from "./AddNewPageModal";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { Theme, THEMES } from "../lib/themes";
+import { parseKeywordList, formatKeywordsForStorage } from "../lib/keywords/keyword-parser";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { preparePreviewHtml } from "../lib/export/preview-renderer";
@@ -118,7 +119,15 @@ export function WebsiteManager({
       optimizationCycles: Array.isArray(p?.optimizationCycles) ? p.optimizationCycles : [],
       theme: p?.theme?.name ? p.theme : defaultTheme,
       businessDetails: p?.businessDetails || ({} as any),
-      formData: p?.formData || {},
+      formData: p?.formData
+        ? {
+            ...p.formData,
+            keywords: parseKeywordList(p.formData.keywords || p.formData.targetKeywords),
+            targetKeywords: formatKeywordsForStorage(
+              parseKeywordList(p.formData.targetKeywords || p.formData.keywords)
+            ),
+          }
+        : {},
       pageContentMap: p?.pageContentMap || {},
       customContentInstructions: p?.customContentInstructions || p?.formData?.customContentInstructions || "",
       rankRentConfig: p?.rankRentConfig || undefined,

@@ -1,4 +1,5 @@
 import { SectionJSON, SiteContentJSON } from "../../lib/generator/content-schema";
+import { renderGoogleMapEmbed } from "../../lib/location/map-embed";
 
 export function renderContactForm(
   section: SectionJSON,
@@ -91,10 +92,17 @@ export function renderContactForm(
           </div>
 
           ${
-            !isServiceArea && mapEmbed
+            mapEmbed || address.city
               ? `
-          <div style="margin-top: 2rem; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm);">
-            ${mapEmbed}
+          <div style="margin-top: 2rem;">
+            ${renderGoogleMapEmbed({
+              input: mapEmbed,
+              address: isServiceArea ? { city: address.city, state: address.state } : address,
+              city: address.city,
+              state: address.state,
+              businessName: site.businessName,
+              height: 320,
+            })}
           </div>`
               : ""
           }

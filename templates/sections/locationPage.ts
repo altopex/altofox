@@ -162,15 +162,24 @@ ${breadcrumbsHtml}
             loading="eager"
             fetchpriority="high"${fallbackAttr}
           >
-          <div class="map-embed-container" style="margin-top: 1rem; border-radius: var(--radius); overflow: hidden; height: 220px; border: 1px solid var(--color-border);">
-            <iframe
-              title="Service map for ${ctx.city}, ${ctx.stateId}"
-              width="100%"
-              height="100%"
-              style="border: 0;"
-              loading="lazy"
-              src="${mapEmbedUrl}"
-            ></iframe>
+          <div class="map-embed-container" style="margin-top: 1rem; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface, #F8FAFC);">
+            <div style="height: 200px;">
+              <iframe
+                title="Service map for ${ctx.city}, ${ctx.stateId}"
+                width="100%"
+                height="100%"
+                style="border: 0; display: block;"
+                loading="lazy"
+                referrerpolicy="no-referrer-when-downgrade"
+                src="${mapEmbedUrl}"
+              ></iframe>
+            </div>
+            <div style="padding: 0.5rem 0.85rem; background: var(--color-surface, #FFFFFF); border-top: 1px solid var(--color-border); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+              <span style="font-size: 0.75rem; color: var(--color-text-muted); font-weight: 500;">📍 ${ctx.city}, ${ctx.stateId}</span>
+              <a href="https://www.google.com/maps/search/?api=1&query=${cityQuery}" target="_blank" rel="noopener noreferrer" style="font-size: 0.75rem; color: var(--color-primary); font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+                Open in Maps ↗
+              </a>
+            </div>
           </div>
         </div>
       </div>

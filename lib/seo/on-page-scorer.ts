@@ -3,6 +3,8 @@
  * Evaluates HTML content strictly in code with actionable suggestions.
  */
 
+import { parseKeywordList } from "../keywords/keyword-parser";
+
 export interface SEOCheckResult {
   id: string;
   name: string;
@@ -563,9 +565,7 @@ export function parseBulkKeywordPaste(
         pagePath = `${pagePath}.html`;
       }
       const primaryKeyword = parts[1];
-      const secondaryKeywords = parts[2]
-        ? parts[2].split(",").map((s) => s.trim()).filter(Boolean)
-        : [];
+      const secondaryKeywords = parts[2] ? parseKeywordList(parts[2]) : [];
       results.push({ pagePath, primaryKeyword, secondaryKeywords });
     }
   }

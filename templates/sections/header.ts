@@ -1,6 +1,7 @@
 import { SiteContentJSON } from "../../lib/generator/content-schema";
 import { PageRegistry, RegistryPage, LinkStyle } from "../../lib/registry/page-registry";
 import { renderHeaderFromRegistry } from "../../lib/registry/navigation-renderer";
+import { renderBrandLogo } from "../../lib/generator/logo-generator";
 
 export function renderHeader(
   site: SiteContentJSON["site"],
@@ -23,15 +24,18 @@ export function renderHeader(
   const phone = site.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
   const bizName = site.businessName || "Local Services";
+  const logoHtml = renderBrandLogo({
+    businessName: bizName,
+    trade: (site as any).trade || (site as any).industry || (site as any).primaryService,
+    logoUrl: (site as any).logoUrl || (site as any).logo,
+    href: "index.html",
+  });
 
   return `
   <!-- Site Header -->
   <header class="site-header ${variant === "centered" ? "header-centered" : ""}" id="site-header">
     <div class="header-container container">
-      <a href="index.html" class="brand-logo" aria-label="${bizName} Home">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary);"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-        <span>${bizName}</span>
-      </a>
+      ${logoHtml}
 
       <!-- Desktop Navigation -->
       <nav class="main-nav" aria-label="Main Navigation">

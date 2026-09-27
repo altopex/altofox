@@ -1,4 +1,5 @@
 import { SectionJSON } from "../../lib/generator/content-schema";
+import { renderGoogleMapEmbed } from "../../lib/location/map-embed";
 
 export function renderServiceAreas(
   section: SectionJSON,
@@ -37,10 +38,15 @@ export function renderServiceAreas(
           .join("\n        ")}
       </div>
       ${
-        mapEmbed
+        mapEmbed || areas.length > 0
           ? `
-      <div class="reveal" style="margin-top: 3rem; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-md);">
-        ${mapEmbed}
+      <div class="reveal" style="margin-top: 3rem;">
+        ${renderGoogleMapEmbed({
+          input: mapEmbed,
+          city: areas[0]?.name,
+          businessName: "Regional Service Coverage",
+          height: 380,
+        })}
       </div>`
           : ""
       }

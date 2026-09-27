@@ -1,6 +1,7 @@
 import { WebsiteFormData, TargetPage, computeTargetPages } from "./prompt";
 import { THEMES } from "../themes";
 import { BRAND } from "@/config/brand";
+import { renderBrandLogo } from "./logo-generator";
 
 /**
  * Builds the complete styles.css stylesheet strictly customized to the chosen theme
@@ -336,9 +337,9 @@ body.theme-clean-medical .hero {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  grid-template-columns: 1fr 1fr;
   gap: 3.5rem;
-  align-items: center;
+  align-items: stretch;
 }
 
 .hero-subheadline {
@@ -955,10 +956,12 @@ export function generateThemeTestSite(
   // Build Shared Header
   const headerHtml = `  <header class="site-header" id="site-header">
     <div class="header-container container">
-      <a href="index.html" class="brand-logo">
-        <span class="logo-icon">⚡</span>
-        <span class="logo-text">${bizName}</span>
-      </a>
+      ${renderBrandLogo({
+        businessName: bizName,
+        trade: formData.servicesOffered || formData.businessType,
+        logoUrl: formData.logoUrl,
+        href: "index.html",
+      })}
 
       <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
         <span class="hamburger-bar"></span>
@@ -1008,10 +1011,13 @@ export function generateThemeTestSite(
   const footerHtml = `  <footer class="site-footer">
     <div class="footer-top container">
       <div class="footer-col footer-col-brand">
-        <div class="brand-logo">
-          <span class="logo-icon">⚡</span>
-          <span class="logo-text">${bizName}</span>
-        </div>
+        ${renderBrandLogo({
+          businessName: bizName,
+          trade: formData.servicesOffered || formData.businessType,
+          logoUrl: formData.logoUrl,
+          isFooter: true,
+          href: null,
+        })}
         <p class="footer-desc">${formData.businessDescription || `Reliable, licensed local services in ${city}, ${state}. Available 24/7 with upfront transparent pricing.`}</p>
         <div class="footer-phone">
           <a href="tel:${cleanPhone}" class="footer-phone-link">${phone}</a>

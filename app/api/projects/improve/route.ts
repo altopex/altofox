@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
       scoreDelta: result.newScore - result.previousScore,
       targetReached: result.targetReached,
       changesApplied: result.changesApplied,
+      perPageResults: result.perPageResults,
       improvedFiles: result.improvedFiles,
       report: result.newReport,
     });

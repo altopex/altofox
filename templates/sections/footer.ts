@@ -1,6 +1,7 @@
 import { SiteContentJSON } from "../../lib/generator/content-schema";
 import { PageRegistry, RegistryPage, LinkStyle } from "../../lib/registry/page-registry";
 import { renderFooterFromRegistry } from "../../lib/registry/navigation-renderer";
+import { renderBrandLogo } from "../../lib/generator/logo-generator";
 
 export function renderFooter(
   site: SiteContentJSON["site"],
@@ -39,10 +40,13 @@ export function renderFooter(
       <div class="footer-grid">
         <!-- Col 1: About & Brand -->
         <div class="footer-col">
-          <div class="brand-logo" style="color: #FFFFFF; margin-bottom: 1rem;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--color-accent);"><path d="M12 2L2 7l10 5 10-5-10-5z"></path><path d="M2 17l10 5 10-5"></path><path d="M2 12l10 5 10-5"></path></svg>
-            <span>${bizName}</span>
-          </div>
+          ${renderBrandLogo({
+            businessName: bizName,
+            trade: (site as any).trade || (site as any).industry || (site as any).primaryService,
+            logoUrl: (site as any).logoUrl || (site as any).logo,
+            isFooter: true,
+            href: null,
+          })}
           <p>${tagline}</p>
           <div style="margin-top: 1.5rem;">
             <a href="tel:${cleanPhone}" style="color: var(--color-accent); font-weight: 800; font-size: 1.25rem;">${phone}</a>

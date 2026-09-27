@@ -9,6 +9,7 @@ import {
   buildSinglePagePrompt,
 } from "./prompt";
 import { THEMES } from "../themes";
+import { renderBrandLogo } from "./logo-generator";
 
 export interface SharedSiteLayout {
   headerHtml: string;
@@ -371,10 +372,12 @@ function generateFallbackHeader(formData: WebsiteFormData): string {
   return `
   <header class="site-header" id="site-header">
     <div class="header-container container">
-      <a href="index.html" class="brand-logo">
-        <span class="logo-icon">⚡</span>
-        <span class="logo-text">${bizName}</span>
-      </a>
+      ${renderBrandLogo({
+        businessName: bizName,
+        trade: formData.servicesOffered || formData.businessType,
+        logoUrl: formData.logoUrl,
+        href: "index.html",
+      })}
 
       <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
         <span class="hamburger-bar"></span>
@@ -417,10 +420,13 @@ function generateFallbackFooter(formData: WebsiteFormData): string {
   <footer class="site-footer">
     <div class="footer-top container">
       <div class="footer-col footer-col-brand">
-        <div class="brand-logo">
-          <span class="logo-icon">⚡</span>
-          <span class="logo-text">${bizName}</span>
-        </div>
+        ${renderBrandLogo({
+          businessName: bizName,
+          trade: formData.servicesOffered || formData.businessType,
+          logoUrl: formData.logoUrl,
+          isFooter: true,
+          href: null,
+        })}
         <p class="footer-desc">${formData.businessDescription || `Reliable, licensed local services in ${city}, ${state}. Available 24/7 with upfront pricing.`}</p>
         <div class="footer-phone">
           <a href="tel:${cleanPhone}" class="footer-phone-link">${phone}</a>

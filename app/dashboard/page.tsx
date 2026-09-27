@@ -44,6 +44,11 @@ import {
   NichePack,
 } from "@/niches";
 import {
+  parseKeywordList,
+  formatKeywordsForStorage,
+  validateKeywordList,
+} from "@/lib/keywords/keyword-parser";
+import {
   Sparkles,
   Key,
   Loader2,
@@ -384,6 +389,8 @@ export default function DashboardPage() {
   const [websiteDomain, setWebsiteDomain] = useState("");
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState("");
+  const [suggestedKeywords, setSuggestedKeywords] = useState<string[]>([]);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [googleMaps, setGoogleMaps] = useState("");
   const [socialLinks, setSocialLinks] = useState("");
   const [showCollapsibleSeo, setShowCollapsibleSeo] = useState(false);
@@ -520,8 +527,10 @@ export default function DashboardPage() {
         if (data.phone) setPhone(data.phone);
         if (data.email) setEmail(data.email);
         if (data.businessHours) setBusinessHours(data.businessHours);
-        if (data.websiteDomain) setWebsiteDomain(data.websiteDomain);
-        if (Array.isArray(data.keywords)) setKeywords(data.keywords);
+        if (data.keywords || data.targetKeywords) {
+          const loadedKeywords = parseKeywordList(data.keywords || data.targetKeywords);
+          if (loadedKeywords.length > 0) setKeywords(loadedKeywords);
+        }
         if (data.googleMaps) setGoogleMaps(data.googleMaps);
         if (data.socialLinks) setSocialLinks(data.socialLinks);
 
@@ -738,16 +747,60 @@ export default function DashboardPage() {
   };
 
   // Add / Remove Chips for Keywords
-  const handleAddKeyword = () => {
-    const trimmed = keywordInput.trim();
-    if (trimmed && !keywords.includes(trimmed)) {
-      setKeywords([...keywords, trimmed]);
+  const handleAddKeyword = (inputOverride?: string) => {
+    const raw = typeof inputOverride === "string" ? inputOverride : keywordInput;
+    if (!raw || !raw.trim()) return;
+
+    const parsed = parseKeywordList(raw);
+    if (parsed.length === 0) return;
+
+    const merged = parseKeywordList([...keywords, ...parsed]);
+    setKeywords(merged);
+    setKeywordInput("");
+
+    // If any added keywords were in suggestions, clean them up
+    const addedSet = new Set(parsed.map((k) => k.toLowerCase()));
+    setSuggestedKeywords((prev) => prev.filter((s) => !addedSet.has(s.toLowerCase())));
+    setSelectedSuggestions((prev) => prev.filter((s) => !addedSet.has(s.toLowerCase())));
+
+    if (stepErrors.keywords) {
+      setStepErrors((prev) => ({ ...prev, keywords: "" }));
+    }
+  };
+
+  // Intercept paste on keyword input to instantly parse comma/newline-separated lists
+  const handlePasteKeywords = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    if (pastedText.includes(",") || pastedText.includes("\n") || pastedText.includes("\r")) {
+      e.preventDefault();
+      const parsed = parseKeywordList(pastedText);
+      if (parsed.length === 0) return;
+
+      const merged = parseKeywordList([...keywords, ...parsed]);
+      const addedCount = merged.length - keywords.length;
+      setKeywords(merged);
       setKeywordInput("");
+
+      const addedSet = new Set(parsed.map((k) => k.toLowerCase()));
+      setSuggestedKeywords((prev) => prev.filter((s) => !addedSet.has(s.toLowerCase())));
+      setSelectedSuggestions((prev) => prev.filter((s) => !addedSet.has(s.toLowerCase())));
+
+      if (stepErrors.keywords) {
+        setStepErrors((prev) => ({ ...prev, keywords: "" }));
+      }
+
+      addToast({
+        type: "info",
+        title: "Keywords Parsed",
+        message: `Recognized and added ${addedCount} keyword${addedCount === 1 ? "" : "s"} from pasted text.`,
+      });
     }
   };
 
   const handleRemoveKeyword = (item: string) => {
-    setKeywords(keywords.filter((k) => k !== item));
+    setKeywords(keywords.filter((k) => k.toLowerCase() !== item.toLowerCase()));
   };
 
   // Effective Business Type String
@@ -793,6 +846,7 @@ export default function DashboardPage() {
   };
 
   // Auto-Suggest SEO Keywords using active Niche Pack patterns and user location
+  // NOTE: Does NOT auto-merge into selected keywords; allows user to review and pick
   const handleSuggestKeywords = () => {
     const generated = generateKeywordsForNiche(
       currentNichePack,
@@ -800,13 +854,77 @@ export default function DashboardPage() {
       stateRegion.trim() || "TX",
       serviceAreas
     );
-    const merged = Array.from(new Set([...keywords, ...generated]));
+    const parsedGen = parseKeywordList(generated);
+    const currentLower = new Set(keywords.map((k) => k.toLowerCase()));
+    const available = parsedGen.filter((k) => !currentLower.has(k.toLowerCase()));
+
+    if (available.length === 0) {
+      addToast({
+        type: "info",
+        title: "Keywords Already Present",
+        message: "All suggested keywords for this niche are already in your target keyword list.",
+      });
+      return;
+    }
+
+    setSuggestedKeywords(available);
+    setSelectedSuggestions([]); // User explicitly selects or chooses Select All
+    addToast({
+      type: "info",
+      title: `${currentNichePack.name} Keyword Suggestions`,
+      message: `Found ${available.length} relevant keyword suggestions. Select the ones you want below.`,
+    });
+  };
+
+  const handleToggleSuggestion = (sug: string) => {
+    setSelectedSuggestions((prev) =>
+      prev.includes(sug) ? prev.filter((k) => k !== sug) : [...prev, sug]
+    );
+  };
+
+  const handleToggleAllSuggestions = () => {
+    if (selectedSuggestions.length === suggestedKeywords.length) {
+      setSelectedSuggestions([]);
+    } else {
+      setSelectedSuggestions([...suggestedKeywords]);
+    }
+  };
+
+  const handleAddSelectedSuggestions = () => {
+    if (selectedSuggestions.length === 0) return;
+    const merged = parseKeywordList([...keywords, ...selectedSuggestions]);
+    const count = selectedSuggestions.length;
     setKeywords(merged);
+
+    const addedSet = new Set(selectedSuggestions.map((s) => s.toLowerCase()));
+    setSuggestedKeywords((prev) => prev.filter((s) => !addedSet.has(s.toLowerCase())));
+    setSelectedSuggestions([]);
+
+    if (stepErrors.keywords) {
+      setStepErrors((prev) => ({ ...prev, keywords: "" }));
+    }
+
     addToast({
       type: "success",
-      title: `${currentNichePack.name} SEO Keywords Generated`,
-      message: `Added ${generated.length} high-intent local SEO keywords using ${currentNichePack.name} patterns.`,
+      title: "Keywords Added",
+      message: `Added ${count} suggested keyword${count === 1 ? "" : "s"} to your target keywords.`,
     });
+  };
+
+  const handleAddSingleSuggestion = (sug: string) => {
+    const merged = parseKeywordList([...keywords, sug]);
+    setKeywords(merged);
+    setSuggestedKeywords((prev) => prev.filter((s) => s.toLowerCase() !== sug.toLowerCase()));
+    setSelectedSuggestions((prev) => prev.filter((s) => s.toLowerCase() !== sug.toLowerCase()));
+
+    if (stepErrors.keywords) {
+      setStepErrors((prev) => ({ ...prev, keywords: "" }));
+    }
+  };
+
+  const handleDismissSuggestions = () => {
+    setSuggestedKeywords([]);
+    setSelectedSuggestions([]);
   };
 
   // Toggle Page Selection
@@ -875,8 +993,21 @@ export default function DashboardPage() {
     if (!phone.trim()) {
       errors.phone = "Phone number is required for customer calls.";
     }
-    if (keywords.length === 0 && !keywordInput.trim()) {
-      errors.keywords = "At least one target keyword is required. Click 'Suggest Keywords' for help.";
+
+    // Auto-commit any pending keyword input so user doesn't lose it
+    let effectiveKeywords = [...keywords];
+    if (keywordInput.trim()) {
+      const pending = parseKeywordList(keywordInput);
+      if (pending.length > 0) {
+        effectiveKeywords = parseKeywordList([...effectiveKeywords, ...pending]);
+        setKeywords(effectiveKeywords);
+        setKeywordInput("");
+      }
+    }
+
+    const kwValidation = validateKeywordList(effectiveKeywords);
+    if (!kwValidation.valid) {
+      errors.keywords = kwValidation.error || "At least one target keyword is required. Add keywords or select from suggestions.";
     }
     setStepErrors(errors);
     return Object.keys(errors).length === 0;
@@ -1046,7 +1177,8 @@ export default function DashboardPage() {
       email: email.trim(),
       businessHours: businessHours.trim(),
       websiteDomain: websiteDomain.trim(),
-      targetKeywords: keywords.join(", "),
+      targetKeywords: formatKeywordsForStorage(keywords),
+      keywords: parseKeywordList(keywords),
       pagesToCreate: selectedPages,
       separateServicePages: separateServicePages,
       separateAreaPages: separateAreaPages,
@@ -2249,8 +2381,8 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Target Keywords (with Niche Pack Suggest button) */}
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <label className="text-xs font-semibold text-[#0F172A]">
                             Target Keywords for Local SEO <span className="text-[#EF4444]">*</span>
@@ -2262,58 +2394,174 @@ export default function DashboardPage() {
                         <button
                           type="button"
                           onClick={handleSuggestKeywords}
-                          className="inline-flex items-center space-x-1 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
+                          className="inline-flex items-center space-x-1.5 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>Suggest {currentNichePack.name} Keywords</span>
                         </button>
                       </div>
 
-                      <div className="flex gap-2 mb-2">
-                        <input
-                          type="text"
-                          value={keywordInput}
-                          onChange={(e) => setKeywordInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              handleAddKeyword();
-                            }
-                          }}
-                          placeholder="e.g. emergency plumber Dallas TX"
-                          className="input-base flex-1"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleAddKeyword}
-                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
-                        >
-                          + Add
-                        </button>
+                      {/* Keyword Input with Paste Interceptor */}
+                      <div className="space-y-1">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={keywordInput}
+                            onChange={(e) => setKeywordInput(e.target.value)}
+                            onPaste={handlePasteKeywords}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                handleAddKeyword();
+                              }
+                            }}
+                            placeholder="e.g. plumber near me, emergency plumber, water heater repair"
+                            className="input-base flex-1"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddKeyword()}
+                            className="px-4 py-2 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition shadow-2xs cursor-pointer"
+                          >
+                            + Add
+                          </button>
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          Paste comma-separated or newline-separated keywords. Phrases like &ldquo;emergency plumber near me&rdquo; stay intact.
+                        </p>
                       </div>
 
-                      {/* Keywords list */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {keywords.map((kw) => (
-                          <span
-                            key={kw}
-                            className="inline-flex items-center space-x-1.5 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-2.5 py-1 rounded-full text-xs font-medium"
-                          >
-                            <span>{kw}</span>
+                      {/* Selected Keywords Section */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-700">
+                            Selected Keywords ({keywords.length})
+                          </span>
+                          {keywords.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => handleRemoveKeyword(kw)}
-                              className="hover:text-red-600 rounded-full"
+                              onClick={() => setKeywords([])}
+                              className="text-[11px] text-slate-400 hover:text-red-500 transition cursor-pointer"
                             >
-                              <X className="w-3 h-3" />
+                              Clear all
                             </button>
-                          </span>
-                        ))}
+                          )}
+                        </div>
+
+                        {keywords.length === 0 ? (
+                          <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50/60 text-center text-xs text-slate-400">
+                            No keywords added yet. Paste comma-separated keywords above or click &ldquo;Suggest {currentNichePack.name} Keywords&rdquo;.
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-xl max-h-48 overflow-y-auto">
+                            {keywords.map((kw) => (
+                              <span
+                                key={kw}
+                                className="inline-flex items-center space-x-1.5 bg-white text-indigo-700 border border-indigo-200 shadow-2xs px-2.5 py-1 rounded-full text-xs font-medium group hover:border-indigo-300 transition"
+                              >
+                                <span>{kw}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveKeyword(kw)}
+                                  className="text-slate-400 hover:text-red-600 rounded-full transition cursor-pointer p-0.5"
+                                  title={`Remove "${kw}"`}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {stepErrors.keywords && (
+                          <p className="text-xs text-[#EF4444] font-medium">
+                            {stepErrors.keywords}
+                          </p>
+                        )}
                       </div>
-                      {stepErrors.keywords && (
-                        <p className="text-xs text-[#EF4444] mt-1 font-medium">
-                          {stepErrors.keywords}
-                        </p>
+
+                      {/* Suggested Keywords Section (Distinct & Selectable) */}
+                      {suggestedKeywords.length > 0 && (
+                        <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                              <span className="text-xs font-bold text-slate-900">
+                                Suggested Keywords ({suggestedKeywords.length})
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                ({selectedSuggestions.length} selected)
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <button
+                                type="button"
+                                onClick={handleToggleAllSuggestions}
+                                className="px-2 py-0.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/70 rounded transition cursor-pointer"
+                              >
+                                {selectedSuggestions.length === suggestedKeywords.length
+                                  ? "Deselect All"
+                                  : "Select All"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAddSelectedSuggestions}
+                                disabled={selectedSuggestions.length === 0}
+                                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-2xs transition cursor-pointer"
+                              >
+                                + Add Selected ({selectedSuggestions.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleDismissSuggestions}
+                                className="text-slate-400 hover:text-slate-600 p-1 rounded-md transition cursor-pointer"
+                                title="Dismiss suggestions"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+                            {suggestedKeywords.map((sug) => {
+                              const isChecked = selectedSuggestions.includes(sug);
+                              return (
+                                <div
+                                  key={sug}
+                                  onClick={() => handleToggleSuggestion(sug)}
+                                  className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition select-none ${
+                                    isChecked
+                                      ? "bg-indigo-600 text-white border border-indigo-600 shadow-2xs"
+                                      : "bg-white text-slate-700 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50"
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => handleToggleSuggestion(sug)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="w-3 h-3 text-indigo-600 rounded border-slate-300 focus:ring-0 cursor-pointer"
+                                  />
+                                  <span>{sug}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAddSingleSuggestion(sug);
+                                    }}
+                                    className={`ml-1 text-[10px] font-bold px-1 rounded transition cursor-pointer ${
+                                      isChecked
+                                        ? "text-indigo-100 hover:text-white"
+                                        : "text-indigo-600 hover:bg-indigo-100"
+                                    }`}
+                                    title={`Add "${sug}" immediately`}
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
                     </div>
 
