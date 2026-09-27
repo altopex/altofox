@@ -180,7 +180,7 @@ async function runThemeSystemAudit() {
   console.log("\n--- Testing Live HTML Generation Across Themes ---");
 
   // A. Test Modern Local Pro
-  const resModern = await assembleWebsite(sampleSiteData, modernProTheme, { domain: "austinpremierplumbing.com" });
+  const resModern = await assembleWebsite(sampleSiteData, modernProTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexModern = resModern.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexModern.includes("theme-modern-local-pro") || indexModern.includes("theme-modern-pro"), "Modern Local Pro has correct body theme class");
   assert(indexModern.includes("hero-split"), "Modern Local Pro renders hero-split");
@@ -188,7 +188,7 @@ async function runThemeSystemAudit() {
   assert(indexModern.includes("final-cta-section"), "Modern Local Pro includes Final CTA + Map section immediately above footer");
 
   // B. Test Bold Conversion
-  const resBold = await assembleWebsite(sampleSiteData, boldTheme, { domain: "austinpremierplumbing.com" });
+  const resBold = await assembleWebsite(sampleSiteData, boldTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexBold = resBold.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexBold.includes("theme-bold-conversion"), "Bold Conversion has theme-bold-conversion body class");
   assert(indexBold.includes("hero-compact-bold"), "Bold Conversion renders hero-compact-bold");
@@ -198,7 +198,7 @@ async function runThemeSystemAudit() {
   assert(indexBold.includes("CALL NOW: (512) 890-4321"), "Bold Conversion hero has prominent CALL NOW action");
 
   // C. Test Split Hero
-  const resSplit = await assembleWebsite(sampleSiteData, splitHeroTheme, { domain: "austinpremierplumbing.com" });
+  const resSplit = await assembleWebsite(sampleSiteData, splitHeroTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexSplit = resSplit.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexSplit.includes("theme-split-hero"), "Split Hero has theme-split-hero body class");
   assert(indexSplit.includes("hero-split-full"), "Split Hero renders hero-split-full");
@@ -213,7 +213,7 @@ async function runThemeSystemAudit() {
   }
 
   // D. Test Editorial Modern
-  const resEditorial = await assembleWebsite(sampleSiteData, editorialTheme, { domain: "austinpremierplumbing.com" });
+  const resEditorial = await assembleWebsite(sampleSiteData, editorialTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexEditorial = resEditorial.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexEditorial.includes("theme-editorial-modern"), "Editorial Modern has theme-editorial-modern body class");
   assert(indexEditorial.includes("hero-asymmetric"), "Editorial Modern renders hero-asymmetric");
@@ -221,28 +221,28 @@ async function runThemeSystemAudit() {
 
   // E. Test Clean Minimal
   const minimalTheme = getThemeById("clean-minimal");
-  const resMinimal = await assembleWebsite(sampleSiteData, minimalTheme, { domain: "austinpremierplumbing.com" });
+  const resMinimal = await assembleWebsite(sampleSiteData, minimalTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexMinimal = resMinimal.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexMinimal.includes("theme-clean-minimal"), "Clean Minimal has theme-clean-minimal body class");
   assert(indexMinimal.includes("hero-minimal"), "Clean Minimal renders hero-minimal");
   assert(indexMinimal.includes("card-minimal"), "Clean Minimal renders card-minimal");
 
   // F. Test Trust First
-  const resTrust = await assembleWebsite(sampleSiteData, trustFirstTheme, { domain: "austinpremierplumbing.com" });
+  const resTrust = await assembleWebsite(sampleSiteData, trustFirstTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexTrust = resTrust.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexTrust.includes("theme-trust-first"), "Trust First has theme-trust-first body class");
   assert(indexTrust.includes("trust-bar-expanded"), "Trust First renders trust-bar-expanded credibility grid");
 
   // G. Test Contemporary Soft
   const softTheme = getThemeById("contemporary-soft");
-  const resSoft = await assembleWebsite(sampleSiteData, softTheme, { domain: "austinpremierplumbing.com" });
+  const resSoft = await assembleWebsite(sampleSiteData, softTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexSoft = resSoft.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexSoft.includes("theme-contemporary-soft"), "Contemporary Soft has theme-contemporary-soft body class");
   assert(indexSoft.includes("hero-soft"), "Contemporary Soft renders hero-soft");
   assert(indexSoft.includes("card-soft"), "Contemporary Soft renders card-soft with 20px corners");
 
   // H. Test Modern Service Grid
-  const resServiceGrid = await assembleWebsite(sampleSiteData, serviceGridTheme, { domain: "austinpremierplumbing.com" });
+  const resServiceGrid = await assembleWebsite(sampleSiteData, serviceGridTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexServiceGrid = resServiceGrid.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexServiceGrid.includes("theme-modern-service-grid"), "Modern Service Grid has theme-modern-service-grid body class");
   assert(indexServiceGrid.includes("hero-service-first"), "Modern Service Grid renders hero-service-first");
@@ -250,14 +250,14 @@ async function runThemeSystemAudit() {
 
   // I. Test High Contrast Modern
   const contrastTheme = getThemeById("high-contrast-modern");
-  const resContrast = await assembleWebsite(sampleSiteData, contrastTheme, { domain: "austinpremierplumbing.com" });
+  const resContrast = await assembleWebsite(sampleSiteData, contrastTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexContrast = resContrast.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexContrast.includes("theme-high-contrast-modern"), "High Contrast Modern has theme-high-contrast-modern body class");
   assert(indexContrast.includes("hero-high-contrast"), "High Contrast Modern renders hero-high-contrast");
 
   // J. Test Premium Local
   const premiumTheme = getThemeById("premium-local");
-  const resPremium = await assembleWebsite(sampleSiteData, premiumTheme, { domain: "austinpremierplumbing.com" });
+  const resPremium = await assembleWebsite(sampleSiteData, premiumTheme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
   const indexPremium = resPremium.files.find((f) => f.path === "index.html")?.content || "";
   assert(indexPremium.includes("theme-premium-local"), "Premium Local has theme-premium-local body class");
   assert(indexPremium.includes("hero-asymmetric"), "Premium Local renders hero-asymmetric with refined serif");
@@ -265,7 +265,7 @@ async function runThemeSystemAudit() {
   // 5. Verify Phone Conversion in all 10 themes
   console.log("\n--- Testing Phone Conversion Consistency Across All 10 Themes ---");
   for (const theme of primaryThemes) {
-    const assembled = await assembleWebsite(sampleSiteData, theme, { domain: "austinpremierplumbing.com" });
+    const assembled = await assembleWebsite(sampleSiteData, theme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
     const html = assembled.files.find((f) => f.path === "index.html")?.content || "";
     assert(html.includes("tel:5128904321"), `${theme.name} contains clickable tel: phone call link`);
     assert(html.includes("mobile-call-bar"), `${theme.name} includes mobile call sticky bar`);
@@ -275,7 +275,7 @@ async function runThemeSystemAudit() {
   // 6. Verify SEO Schema Preservation Across All 10 Themes
   console.log("\n--- Testing SEO Schema & Metadata Preservation ---");
   for (const theme of primaryThemes) {
-    const assembled = await assembleWebsite(sampleSiteData, theme, { domain: "austinpremierplumbing.com" });
+    const assembled = await assembleWebsite(sampleSiteData, theme, { domain: "austinpremierplumbing.com", fastOfflinePreview: true });
     const html = assembled.files.find((f) => f.path === "index.html")?.content || "";
     assert(html.includes('"@type": "LocalBusiness"') || html.includes('"@type": "Plumber"'), `${theme.name} preserves JSON-LD Schema`);
     assert(html.includes("<title>"), `${theme.name} preserves SEO title tag`);

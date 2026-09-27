@@ -1883,6 +1883,7 @@ export function WebsiteManager({
         }}
         onSelectTheme={(themeId) => handleSwitchTheme(themeId)}
         isSelected={project.theme?.id === themePreviewTarget?.id}
+        projectId={project.id}
       />
 
       {/* Monthly Optimization Cycle Modal */}

@@ -20,6 +20,7 @@ interface ThemePreviewModalProps {
   onClose: () => void;
   onSelectTheme: (themeId: string) => void;
   isSelected?: boolean;
+  projectId?: string;
 }
 
 export function ThemePreviewModal({
@@ -28,11 +29,14 @@ export function ThemePreviewModal({
   onClose,
   onSelectTheme,
   isSelected = false,
+  projectId,
 }: ThemePreviewModalProps) {
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [htmlContent, setHtmlContent] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewProjectName, setPreviewProjectName] = useState<string>("");
+  const [isRealProject, setIsRealProject] = useState<boolean>(false);
 
   useEffect(() => {
     if (!isOpen || !theme) {
@@ -45,12 +49,18 @@ export function ThemePreviewModal({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/themes/preview?themeId=${encodeURIComponent(theme.id)}`)
+    const url = `/api/themes/preview?themeId=${encodeURIComponent(theme.id)}${
+      projectId ? `&projectId=${encodeURIComponent(projectId)}` : ""
+    }`;
+
+    fetch(url)
       .then((res) => res.json())
       .then((data) => {
         if (!isMounted) return;
         if (data.success && data.html) {
           setHtmlContent(data.html);
+          setPreviewProjectName(data.projectName || "");
+          setIsRealProject(Boolean(data.isRealProject));
         } else {
           setError(data.error || "Failed to render theme preview");
         }
@@ -66,7 +76,7 @@ export function ThemePreviewModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, theme]);
+  }, [isOpen, theme, projectId]);
 
   if (!isOpen || !theme) return null;
 
@@ -95,6 +105,15 @@ export function ThemePreviewModal({
                     Currently Selected
                   </span>
                 ) : null}
+                {isRealProject && previewProjectName ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Project: {previewProjectName}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                    Demo: Dallas Premier Plumbing
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 line-clamp-1">{theme.description}</p>
             </div>

@@ -65,6 +65,8 @@ export interface AssembleOptions {
     provider?: string;
     model?: string;
   };
+  validateNetwork?: boolean;
+  fastOfflinePreview?: boolean;
 }
 
 export interface AssembledWebsite {
@@ -315,7 +317,9 @@ export async function assembleWebsite(
       state: data.site.address?.state,
       pexelsKey: options?.pexelsKey,
       pixabayKey: options?.pixabayKey,
-      providerCredentials: options?.providerCredentials,
+      providerCredentials: options?.fastOfflinePreview ? undefined : options?.providerCredentials,
+      validateNetwork: options?.fastOfflinePreview ? false : options?.validateNetwork,
+      fastOfflinePreview: options?.fastOfflinePreview,
     }
   );
 

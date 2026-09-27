@@ -281,10 +281,44 @@ export async function resolveImagePlanWithValidation(
       providerName?: string;
     };
     validateNetwork?: boolean;
+    fastOfflinePreview?: boolean;
   } = {}
 ): Promise<ImagePlanSlot[]> {
   const validatedPlan: ImagePlanSlot[] = [];
   const deduplicationTracker = new ImageDeduplicationTracker();
+
+  if (options.fastOfflinePreview) {
+    for (const slot of plan) {
+      const resolved = resolvePageImage(
+        {
+          trade,
+          city,
+          state: options.state,
+          serviceName: slot.serviceName,
+          slot: slot.slot,
+          width: slot.width,
+          height: slot.height,
+          customAlt: slot.alt,
+          pageSlug: slot.pageSlug,
+        },
+        {
+          preferredSource: options.preferredSource,
+          deduplicationTracker,
+        }
+      );
+
+      validatedPlan.push({
+        ...slot,
+        query: resolved.query,
+        remoteUrl: resolved.url,
+        fallbackUrl: resolved.fallbackUrl,
+        allFallbacks: resolved.allFallbacks,
+        localSvgFallback: resolved.localSvgFallback,
+        status: "found",
+      });
+    }
+    return validatedPlan;
+  }
 
   for (const slot of plan) {
     try {
