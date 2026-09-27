@@ -42,7 +42,7 @@ async function runTests() {
 
   assert(
     baseCss.includes(".hero-image-wrap") &&
-    baseCss.includes("min-height: 440px;"),
+    (baseCss.includes("min-height: 480px;") || baseCss.includes("min-height: 440px;")),
     "Desktop .hero-image-wrap has minimum visual height of at least 440px"
   );
 
@@ -164,8 +164,8 @@ async function runTests() {
     "Generated styles.css includes 1fr 1fr desktop hero split"
   );
   assert(
-    cssContent.includes("min-height: 440px;"),
-    "Generated styles.css includes min-height: 440px desktop hero wrap"
+    cssContent.includes("min-height: 480px;") || cssContent.includes("min-height: 440px;"),
+    "Generated styles.css includes spacious desktop hero wrap (>= 440px)"
   );
 
   // 3. Test different content lengths: Short Title vs Long Title

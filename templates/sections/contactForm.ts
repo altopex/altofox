@@ -92,7 +92,7 @@ export function renderContactForm(
           </div>
 
           ${
-            mapEmbed || address.city
+            mapEmbed
               ? `
           <div style="margin-top: 2rem;">
             ${renderGoogleMapEmbed({

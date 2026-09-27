@@ -1,25 +1,83 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bundleProjectToZipStream } from "@/lib/export/zip-bundler";
+import { PrismaClient } from "@prisma/client";
+import path from "path";
+import fs from "fs";
 
 export const dynamic = "force-dynamic";
 
 /**
+ * Fallback helper to query SQLite in explicit read-only mode if primary connection fails with lock/permission errors.
+ */
+async function findProjectWithFallback(projectId: string) {
+  try {
+    return await db.project.findUnique({
+      where: { id: projectId },
+      include: { files: true },
+    });
+  } catch (primaryErr: any) {
+    console.warn(`[ZIP Export API] Primary db lookup encountered error: ${primaryErr?.message || primaryErr}. Attempting read-only fallback...`);
+
+    // Candidate db files to open with ?mode=ro
+    const candidates = [
+      path.resolve(process.cwd(), "prisma", "dev.db"),
+      path.resolve(process.cwd(), "dev.db"),
+      "/tmp/dev.db",
+      "/var/task/prisma/dev.db",
+      "/var/task/dev.db",
+    ];
+
+    let fallbackClient: PrismaClient | null = null;
+    for (const cand of candidates) {
+      if (fs.existsSync(cand)) {
+        try {
+          fallbackClient = new PrismaClient({
+            datasources: {
+              db: {
+                url: `file:${cand}?mode=ro`,
+              },
+            },
+          });
+          const res = await fallbackClient.project.findUnique({
+            where: { id: projectId },
+            include: { files: true },
+          });
+          if (res) {
+            console.log(`[ZIP Export API] Successfully retrieved project "${projectId}" via read-only fallback.`);
+            await fallbackClient.$disconnect().catch(() => {});
+            return res;
+          }
+        } catch {
+          if (fallbackClient) {
+            await fallbackClient.$disconnect().catch(() => {});
+          }
+        }
+      }
+    }
+
+    // Re-throw primary error if fallback could not resolve
+    throw primaryErr;
+  }
+}
+
+/**
  * GET /api/projects/[id]/download
  * Streams a production-ready ZIP archive of the saved project.
+ * Supports version queries: ?version=1 or ?versionId=...
  */
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const projectId = params.id;
-  console.log(`[ZIP Export API] Received GET download request for project ID: "${projectId}"`);
+  const requestedVersion = req.nextUrl?.searchParams?.get("version") || req.nextUrl?.searchParams?.get("versionNumber");
+  const requestedVersionId = req.nextUrl?.searchParams?.get("versionId");
+
+  console.log(`[ZIP Export API] Received GET download request for project ID: "${projectId}" (version: ${requestedVersion || requestedVersionId || "current"})`);
 
   try {
-    const project = await db.project.findUnique({
-      where: { id: projectId },
-      include: { files: true },
-    });
+    const project = await findProjectWithFallback(projectId);
 
     if (!project) {
       console.warn(`[ZIP Export API] Project not found in database: "${projectId}"`);
@@ -29,7 +87,55 @@ export async function GET(
       );
     }
 
-    if (!project.files || project.files.length === 0) {
+    // Parse optional metadata, versions, and optimization history safely
+    let targetFiles = project.files || [];
+    let optimizationScore: number | undefined = undefined;
+    let optimizationHistory: any = null;
+
+    if (project.notes) {
+      try {
+        const parsedNotes = JSON.parse(project.notes);
+
+        // Case A / B: Retrieve actual optimization score if present; never invent or force 95%
+        if (typeof parsedNotes.overallScore === "number") {
+          optimizationScore = parsedNotes.overallScore;
+        } else if (typeof parsedNotes.qualityScore === "number") {
+          optimizationScore = parsedNotes.qualityScore;
+        } else if (typeof parsedNotes.score === "number") {
+          optimizationScore = parsedNotes.score;
+        }
+
+        // Case C: Check version history if a specific version was requested
+        if (Array.isArray(parsedNotes.versions) && parsedNotes.versions.length > 0) {
+          optimizationHistory = parsedNotes.versions;
+
+          let targetVersionObj: any = null;
+          if (requestedVersionId) {
+            targetVersionObj = parsedNotes.versions.find((v: any) => v.id === requestedVersionId);
+          } else if (requestedVersion) {
+            const vNum = parseInt(requestedVersion, 10);
+            targetVersionObj = parsedNotes.versions.find((v: any) => v.versionNumber === vNum);
+          }
+
+          if (targetVersionObj && Array.isArray(targetVersionObj.files) && targetVersionObj.files.length > 0) {
+            targetFiles = targetVersionObj.files.map((f: any) => ({
+              path: f.path,
+              content: f.content,
+              mimeType: f.mimeType || "text/plain",
+            }));
+            if (typeof targetVersionObj.qualityScore === "number") {
+              optimizationScore = targetVersionObj.qualityScore;
+            }
+            console.log(`[ZIP Export API] Serving specific version ${targetVersionObj.versionNumber || targetVersionObj.id} (${targetFiles.length} files)`);
+          }
+        }
+      } catch {
+        // Case D: If notes parsing or score lookup fails, NEVER break the download.
+        // Plain string notes or unformatted data are safely ignored.
+      }
+    }
+
+    if (!targetFiles || targetFiles.length === 0) {
       console.warn(`[ZIP Export API] Project has no files: "${projectId}"`);
       return NextResponse.json(
         { success: false, error: "Project has no files to bundle into a ZIP archive." },
@@ -40,13 +146,13 @@ export async function GET(
     const { stream, safeFilename, stats } = await bundleProjectToZipStream({
       projectId: project.id,
       projectName: project.name,
-      files: project.files,
+      files: targetFiles,
       provider: project.provider,
       model: project.model,
       createdAt: project.createdAt,
     });
 
-    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files, ${stats.omittedAssets} omitted assets)`);
+    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files, optimization score: ${optimizationScore ?? "none"})`);
 
     return new Response(stream, {
       status: 200,
@@ -56,6 +162,7 @@ export async function GET(
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
+        ...(optimizationScore !== undefined ? { "X-Quality-Score": String(optimizationScore) } : {}),
       },
     });
   } catch (error: any) {
@@ -63,7 +170,6 @@ export async function GET(
       message: error?.message,
       name: error?.name,
       stack: error?.stack,
-      memoryUsage: process.memoryUsage(),
     });
 
     return NextResponse.json(
@@ -90,7 +196,7 @@ export async function POST(
 
   try {
     const body = await req.json();
-    const { name, files, photos, provider, model, domain, businessDetails, formData } = body || {};
+    const { name, files, photos, provider, model, domain, businessDetails, formData, qualityScore } = body || {};
 
     if (!Array.isArray(files) || files.length === 0) {
       return NextResponse.json(
@@ -121,6 +227,7 @@ export async function POST(
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
+        ...(typeof qualityScore === "number" ? { "X-Quality-Score": String(qualityScore) } : {}),
       },
     });
   } catch (error: any) {

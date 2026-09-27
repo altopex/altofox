@@ -292,7 +292,7 @@ async function runMasterAudit() {
   const css = stylesFile!.content.toString();
   assert(css.includes(".hero-split-grid") && css.includes("grid-template-columns: 1fr 1fr;"), "CSS has balanced 1fr 1fr desktop split columns");
   assert(css.includes("align-items: stretch;"), "CSS has align-items: stretch so left content and right image share equal row height");
-  assert(css.includes(".hero-image-wrap") && css.includes("min-height: 440px;"), "Desktop image container has min-height >= 440px (never tiny/compressed)");
+  assert(css.includes(".hero-image-wrap") && (css.includes("min-height: 480px;") || css.includes("min-height: 440px;")), "Desktop image container has min-height >= 440px (never tiny/compressed)");
   assert(css.includes("aspect-ratio: 4 / 3;") && css.includes("min-height: 260px;"), "Mobile hero image has 4:3 aspect-ratio with min-height >= 260px (never a 190px sliver)");
   assert(css.includes("object-fit: cover;") && css.includes("object-position: center 25%;"), "Image uses object-fit: cover and intelligent upper-center crop position");
 

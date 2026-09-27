@@ -2,6 +2,7 @@ import { SiteContentJSON } from "../../lib/generator/content-schema";
 import { PageRegistry, RegistryPage, LinkStyle } from "../../lib/registry/page-registry";
 import { renderFooterFromRegistry } from "../../lib/registry/navigation-renderer";
 import { renderBrandLogo } from "../../lib/generator/logo-generator";
+import { renderGoogleMapEmbed } from "../../lib/location/map-embed";
 
 export function renderFooter(
   site: SiteContentJSON["site"],
@@ -32,6 +33,8 @@ export function renderFooter(
 
   const email = site.email || "";
   const areas = site.serviceAreas && site.serviceAreas.length > 0 ? site.serviceAreas : [];
+
+  const mapInput = (site as any).googleMaps || (address.street ? `${address.street}, ${address.city || ""}, ${address.state || ""}` : address.city);
 
   return `
   <!-- Site Footer: 4-Column Layout -->
@@ -83,6 +86,22 @@ export function renderFooter(
           <p style="margin-top: 0.75rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>
         </div>
       </div>
+
+      <!-- Footer Location Map: Sole Google Map on the Page -->
+      ${
+        mapInput
+          ? `
+      <div class="footer-map-container" style="margin-top: 2.5rem; margin-bottom: 2rem;">
+        ${renderGoogleMapEmbed({
+          input: mapInput,
+          city: address.city,
+          state: address.state,
+          businessName: bizName,
+          height: 320,
+        })}
+      </div>`
+          : ""
+      }
 
       <div class="footer-bottom">
         <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated.</p>

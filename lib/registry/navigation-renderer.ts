@@ -1,6 +1,7 @@
 import { PageRegistry, RegistryPage, linkTo, LinkStyle, assetPath } from "./page-registry";
 import { SiteInfoJSON } from "../generator/content-schema";
 import { renderBrandLogo } from "../generator/logo-generator";
+import { renderGoogleMapEmbed } from "../location/map-embed";
 
 export interface HeaderRenderOptions {
   registry: PageRegistry;
@@ -245,6 +246,8 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
   // Areas Links
   const displayedAreas = locationPages.slice(0, 5);
 
+  const mapInput = (site as any).googleMaps || (address.street ? `${address.street}, ${address.city || ""}, ${address.state || ""}` : address.city);
+
   return `
   <!-- Site Footer: 4-Column Layout -->
   <footer class="site-footer" id="site-footer">
@@ -302,6 +305,22 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
           </div>` : ""}
         </div>
       </div>
+
+      <!-- Footer Location Map: Sole Google Map on the Page -->
+      ${
+        mapInput
+          ? `
+      <div class="footer-map-container" style="margin-top: 2.5rem; margin-bottom: 2rem;">
+        ${renderGoogleMapEmbed({
+          input: mapInput,
+          city: address.city,
+          state: address.state,
+          businessName: bizName,
+          height: 320,
+        })}
+      </div>`
+          : ""
+      }
 
       <div class="footer-bottom">
         <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved. Locally Owned & Operated.</p>

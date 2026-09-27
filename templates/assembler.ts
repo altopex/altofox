@@ -470,8 +470,14 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderGallery(section, sectionImages));
           break;
         case "serviceAreas":
-          const areaMapEmbed = options?.mapEmbed || (data.site as any).googleMaps || data.site.address?.city;
-          renderedSectionsHtml.push(Sections.renderServiceAreas(section, data.site.serviceAreas, areaMapEmbed));
+          renderedSectionsHtml.push(
+            Sections.renderServiceAreas(
+              section,
+              data.site.serviceAreas,
+              data.site.address?.city,
+              data.site.address?.state
+            )
+          );
           break;
         case "testimonials":
           const testHtml = Sections.renderTestimonials(section, data.site);
@@ -486,7 +492,16 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           renderedSectionsHtml.push(Sections.renderCtaBanner(section, data.site.phone, sectionImages));
           break;
         case "contactForm":
-          const contactMapEmbed = options?.mapEmbed || (data.site as any).googleMaps || (data.site.address?.city ? `${data.site.address?.city}${data.site.address?.state ? `, ${data.site.address.state}` : ""}` : undefined);
+          // The homepage has its sole dedicated map in the footer/location area.
+          // Omit duplicate contactForm map on homepage so only ONE map exists.
+          const isHomePage = page.slug === "index" || page.slug === "";
+          const contactMapEmbed = isHomePage
+            ? undefined
+            : options?.mapEmbed ||
+              (data.site as any).googleMaps ||
+              (data.site.address?.city
+                ? `${data.site.address?.city}${data.site.address?.state ? `, ${data.site.address.state}` : ""}`
+                : undefined);
           renderedSectionsHtml.push(Sections.renderContactForm(section, data.site, contactMapEmbed));
           break;
         default:
