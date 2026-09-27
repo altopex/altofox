@@ -55,6 +55,12 @@ export interface AssembleOptions {
     localNotes?: string;
   }[];
   customContentInstructions?: string;
+  providerCredentials?: {
+    apiKey?: string;
+    baseUrl?: string;
+    provider?: string;
+    model?: string;
+  };
 }
 
 export interface AssembledWebsite {
@@ -304,6 +310,7 @@ export async function assembleWebsite(
       state: data.site.address?.state,
       pexelsKey: options?.pexelsKey,
       pixabayKey: options?.pixabayKey,
+      providerCredentials: options?.providerCredentials,
     }
   );
 

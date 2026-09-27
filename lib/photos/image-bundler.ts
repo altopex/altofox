@@ -6,6 +6,7 @@ import {
   resolvePageImage,
   resolveValidatedPageImage,
   ImageProviderType,
+  ImageDeduplicationTracker,
 } from "./image-provider";
 import { generateTradeSvgBuffer, generateTradeSvgDataUri } from "./trade-svg-fallback";
 import { detectTradeCategory } from "./photo-service";
@@ -15,6 +16,7 @@ export interface ImagePlanSlot {
   slot: ImageSlotType;
   query: string;
   alt: string;
+  serviceName?: string;
   width: number;
   height: number;
   localPath: string; // e.g. "images/certified-plumber-portland.jpg"
@@ -103,6 +105,32 @@ export function createImagePlan(
       }
 
       for (let i = 0; i < count; i++) {
+        let specificServiceName = serviceName;
+        let itemTitle: string | undefined;
+
+        if (slotType === "service" && section?.content?.services && Array.isArray(section.content.services)) {
+          const sItem = section.content.services[i];
+          if (sItem) {
+            itemTitle = typeof sItem === "string" ? sItem : (sItem.title || sItem.name || sItem.heading);
+            if (itemTitle) {
+              specificServiceName = itemTitle;
+            }
+          }
+        } else if (slotType === "hero") {
+          itemTitle = section?.content?.h1 || section?.content?.eyebrow || pageTitle;
+          specificServiceName = isServicePage ? (serviceName || pageTitle) : undefined;
+        } else if (slotType === "about") {
+          itemTitle = section?.content?.title || "Craftsman & Technician Team";
+        } else if (slotType === "gallery") {
+          const galleryTitles = [
+            "Precision System Installation",
+            "Residential Repair Restoration",
+            "Modern Equipment Upgrade",
+            "Certified Workmanship Result",
+          ];
+          itemTitle = galleryTitles[i % galleryTitles.length];
+        }
+
         const baseName = `${tradeClean}-${slotType}-${slug}-${photoIndex}`;
         let localPath = `images/${baseName}.jpg`;
         if (usedPaths.has(localPath)) {
@@ -120,8 +148,8 @@ export function createImagePlan(
 
         const resolved = resolvePageImage(
           {
-            pageTitle,
-            serviceName,
+            pageTitle: itemTitle || pageTitle,
+            serviceName: specificServiceName,
             city,
             state: options.state,
             trade,
@@ -148,6 +176,7 @@ export function createImagePlan(
           slot: slotType,
           query: finalQuery,
           alt: finalAlt,
+          serviceName: specificServiceName,
           width: defaultWidth,
           height: defaultHeight,
           localPath,
@@ -237,10 +266,19 @@ export async function resolveImagePlanWithValidation(
     pexelsKey?: string;
     pixabayKey?: string;
     openaiKey?: string;
+    providerCredentials?: {
+      provider?: string;
+      apiKey?: string;
+      baseUrl?: string;
+      model?: string;
+      organizationId?: string;
+      providerName?: string;
+    };
     validateNetwork?: boolean;
   } = {}
 ): Promise<ImagePlanSlot[]> {
   const validatedPlan: ImagePlanSlot[] = [];
+  const deduplicationTracker = new ImageDeduplicationTracker();
 
   for (const slot of plan) {
     try {
@@ -249,6 +287,7 @@ export async function resolveImagePlanWithValidation(
           trade,
           city,
           state: options.state,
+          serviceName: slot.serviceName,
           slot: slot.slot,
           width: slot.width,
           height: slot.height,
@@ -260,12 +299,15 @@ export async function resolveImagePlanWithValidation(
           pexelsKey: options.pexelsKey,
           pixabayKey: options.pixabayKey,
           openaiKey: options.openaiKey,
+          providerCredentials: options.providerCredentials,
+          deduplicationTracker,
           validateNetwork: options.validateNetwork,
         }
       );
 
       validatedPlan.push({
         ...slot,
+        query: resolved.query,
         remoteUrl: resolved.url,
         fallbackUrl: resolved.fallbackUrl,
         allFallbacks: resolved.allFallbacks,

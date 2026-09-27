@@ -50,21 +50,36 @@ export function buildCommercialImagePrompt(options: GenerateImageOptions): strin
   return `Commercial photography of professional ${trade} work, specifically ${service}${locContext}. ${framing}, realistic lighting, modern clean equipment, natural textures, 4k commercial photography, no text, no logos, no watermarks.`;
 }
 
+export interface AiImageCredentials {
+  apiKey?: string;
+  baseUrl?: string;
+  provider?: string;
+  model?: string;
+}
+
 /**
- * Attempts AI image generation using configured AI provider (OpenAI DALL-E)
+ * Attempts AI image generation using configured AI provider (OpenAI DALL-E or custom OpenAI-compatible endpoint)
  */
 export async function tryGenerateAiImage(
   options: GenerateImageOptions,
-  apiKeyOverride?: string,
+  credentialsOrKey?: string | AiImageCredentials,
   timeoutMs: number = 8000
 ): Promise<GeneratedImageResult | null> {
-  let apiKey = apiKeyOverride?.trim();
+  let apiKey = typeof credentialsOrKey === "string" ? credentialsOrKey.trim() : credentialsOrKey?.apiKey?.trim();
+  let baseUrl = typeof credentialsOrKey === "object" ? credentialsOrKey?.baseUrl?.trim() : undefined;
 
   if (!apiKey) {
     try {
-      const creds = await getProviderCredentials("openai");
-      if (creds?.apiKey) {
-        apiKey = creds.apiKey;
+      // Check custom provider first, then openai
+      const customCreds = await getProviderCredentials("custom");
+      if (customCreds?.apiKey) {
+        apiKey = customCreds.apiKey;
+        baseUrl = customCreds.baseUrl || baseUrl;
+      } else {
+        const openaiCreds = await getProviderCredentials("openai");
+        if (openaiCreds?.apiKey) {
+          apiKey = openaiCreds.apiKey;
+        }
       }
     } catch {
       // Key lookup optional
@@ -81,11 +96,19 @@ export async function tryGenerateAiImage(
 
   const prompt = buildCommercialImagePrompt(options);
 
+  // Compute endpoint: custom base URL if provided, otherwise standard OpenAI
+  let endpoint = "https://api.openai.com/v1/images/generations";
+  if (baseUrl) {
+    endpoint = baseUrl.endsWith("/images/generations")
+      ? baseUrl
+      : `${baseUrl.replace(/\/+$/, "")}/images/generations`;
+  }
+
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
+    const res = await fetch(endpoint, {
       method: "POST",
       signal: controller.signal,
       headers: {

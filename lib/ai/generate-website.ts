@@ -22,6 +22,58 @@ export interface TestConnectionParams {
 }
 
 /**
+ * Resolves standard OpenAI-compatible chat completions endpoint from custom baseUrl.
+ * Correctly handles /v1, /chat/completions, and trailing slashes.
+ */
+export function resolveChatCompletionsEndpoint(baseUrl?: string): string {
+  if (!baseUrl || !baseUrl.trim()) return "https://api.openai.com/v1/chat/completions";
+  const url = baseUrl.trim().replace(/\/+$/, "");
+  if (url.endsWith("/chat/completions")) {
+    return url;
+  }
+  if (url.endsWith("/v1")) {
+    return `${url}/chat/completions`;
+  }
+  if (url.includes("/v1/")) {
+    return `${url}/chat/completions`;
+  }
+  return `${url}/chat/completions`;
+}
+
+/**
+ * Extracts assistant message content from various OpenAI-compatible and proxy formats.
+ */
+export function extractChoiceContent(data: any): { content: string; finishReason?: string } {
+  let finishReason = data?.choices?.[0]?.finish_reason || data?.choices?.[0]?.finishReason;
+  let content = "";
+
+  const choice = data?.choices?.[0];
+  if (choice) {
+    if (typeof choice.message?.content === "string") {
+      content = choice.message.content;
+    } else if (Array.isArray(choice.message?.content)) {
+      content = choice.message.content
+        .map((part: any) => (typeof part === "string" ? part : part?.text || ""))
+        .join("");
+    } else if (typeof choice.text === "string") {
+      content = choice.text;
+    } else if (choice.message && typeof choice.message === "object") {
+      content = choice.message.text || "";
+    }
+  } else if (Array.isArray(data?.candidates)) {
+    const cand = data.candidates[0];
+    finishReason = cand?.finishReason;
+    content = cand?.content?.parts?.map((p: any) => p?.text || "").join("") || "";
+  } else if (Array.isArray(data?.content)) {
+    content = data.content.map((p: any) => (typeof p === "string" ? p : p?.text || "")).join("");
+  } else if (typeof data?.content === "string") {
+    content = data.content;
+  }
+
+  return { content, finishReason };
+}
+
+/**
  * Single shared function for all AI providers to generate website content.
  * Standardizes OpenAI, Gemini, OpenRouter, and custom OpenAI-compatible formats.
  */
@@ -142,10 +194,8 @@ export async function generateWebsite(params: GenerateWebsiteParams): Promise<st
     endpoint = "https://openrouter.ai/api/v1/chat/completions";
     extraHeaders["HTTP-Referer"] = BRAND.siteUrl;
     extraHeaders["X-Title"] = `${BRAND.name} Website Builder`;
-  } else if (provider === "custom" && baseUrl) {
-    endpoint = baseUrl.endsWith("/chat/completions")
-      ? baseUrl
-      : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  } else if (baseUrl && (provider === "custom" || provider === "openai" || provider.includes("custom"))) {
+    endpoint = resolveChatCompletionsEndpoint(baseUrl);
   }
 
   if (organizationId && organizationId.trim()) {
@@ -226,9 +276,13 @@ export async function generateWebsite(params: GenerateWebsiteParams): Promise<st
     throw new Error(`Malformed response from ${providerName}: Response is not valid JSON.`);
   }
 
-  const content = data.choices?.[0]?.message?.content;
+  const { content, finishReason } = extractChoiceContent(data);
   if (typeof content !== "string" || !content.trim()) {
     throw new Error(`Malformed response from ${providerName}: Expected valid content in choices[0].message.content.`);
+  }
+
+  if (finishReason === "length") {
+    console.warn(`[generateWebsite] Warning: Model response reached token limit (${maxTokens}). Output may be truncated.`);
   }
 
   return content;
@@ -275,8 +329,8 @@ export async function testConnection(
             "x-goog-api-key": apiKey.trim(),
           },
           body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: "Respond with OK" }] }],
-            generationConfig: { maxOutputTokens: 5 },
+            contents: [{ role: "user", parts: [{ text: 'Respond ONLY with JSON: {"status": "ok", "provider": "connected"}' }] }],
+            generationConfig: { maxOutputTokens: 60 },
           }),
           signal: AbortSignal.timeout(15000),
         });
@@ -318,9 +372,20 @@ export async function testConnection(
         return { success: false, message: "Malformed response: Candidate response was empty." };
       }
 
+      let structuredJsonVerified = false;
+      try {
+        const cleaned = reply.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+        const parsed = JSON.parse(cleaned);
+        if (typeof parsed === "object" && parsed !== null) {
+          structuredJsonVerified = true;
+        }
+      } catch {}
+
       return {
         success: true,
-        message: `Successfully connected to Google Gemini (${cleanedModel}) in ${latencyMs}ms!`,
+        message: structuredJsonVerified
+          ? `Successfully connected to Google Gemini (${cleanedModel}) in ${latencyMs}ms! Structured JSON verified.`
+          : `Successfully connected to Google Gemini (${cleanedModel}) in ${latencyMs}ms!`,
         latencyMs,
       };
     }
@@ -341,10 +406,8 @@ export async function testConnection(
       endpoint = "https://openrouter.ai/api/v1/chat/completions";
       extraHeaders["HTTP-Referer"] = BRAND.siteUrl;
       extraHeaders["X-Title"] = BRAND.name;
-    } else if (provider === "custom" && baseUrl) {
-      endpoint = baseUrl.endsWith("/chat/completions")
-        ? baseUrl
-        : `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    } else if (baseUrl && (provider === "custom" || provider === "openai" || provider.includes("custom"))) {
+      endpoint = resolveChatCompletionsEndpoint(baseUrl);
     }
 
     if (organizationId && organizationId.trim()) {
@@ -362,8 +425,8 @@ export async function testConnection(
         },
         body: JSON.stringify({
           model: testModel,
-          messages: [{ role: "user", content: "Respond with OK" }],
-          max_tokens: 5,
+          messages: [{ role: "user", content: 'Respond ONLY with JSON: {"status": "ok", "provider": "connected"}' }],
+          max_tokens: 60,
         }),
         signal: AbortSignal.timeout(15000),
       });
@@ -413,14 +476,25 @@ export async function testConnection(
       return { success: false, message: "Malformed response: Provider did not return valid JSON." };
     }
 
-    const content = data.choices?.[0]?.message?.content;
+    const { content } = extractChoiceContent(data);
     if (typeof content !== "string" || !content.trim()) {
       return { success: false, message: "Malformed response: Response contained no valid message content in choices[0]." };
     }
 
+    let structuredJsonVerified = false;
+    try {
+      const cleaned = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      const parsed = JSON.parse(cleaned);
+      if (typeof parsed === "object" && parsed !== null) {
+        structuredJsonVerified = true;
+      }
+    } catch {}
+
     return {
       success: true,
-      message: `Successfully connected to ${providerName} (${testModel}) in ${latencyMs}ms!`,
+      message: structuredJsonVerified
+        ? `Successfully connected to ${providerName} (${testModel}) in ${latencyMs}ms! Structured JSON verified.`
+        : `Successfully connected to ${providerName} (${testModel}) in ${latencyMs}ms!`,
       latencyMs,
     };
   } catch (err) {

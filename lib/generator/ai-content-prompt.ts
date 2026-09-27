@@ -404,11 +404,24 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
   const phone = formData.phone || "(555) 123-4567";
   const domain = (formData.websiteDomain || "www.example.com").replace(/^https?:\/\//, "");
 
-  const servicesList = formData.services && formData.services.length > 0
+  const rawServices = formData.services && formData.services.length > 0
     ? formData.services
     : formData.servicesOffered
     ? formData.servicesOffered.split(",").map((s) => s.trim()).filter(Boolean)
     : niche.commonServices.slice(0, 6);
+
+  const servicesList: Array<{ title: string; description: string }> = rawServices.map((s: any) => {
+    if (typeof s === "string") {
+      return {
+        title: s,
+        description: `Professional, guaranteed ${s.toLowerCase()} performed by certified specialists with advanced equipment.`,
+      };
+    }
+    return {
+      title: s.title || "Specialized Service",
+      description: s.description || `Professional, guaranteed ${(s.title || "service").toLowerCase()} performed by certified specialists.`,
+    };
+  });
 
   const areasList = formData.serviceAreasList && formData.serviceAreasList.length > 0
     ? formData.serviceAreasList
@@ -461,8 +474,11 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
   const shouldIncludeReviews = hasRealReviews || hasGoogleReviewUrl;
 
   // Build each page content
-  const pagesContent = pages.map((page) => {
-    const slug = page.path.replace(/\.html$/, "");
+  const pagesContent = pages.map((page: any) => {
+    const rawPath = typeof page === "string"
+      ? (page.toLowerCase() === "home" ? "index.html" : `${page.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.html`)
+      : page?.path || page?.slug || "index.html";
+    const slug = rawPath.replace(/\.html$/, "");
     const isHome = slug === "index";
 
     // 1. Home Page
@@ -517,8 +533,8 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
               headline: `Specialized ${formData.businessType} Solutions`,
               subheadline: `Complete commercial and residential service handled with precision and care in ${city}.`,
               items: servicesList.map((s) => ({
-                title: s,
-                description: `Professional, guaranteed ${s.toLowerCase()} performed by certified specialists with advanced equipment.`,
+                title: s.title,
+                description: s.description,
                 slug: "services",
               })),
             },
@@ -615,15 +631,19 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
       };
     }
 
+    const pageTitle = typeof page === "string"
+      ? (page.toLowerCase() === "home" ? "Home" : page)
+      : page?.title || slug.charAt(0).toUpperCase() + slug.slice(1);
+
     // 2. Inner Pages (About, Services, Contact, Subpages)
     return {
       slug,
       seo: {
-        title: `${page.title} | ${bizName}`,
-        description: `Professional, licensed ${page.title.toLowerCase()} in ${city}, ${state}. Upfront pricing and written warranties. Call ${phone}.`,
-        h1: page.title,
-        primaryKeyword: `${page.title} ${city}`,
-        ogDescription: `Contact ${bizName} for dependable ${page.title.toLowerCase()} in ${city}.`,
+        title: `${pageTitle} | ${bizName}`,
+        description: `Professional, licensed ${pageTitle.toLowerCase()} in ${city}, ${state}. Upfront pricing and written warranties. Call ${phone}.`,
+        h1: pageTitle,
+        primaryKeyword: `${pageTitle} ${city}`,
+        ogDescription: `Contact ${bizName} for dependable ${pageTitle.toLowerCase()} in ${city}.`,
       },
       sections: [
         {
@@ -631,7 +651,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           variant: "split",
           content: {
             eyebrow: "Local Expertise",
-            h1: page.title,
+            h1: pageTitle,
             subheadline: `Certified, guaranteed service in ${city} and surrounding communities. Upfront rates and zero surprise charges.`,
             primaryCta: `Call ${phone}`,
             secondaryCta: "Request Quote",
@@ -641,8 +661,8 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           images: [
             {
               slot: "main",
-              query: niche.imageQueries.services[0] || `${tradeCategory} ${page.title}`,
-              alt: `${page.title} by ${bizName}`,
+              query: niche.imageQueries.services[0] || `${tradeCategory} ${pageTitle}`,
+              alt: `${pageTitle} by ${bizName}`,
             },
           ],
         },
@@ -651,8 +671,8 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           variant: "split",
           content: {
             eyebrow: "Our Standard of Service",
-            headline: `Delivering Unmatched ${page.title} in ${city}`,
-            story: `At ${bizName}, we take immense pride in providing dependable, safe, and transparent services. When you contact us for ${page.title.toLowerCase()}, you get seasoned technicians who respect your schedule and property.`,
+            headline: `Delivering Unmatched ${pageTitle} in ${city}`,
+            story: `At ${bizName}, we take immense pride in providing dependable, safe, and transparent services. When you contact us for ${pageTitle.toLowerCase()}, you get seasoned technicians who respect your schedule and property.`,
           },
           images: [
             {
@@ -669,7 +689,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
           type: "ctaBanner",
           variant: "gradient",
           content: {
-            headline: `Ready to Schedule ${page.title}?`,
+            headline: `Ready to Schedule ${pageTitle}?`,
             text: `Speak directly with a local specialist in ${city} today.`,
             phone,
           },
