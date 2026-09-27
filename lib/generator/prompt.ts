@@ -143,6 +143,7 @@ export interface WebsiteFormData {
     sectionStyle: string;
     designNotes: string;
   };
+  customContentInstructions?: string;
   extraInstructions?: string;
 }
 
@@ -485,6 +486,9 @@ export function buildUserPrompt(data: WebsiteFormData, targetPages?: TargetPage[
   if (data.socialLinks?.trim()) lines.push(`- Social Media Links: ${data.socialLinks.trim()}`);
   if (data.language?.trim() && data.language.trim().toLowerCase() !== "english") {
     lines.push(`- Website Language: ${data.language.trim()} (Generate all titles, copy, buttons, and schema in ${data.language.trim()})`);
+  }
+  if (data.customContentInstructions?.trim()) {
+    lines.push(`- Custom Content Instructions (Tone, Brand Voice, Style, Phrasing): ${data.customContentInstructions.trim()}`);
   }
   if (data.extraInstructions?.trim()) {
     lines.push(`- Extra Instructions: ${data.extraInstructions.trim()}`);

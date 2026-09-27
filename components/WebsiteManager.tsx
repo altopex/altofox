@@ -13,6 +13,7 @@ import {
 import { KeywordMapModal, KeywordMapEntry } from "./KeywordMapModal";
 import { FindReplaceModal } from "./FindReplaceModal";
 import { SearchConsoleHub } from "./SearchConsoleHub";
+import { AddNewPageModal, AddNewPageInitialData } from "./AddNewPageModal";
 import { auditPageSEO } from "../lib/seo/on-page-scorer";
 import { Theme, THEMES } from "../lib/themes";
 import { MonthlyOptimizationCycleModal } from "./MonthlyOptimizationCycleModal";
@@ -119,6 +120,7 @@ export function WebsiteManager({
       businessDetails: p?.businessDetails || ({} as any),
       formData: p?.formData || {},
       pageContentMap: p?.pageContentMap || {},
+      customContentInstructions: p?.customContentInstructions || p?.formData?.customContentInstructions || "",
       rankRentConfig: p?.rankRentConfig || undefined,
     };
   }, []);
@@ -139,6 +141,47 @@ export function WebsiteManager({
   const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
   const [isFindReplaceModalOpen, setIsFindReplaceModalOpen] = useState(false);
   const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
+  const [isAddNewPageModalOpen, setIsAddNewPageModalOpen] = useState(false);
+  const [newPageInitialData, setNewPageInitialData] = useState<AddNewPageInitialData | null>(null);
+
+  // Settings & Custom Content Instructions
+  const [settingsInstructions, setSettingsInstructions] = useState<string>(
+    () => initialProject?.customContentInstructions || initialProject?.formData?.customContentInstructions || ""
+  );
+  const [settingsSavedToast, setSettingsSavedToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (project) {
+      setSettingsInstructions(project.customContentInstructions || project.formData?.customContentInstructions || "");
+    }
+  }, [project.id, project.customContentInstructions, project.formData]);
+
+  const handleSaveCustomInstructions = async () => {
+    const updatedProject: SavedProject = {
+      ...project,
+      customContentInstructions: settingsInstructions.trim(),
+      lastEditedAt: Date.now(),
+    };
+    setProject(updatedProject);
+    onProjectUpdated(updatedProject);
+    await saveProjectToDB(updatedProject);
+    setSettingsSavedToast("Custom Content Instructions saved successfully!");
+    setTimeout(() => setSettingsSavedToast(null), 3000);
+  };
+
+  const handleClearCustomInstructions = async () => {
+    setSettingsInstructions("");
+    const updatedProject: SavedProject = {
+      ...project,
+      customContentInstructions: "",
+      lastEditedAt: Date.now(),
+    };
+    setProject(updatedProject);
+    onProjectUpdated(updatedProject);
+    await saveProjectToDB(updatedProject);
+    setSettingsSavedToast("Custom Content Instructions reset to default.");
+    setTimeout(() => setSettingsSavedToast(null), 3000);
+  };
 
   // Selected Page in Pages Tab
   const [selectedPagePath, setSelectedPagePath] = useState<string>(() => {
@@ -844,10 +887,24 @@ export function WebsiteManager({
               {/* Pages Column */}
               <div className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
                 <div className="p-3 border-b border-slate-200 flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-800">Pages List</span>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {project.files.filter((f) => f.path.endsWith(".html")).length} Total
-                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-800">Pages</span>
+                    <span className="text-[10px] text-slate-500 font-mono ml-1.5">
+                      ({project.files.filter((f) => f.path.endsWith(".html")).length})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewPageInitialData(null);
+                      setIsAddNewPageModalOpen(true);
+                    }}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] transition shadow-xs"
+                    title="Add Dedicated Page to Website"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add Page</span>
+                  </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-4 text-xs">
@@ -1210,6 +1267,15 @@ export function WebsiteManager({
                   businessType={project.formData?.businessType || "Contractor"}
                   city={project.formData?.city || "Local"}
                   changeLog={project.changeLog}
+                  customContentInstructions={project.customContentInstructions || project.formData?.customContentInstructions}
+                  onRequestCreateDedicatedPage={(initData) => {
+                    setNewPageInitialData(initData);
+                    setIsAddNewPageModalOpen(true);
+                  }}
+                  onSelectExistingPage={(pagePath) => {
+                    handleSelectPage(pagePath);
+                    setActiveTab("pages");
+                  }}
                   onApplyOptimization={(path, newHtml, logSummary) => {
                     const updatedFiles = project.files.map((f) =>
                       f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
@@ -1621,6 +1687,24 @@ export function WebsiteManager({
           />
         </ErrorBoundary>
       )}
+
+      {/* Add New Dedicated Page Modal */}
+      <AddNewPageModal
+        isOpen={isAddNewPageModalOpen}
+        onClose={() => setIsAddNewPageModalOpen(false)}
+        project={project}
+        initialData={newPageInitialData}
+        onPageCreated={(updatedProject, newPagePath) => {
+          setProject(updatedProject);
+          onProjectUpdated(updatedProject);
+          handleSelectPage(newPagePath);
+          setActiveTab("pages");
+        }}
+        onSelectExistingPage={(pagePath) => {
+          handleSelectPage(pagePath);
+          setActiveTab("pages");
+        }}
+      />
     </div>
   );
 }

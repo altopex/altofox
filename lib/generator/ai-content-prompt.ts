@@ -226,6 +226,24 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   if (formData.businessHours) lines.push(`- Business Hours: ${formData.businessHours}`);
   if (formData.websiteDomain) lines.push(`- Website Domain: ${formData.websiteDomain}`);
 
+  // === BRAND VOICE & CUSTOM CONTENT INSTRUCTIONS ===
+  const customInstructions = (formData.customContentInstructions || formData.extraInstructions || "").trim();
+  if (customInstructions) {
+    lines.push("");
+    lines.push("=== BRAND VOICE & CUSTOM CONTENT INSTRUCTIONS (STYLE & EMPHASIS LAYER) ===");
+    lines.push(`"${customInstructions}"`);
+    lines.push("");
+    lines.push("STRICT ARCHITECTURAL INTEGRATION RULES FOR CUSTOM INSTRUCTIONS:");
+    lines.push("- TONE OF VOICE & BRAND PERSONALITY: Infuse this requested tone (e.g. conversational, authoritative, friendly, craftsman, urgent, family-owned warmth) consistently across the Homepage, Service pages, Location pages, FAQs, supporting sections, and CTA copy.");
+    lines.push("- TOPICS & SELLING POINTS TO EMPHASIZE: Naturally emphasize the specific benefits, customer concerns, or topics highlighted by the user.");
+    lines.push("- PREFERRED CTA PHRASING: Adapt buttons and call-to-action banners to align with the requested phrasing style (e.g. 'Schedule an Inspection' vs 'Call for Immediate Dispatch').");
+    lines.push("- WORDS & PHRASES TO AVOID: Strictly avoid any specific terms, claims, or clichés the user flagged to avoid.");
+    lines.push("- STRICT PRESERVATION OF VERIFIED FACTS: Custom instructions must NEVER override verified phone numbers, official address/service-area model, confirmed license numbers, or real business facts.");
+    lines.push("- NO INVENTED CLAIMS OR REVIEWS: Custom instructions must NEVER create fake 5-star ratings, invented quotes, or fabricated awards.");
+    lines.push("- PRESERVE SEO & STRUCTURE: Heading hierarchy (H1/H2), unique meta tags, and keyword targeting remain mandatory across all pages.");
+    lines.push("- INDIVIDUAL SEARCH INTENT: Maintain a unified brand voice while ensuring each page satisfies its own specific search intent (never create duplicate pages).");
+  }
+
   // === 2. LOCATION & GEOGRAPHY ===
   lines.push("");
   lines.push("=== 2. LOCATION & GEOGRAPHY ===");
@@ -354,6 +372,14 @@ export function buildQualityReviewPrompt(
   lines.push("4. Ensure all service area pages have distinct local angles, not just swapped city names.");
   lines.push("5. Remove any invented awards, fake license numbers, or hallucinated prices.");
   lines.push("6. Ensure testimonials have 'isPlaceholder': true.");
+
+  const customInstructions = (formData.customContentInstructions || formData.extraInstructions || "").trim();
+  if (customInstructions) {
+    lines.push("");
+    lines.push("=== CUSTOM BRAND VOICE & STYLE DIRECTIVES TO AUDIT & MAINTAIN ===");
+    lines.push(`"${customInstructions}"`);
+    lines.push("7. Verify that the copy across all pages honors this requested brand tone, phrasing, and emphasis without sacrificing verified facts, SEO titles, or technical schemas.");
+  }
   lines.push("");
   lines.push("=== CURRENT CONTENT JSON TO AUDIT & RETURN PERFECTED ===");
   lines.push(JSON.stringify(currentJSON, null, 2));
@@ -688,6 +714,7 @@ export function buildDefaultTradeContentJSON(formData: WebsiteFormData, targetPa
       realReviewsConfirmed: formData.realReviewsConfirmed,
       realReviews: formData.realReviews,
       allowedClaims: formData.allowedClaims,
+      customContentInstructions: formData.customContentInstructions || formData.extraInstructions || undefined,
     },
     pages: pagesContent,
     schema: {

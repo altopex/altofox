@@ -95,6 +95,7 @@ export function resolveMetaInfo(files: SiteFile[], meta: SiteMetaInfo): SiteMeta
     state: state || meta.state,
     trade: trade || meta.trade,
     businessName: businessName || meta.businessName,
+    customContentInstructions: meta.customContentInstructions,
   };
 }
 
@@ -426,6 +427,13 @@ export function improveConversionCtas(
   const changes: string[] = [];
   const phone = meta.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
+  const customInstr = (meta.customContentInstructions || "").toLowerCase();
+
+  let ctaLabel = `Call ${phone}`;
+  if (customInstr.includes("inspection")) ctaLabel = "Schedule Inspection";
+  else if (customInstr.includes("consultation")) ctaLabel = "Book Consultation";
+  else if (customInstr.includes("quote") || customInstr.includes("estimate")) ctaLabel = "Get Fast Quote";
+  else if (customInstr.includes("dispatch")) ctaLabel = "Immediate Dispatch";
 
   const mobileCallBarHtml = `
 <!-- Conversion Bar: Sticky Mobile Click-to-Call -->
@@ -436,7 +444,7 @@ export function improveConversionCtas(
   </div>
   <a href="tel:${cleanPhone}" style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--color-primary, #2563EB); color: #ffffff; padding: 0.625rem 1.25rem; border-radius: 8px; font-weight: 700; font-size: 0.875rem; text-decoration: none; box-shadow: 0 2px 6px rgba(37,99,235,0.3);">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-    <span>Call ${phone}</span>
+    <span>${ctaLabel}</span>
   </a>
 </div>
 `;

@@ -52,6 +52,7 @@ export interface AssembleOptions {
     distanceOffset?: string;
     localNotes?: string;
   }[];
+  customContentInstructions?: string;
 }
 
 export interface AssembledWebsite {
@@ -668,6 +669,7 @@ ${mobileCallBarHtml}
         businessInfo: data.site,
         angleIndex: i,
         allSelectedCities: nearestCities,
+        customInstructions: data.site.customContentInstructions || options?.customContentInstructions,
       });
 
       const locCtx: LocationPageContext = {

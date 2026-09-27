@@ -72,6 +72,7 @@ export interface SiteInfoJSON {
   realReviewsConfirmed?: boolean;
   realReviews?: RealReviewItemJSON[];
   allowedClaims?: string[];
+  customContentInstructions?: string;
 }
 
 export interface SchemaOrgInfoJSON {
@@ -164,6 +165,7 @@ export const SiteInfoSchema = z.object({
   realReviewsConfirmed: z.boolean().optional(),
   realReviews: z.array(RealReviewItemSchema).optional(),
   allowedClaims: z.array(z.string()).optional(),
+  customContentInstructions: z.string().optional(),
 });
 
 export const SchemaOrgInfoSchema = z.object({

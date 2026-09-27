@@ -368,6 +368,7 @@ export default function DashboardPage() {
   const [logoUrl, setLogoUrl] = useState("");
   const [yearsInBusiness, setYearsInBusiness] = useState("");
   const [uniqueSellingPoints, setUniqueSellingPoints] = useState("");
+  const [customContentInstructions, setCustomContentInstructions] = useState("");
 
   // Step 2 Fields
   const [streetAddress, setStreetAddress] = useState("");
@@ -508,6 +509,7 @@ export default function DashboardPage() {
         if (data.logoUrl) setLogoUrl(data.logoUrl);
         if (data.yearsInBusiness) setYearsInBusiness(data.yearsInBusiness);
         if (data.uniqueSellingPoints) setUniqueSellingPoints(data.uniqueSellingPoints);
+        if (data.customContentInstructions) setCustomContentInstructions(data.customContentInstructions);
 
         if (data.streetAddress) setStreetAddress(data.streetAddress);
         if (data.city) setCity(data.city);
@@ -571,6 +573,7 @@ export default function DashboardPage() {
           logoUrl,
           yearsInBusiness,
           uniqueSellingPoints,
+          customContentInstructions,
           streetAddress,
           city,
           stateRegion,
@@ -610,6 +613,7 @@ export default function DashboardPage() {
     logoUrl,
     yearsInBusiness,
     uniqueSellingPoints,
+    customContentInstructions,
     streetAddress,
     city,
     stateRegion,
@@ -642,6 +646,9 @@ export default function DashboardPage() {
       setBusinessType("Plumber");
       setCustomBusinessType("");
       setBusinessDescription("");
+      setYearsInBusiness("");
+      setUniqueSellingPoints("");
+      setCustomContentInstructions("");
       setServices(["Emergency Repairs", "Drain Cleaning", "Water Heater Repair"]);
       setStreetAddress("");
       setCity("");
@@ -692,6 +699,7 @@ export default function DashboardPage() {
     setCustomThemeColors({});
     setYearsInBusiness(EXAMPLE_DATA.yearsInBusiness);
     setUniqueSellingPoints(EXAMPLE_DATA.uniqueSellingPoints);
+    setCustomContentInstructions("Emphasize 24/7 priority emergency response, upfront transparent pricing, and 20+ years of family-owned master craftsmanship. Friendly, dependable tone.");
     setGoogleMaps(EXAMPLE_DATA.googleMaps);
     setSocialLinks(EXAMPLE_DATA.socialLinks);
     setMaxCompletedStep(5);
@@ -1063,6 +1071,7 @@ export default function DashboardPage() {
       logoUrl: logoUrl.trim(),
       language: savedLanguage,
       qualityReview: prefReview,
+      customContentInstructions: customContentInstructions.trim(),
       extraInstructions: [
         uniqueSellingPoints ? `Unique Selling Points: ${uniqueSellingPoints}` : "",
         yearsInBusiness ? `Years in business: ${yearsInBusiness}` : "",
@@ -1125,6 +1134,7 @@ export default function DashboardPage() {
           files: data.files,
           photos: data.photos,
           qualityReport: data.qualityReport,
+          customContentInstructions: customContentInstructions.trim(),
         };
         setCurrentProject(projData);
 
@@ -1148,6 +1158,7 @@ export default function DashboardPage() {
             name: businessName || "Local Business Website",
             createdAt: Date.now(),
             lastEditedAt: Date.now(),
+            customContentInstructions: customContentInstructions.trim(),
             formData,
             theme: activeTheme,
             nicheId: currentNichePack.id,
@@ -2008,6 +2019,26 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Custom Content Instructions (Optional) */}
+                    <div className="pt-3 border-t border-[#E2E8F0]">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-[#0F172A]">
+                          Custom Content Instructions <span className="text-[#64748B] font-normal">(Optional)</span>
+                        </label>
+                        <span className="text-[11px] text-[#64748B]">Tone, brand voice, special phrasing</span>
+                      </div>
+                      <textarea
+                        rows={4}
+                        value={customContentInstructions}
+                        onChange={(e) => setCustomContentInstructions(e.target.value)}
+                        placeholder="Tell RankLocal how you want this website's content to feel, what to emphasize, or anything specific you want included. RankLocal will combine your instructions with its SEO and content-quality system."
+                        className="w-full p-3 border border-[#E2E8F0] rounded-[10px] text-sm text-[#0F172A] focus:outline-none focus:border-[#4F46E5] focus:ring-3 focus:ring-[#4F46E5]/15"
+                      />
+                      <p className="text-[11px] text-[#64748B] mt-1.5 leading-relaxed">
+                        Tell RankLocal how you want this website&apos;s content to feel, what to emphasize, or anything specific you want included. RankLocal will combine your instructions with its SEO and content-quality system.
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2718,6 +2749,27 @@ export default function DashboardPage() {
                         Edit
                       </button>
                     </div>
+
+                    {/* Custom Content Instructions Item */}
+                    {customContentInstructions.trim() && (
+                      <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
+                        <div>
+                          <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
+                            Custom Content Instructions
+                          </span>
+                          <p className="text-xs text-[#0F172A] mt-1 italic bg-white p-2.5 rounded-lg border border-slate-200 line-clamp-2">
+                            &ldquo;{customContentInstructions.trim()}&rdquo;
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setCurrentStep(1)}
+                          className="text-xs font-semibold text-[#4F46E5] hover:underline shrink-0 ml-3"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    )}
 
                     {/* Location & SEO Item */}
                     <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">

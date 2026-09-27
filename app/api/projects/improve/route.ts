@@ -24,21 +24,27 @@ export async function POST(req: NextRequest) {
       providerName,
     } = body;
 
-    let files: SiteFile[] = directFiles || [];
+    let effectiveMeta = { ...(meta || {}) };
+    let files = directFiles;
 
-    // If projectId provided and no direct files, load from DB
-    if ((!files || files.length === 0) && projectId) {
+    // If projectId provided, check for files and customInstructions from DB
+    if (projectId) {
       const project = await db.project.findUnique({
         where: { id: projectId },
         include: { files: true },
       });
 
-      if (project && project.files) {
-        files = project.files.map((f) => ({
-          path: f.path,
-          content: f.content,
-          mimeType: f.mimeType,
-        }));
+      if (project) {
+        if (!effectiveMeta.customContentInstructions && project.customInstructions) {
+          effectiveMeta.customContentInstructions = project.customInstructions;
+        }
+        if ((!files || files.length === 0) && project.files) {
+          files = project.files.map((f) => ({
+            path: f.path,
+            content: f.content,
+            mimeType: f.mimeType,
+          }));
+        }
       }
     }
 
@@ -80,7 +86,7 @@ export async function POST(req: NextRequest) {
     const result = await applyImprovementAction(
       action as ImprovementActionType,
       files,
-      meta as SiteMetaInfo,
+      effectiveMeta as SiteMetaInfo,
       {
         provider: resolvedProvider,
         model: resolvedModel,

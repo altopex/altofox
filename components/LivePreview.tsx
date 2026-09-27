@@ -76,6 +76,7 @@ export interface ProjectData {
   files: ProjectFileItem[];
   photos?: ProjectPhotoItem[];
   qualityReport?: QualityReport;
+  customContentInstructions?: string;
 }
 
 interface LivePreviewProps {
@@ -283,6 +284,7 @@ export function LivePreview({
           meta: {
             businessName: project.name,
             domain: project.websiteDomain,
+            customContentInstructions: project.customContentInstructions,
           },
           projectId: project.projectId,
           provider: storedProvider,

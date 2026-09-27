@@ -9,6 +9,7 @@ export interface GscPageOptimizationOptions {
   city?: string;
   state?: string;
   availablePagePaths?: string[];
+  customContentInstructions?: string;
 }
 
 export interface GscOptimizationResult {
@@ -162,8 +163,18 @@ export function optimizePageWithGscData(
 
   if (!mainContentLower.includes(primaryQueryLower)) {
     const formattedQuery = primaryQuery.charAt(0).toUpperCase() + primaryQuery.slice(1);
-    
-    // Inject a helpful, conversion-oriented FAQ block addressing the query
+    const customInstr = (options.customContentInstructions || "").toLowerCase();
+
+    let ctaSentence = activePhone ? `Call <a href="tel:${activePhone.replace(/[^\d+]/g, "")}" class="text-indigo-600 font-bold hover:underline">${activePhone}</a> today for immediate assistance.` : "";
+    if (activePhone && customInstr.includes("inspection")) {
+      ctaSentence = `Call <a href="tel:${activePhone.replace(/[^\d+]/g, "")}" class="text-indigo-600 font-bold hover:underline">${activePhone}</a> to schedule a prompt on-site inspection.`;
+    } else if (activePhone && customInstr.includes("consultation")) {
+      ctaSentence = `Call <a href="tel:${activePhone.replace(/[^\d+]/g, "")}" class="text-indigo-600 font-bold hover:underline">${activePhone}</a> to book a direct consultation.`;
+    } else if (activePhone && (customInstr.includes("estimate") || customInstr.includes("quote"))) {
+      ctaSentence = `Call <a href="tel:${activePhone.replace(/[^\d+]/g, "")}" class="text-indigo-600 font-bold hover:underline">${activePhone}</a> for an honest, upfront quote.`;
+    }
+
+    // Inject a helpful, conversion-oriented FAQ block addressing the query matching the site voice
     const faqItemHtml = `
       <!-- GSC Opportunity Content: ${primaryQuery} -->
       <div class="gsc-optimized-block bg-slate-50 border border-slate-200 rounded-xl p-5 my-6">
@@ -171,9 +182,7 @@ export function optimizePageWithGscData(
           <span>Looking for Reliable ${formattedQuery}?</span>
         </h3>
         <p class="text-sm text-slate-600 leading-relaxed">
-          When you need prompt, professional <strong>${primaryQuery}</strong> in ${activeCity}, our licensed team delivers upfront pricing, certified workmanship, and 100% satisfaction guarantees. ${
-            activePhone ? `Call <a href="tel:${activePhone.replace(/[^\d+]/g, "")}" class="text-indigo-600 font-bold hover:underline">${activePhone}</a> today for immediate assistance.` : ""
-          }
+          When you need prompt, professional <strong>${primaryQuery}</strong> in ${activeCity}, our licensed team delivers upfront pricing, certified workmanship, and 100% satisfaction guarantees. ${ctaSentence}
         </p>
       </div>`;
 

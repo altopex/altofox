@@ -99,6 +99,7 @@ export interface SiteMetaInfo {
   targetKeywords?: string;
   domain?: string;
   businessModel?: "storefront" | "service-area";
+  customContentInstructions?: string;
   gscData?: Array<{
     query: string;
     page: string;

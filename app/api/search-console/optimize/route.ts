@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       state = "TX",
       queries: rawQueries,
       availablePagePaths,
+      customContentInstructions,
       provider,
       model,
       apiKey,
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
       city,
       state,
       availablePagePaths,
+      customContentInstructions,
     });
 
     let suggestions = gscResult.changesApplied;
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
         const aiProvider = getProvider(activeProviderType);
         const systemPrompt = `You are a surgical technical SEO analyst optimizing an existing local service web page based on Google Search Console data.
 Your job is to provide 3 concise, specific bullet points summarizing how ranking for "${query}" (Position ${position}, ${impressions} impressions) was strengthened.
+${customContentInstructions ? `Ensure suggestions respect the project's custom brand voice & content directives: "${customContentInstructions.slice(0, 200)}"` : ""}
 Do NOT rewrite the whole page. Respond with valid JSON:
 {
   "suggestions": ["Refined title and meta description to target '${query}'.", "Added an FAQ answering customer intent around '${query}'.", "Preserved all contact numbers and navigation."]

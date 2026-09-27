@@ -1357,6 +1357,7 @@ export function buildLocationContentStrategy(params: {
   angleIndex?: number;
   allSelectedCities?: Array<{ city: string; stateId: string; slug?: string; distanceMiles?: number }>;
   existingSiblingStrategies?: LocationContentStrategy[];
+  customInstructions?: string;
 }): LocationContentStrategy {
   const {
     serviceName,
@@ -1365,6 +1366,7 @@ export function buildLocationContentStrategy(params: {
     angleIndex = 0,
     allSelectedCities = [],
     existingSiblingStrategies = [],
+    customInstructions,
   } = params;
 
   const city = cityData.city;

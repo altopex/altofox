@@ -319,6 +319,7 @@ https://${project.businessDetails?.websiteDomain || "example.com"}/about.html,15
           dateRange: dateRangeInput,
           businessType: project.formData?.businessType || "Contractor",
           city: project.formData?.city || "Local",
+          customContentInstructions: project.customContentInstructions || project.formData?.customContentInstructions,
         }),
       });
 

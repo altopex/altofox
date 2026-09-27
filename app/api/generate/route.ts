@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
       logoUrl: (formData?.logoUrl || "").trim(),
       language: (formData?.language || "English").trim(),
       theme: formData?.theme || undefined,
+      customContentInstructions: (formData?.customContentInstructions || "").trim(),
       extraInstructions: (formData?.extraInstructions || prompt || "").trim(),
     };
 
@@ -161,6 +162,7 @@ export async function POST(req: NextRequest) {
       pixabayKey: effectivePixabayKey || undefined,
       preferredSource: effectivePrefSource,
       serviceAreaCities: Array.isArray(formData?.serviceAreaCities) ? formData.serviceAreaCities : undefined,
+      customContentInstructions: websiteData.customContentInstructions || undefined,
     };
 
     // If explicit demo requested, immediately assemble using trade template defaults
@@ -309,6 +311,7 @@ export async function POST(req: NextRequest) {
       realReviewsConfirmed: websiteData.realReviewsConfirmed,
       realReviews: websiteData.realReviews,
       allowedClaims: websiteData.allowedClaims,
+      customContentInstructions: websiteData.customContentInstructions || contentJSON.site.customContentInstructions,
     };
 
     // If service-area business, strictly enforce hiding street address everywhere
@@ -335,6 +338,7 @@ export async function POST(req: NextRequest) {
           notes: qualityReviewApplied
             ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
             : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
+          customInstructions: websiteData.customContentInstructions || null,
           files: {
             create: assembled.files.map((f) => ({
               path: f.path,

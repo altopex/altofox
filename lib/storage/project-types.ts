@@ -113,6 +113,9 @@ export interface SavedProject {
   // Keywords
   keywordMap: ProjectKeywordItem[];
 
+  // Custom Content Instructions (Tone, Brand Voice, Phrasing, Audience)
+  customContentInstructions?: string;
+
   // Custom Blocks & Must-Include Text
   customBlocks: CustomContentBlock[];
   mustIncludeText?: string;
