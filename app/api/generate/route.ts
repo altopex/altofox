@@ -15,7 +15,12 @@ import { validateContentJSON, SiteContentJSON } from "@/lib/generator/content-sc
 import { extractAndParseJSON } from "@/lib/generator/validator";
 import { assembleWebsite } from "@/templates/assembler";
 import { THEMES, Theme } from "@/lib/themes";
-import { parseKeywordList, formatKeywordsForStorage } from "@/lib/keywords/keyword-parser";
+import {
+  parseKeywordList,
+  formatKeywordsForStorage,
+  parseLocationList,
+  formatLocationsForStorage,
+} from "@/lib/keywords/keyword-parser";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
@@ -77,8 +82,12 @@ export async function POST(req: NextRequest) {
       stateRegion: (formData?.stateRegion || "").trim(),
       zipPostalCode: (formData?.zipPostalCode || "").trim(),
       country: (formData?.country || "USA").trim(),
-      serviceAreas: (formData?.serviceAreas || "").trim(),
-      serviceAreasList: Array.isArray(formData?.serviceAreasList) ? formData.serviceAreasList : undefined,
+      serviceAreas: formatLocationsForStorage(
+        parseLocationList(formData?.serviceAreasList || formData?.serviceAreas || formData?.locations || "")
+      ),
+      serviceAreasList: parseLocationList(
+        formData?.serviceAreasList || formData?.serviceAreas || formData?.locations || ""
+      ),
       phone: (formData?.phone || "").trim(),
       email: (formData?.email || "").trim(),
       businessHours: (formData?.businessHours || "").trim(),

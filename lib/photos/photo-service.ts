@@ -10,6 +10,9 @@ export interface ResolvedImage {
   downloadUrl?: string;
   localPath?: string;
   localWebpPath?: string;
+  localSvgPath?: string;
+  localSvgFallback?: string;
+  allFallbacks?: string[];
   width?: number;
   height?: number;
   photographer?: string;

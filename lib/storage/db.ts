@@ -5,6 +5,48 @@
  */
 
 import { SavedProject, URLRedirect, ProjectChangeLogEntry } from "./project-types";
+import {
+  parseKeywordList,
+  parseLocationList,
+  formatKeywordsForStorage,
+  formatLocationsForStorage,
+} from "../keywords/keyword-parser";
+
+/**
+ * Normalizes project formData to ensure keywords, locations, and services are structured as clean string arrays
+ * even if saved by legacy versions as single comma-separated strings.
+ */
+export function normalizeProjectData(project: SavedProject): SavedProject {
+  if (!project) return project;
+  const formData = project.formData ? { ...project.formData } : {};
+
+  // Normalize keywords
+  const rawKeywords = formData.keywords || formData.targetKeywords || [];
+  const normalizedKeywords = parseKeywordList(rawKeywords);
+
+  // Normalize locations / service areas
+  const rawAreas = formData.serviceAreasList || formData.serviceAreas || formData.locations || [];
+  const normalizedAreas = parseLocationList(rawAreas);
+
+  // Normalize services
+  const rawServices = formData.services || formData.servicesOffered || [];
+  const normalizedServices = parseLocationList(rawServices);
+
+  formData.keywords = normalizedKeywords;
+  formData.targetKeywords = formatKeywordsForStorage(normalizedKeywords);
+  formData.serviceAreasList = normalizedAreas;
+  formData.locations = normalizedAreas;
+  formData.serviceAreas = formatLocationsForStorage(normalizedAreas);
+  if (normalizedServices.length > 0) {
+    formData.services = normalizedServices;
+    formData.servicesOffered = normalizedServices.join(", ");
+  }
+
+  return {
+    ...project,
+    formData,
+  };
+}
 
 const DB_NAME = "ranklocal_projects_db";
 const DB_VERSION = 1;
@@ -77,7 +119,7 @@ export async function getAllProjectsFromDB(): Promise<SavedProject[]> {
   try {
     const cloudProjects = await getAllProjectsFromSupabase();
     if (cloudProjects.length > 0) {
-      return cloudProjects;
+      return cloudProjects.map(normalizeProjectData);
     }
   } catch (err) {
     console.warn("[DB] Could not load from Supabase; using local cache:", err);
@@ -93,7 +135,7 @@ export async function getAllProjectsFromDB(): Promise<SavedProject[]> {
       req.onsuccess = () => {
         const list = (req.result || []) as SavedProject[];
         list.sort((a, b) => b.lastEditedAt - a.lastEditedAt);
-        resolve(list);
+        resolve(list.map(normalizeProjectData));
       };
       req.onerror = () => reject(req.error);
     });
@@ -108,7 +150,7 @@ export async function getAllProjectsFromDB(): Promise<SavedProject[]> {
 export async function getProjectByIdFromDB(id: string): Promise<SavedProject | null> {
   try {
     const cloud = await getProjectByIdFromSupabase(id);
-    if (cloud) return cloud;
+    if (cloud) return normalizeProjectData(cloud);
   } catch (err) {
     console.warn("[DB] Supabase project fetch exception:", err);
   }
@@ -119,7 +161,10 @@ export async function getProjectByIdFromDB(id: string): Promise<SavedProject | n
       const tx = db.transaction(STORE_NAME, "readonly");
       const store = tx.objectStore(STORE_NAME);
       const req = store.get(id);
-      req.onsuccess = () => resolve(req.result || null);
+      req.onsuccess = () => {
+        const res = req.result as SavedProject | undefined;
+        resolve(res ? normalizeProjectData(res) : null);
+      };
       req.onerror = () => reject(req.error);
     });
   } catch {

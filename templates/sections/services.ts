@@ -1,5 +1,6 @@
 import { SectionJSON } from "../../lib/generator/content-schema";
 import { ResolvedImage } from "../../lib/photos/photo-service";
+import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export function renderServices(
   section: SectionJSON,
@@ -46,10 +47,17 @@ export function renderServices(
             const linkHref = item.slug ? (item.slug.endsWith(".html") ? item.slug : `${item.slug}.html`) : "contact.html";
             return `
         <div class="card service-card reveal">
-          <picture>
-            <source srcset="${img.url || img.localWebpPath || img.localPath}" type="image/webp">
-            <img src="${img.url || img.localPath}" data-remote-src="${img.url}" alt="${img.alt || item.title}" class="img-card" width="800" height="533" loading="lazy"${img.fallbackUrl ? ` onerror="this.onerror=null;this.src='${img.fallbackUrl}';"` : ""}>
-          </picture>
+          ${renderStaticImageTag({
+            src: img.url || img.localPath || "",
+            alt: img.alt || item.title,
+            fallbackUrl: img.fallbackUrl,
+            allFallbacks: img.allFallbacks,
+            localSvg: img.localSvgFallback,
+            width: 800,
+            height: 533,
+            loading: "lazy",
+            className: "img-card",
+          })}
           <div class="service-card-body">
             <h3>${item.title}</h3>
             <p>${item.description}</p>

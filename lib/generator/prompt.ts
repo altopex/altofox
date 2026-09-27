@@ -1,4 +1,5 @@
 import { findNicheByIndustry } from "../../niches";
+import { parseLocationList, parseKeywordList } from "../keywords/keyword-parser";
 
 export const SYSTEM_PROMPT = `You are a world-class web designer, conversion copywriter, and local SEO expert. Build a modern, beautiful, high-converting static website for a LOCAL business that is designed to rank in local search and turn visitors into phone calls and leads.
 
@@ -283,12 +284,11 @@ export function computeTargetPages(data: WebsiteFormData): TargetPage[] {
 
   // 2. Page per service area toggle
   if (data.separateAreaPages) {
-    const rawAreas: string[] = [];
-    if (Array.isArray(data.serviceAreasList) && data.serviceAreasList.length > 0) {
-      rawAreas.push(...data.serviceAreasList);
-    } else if (data.serviceAreas?.trim()) {
-      rawAreas.push(...data.serviceAreas.split(/[\n,]+/).map(a => a.trim()).filter(Boolean));
-    }
+    const rawAreas = parseLocationList(
+      Array.isArray(data.serviceAreasList) && data.serviceAreasList.length > 0
+        ? data.serviceAreasList
+        : data.serviceAreas
+    );
 
     const bizSlug = getBusinessKeywordSlug(data.businessType || "contractor");
     const uniqueAreas = Array.from(new Set(rawAreas)).slice(0, 8);

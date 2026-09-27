@@ -47,6 +47,9 @@ import {
   parseKeywordList,
   formatKeywordsForStorage,
   validateKeywordList,
+  parseLocationList,
+  parseTagList,
+  formatLocationsForStorage,
 } from "@/lib/keywords/keyword-parser";
 import {
   Sparkles,
@@ -512,7 +515,10 @@ export default function DashboardPage() {
         if (data.businessType) setBusinessType(data.businessType);
         if (data.customBusinessType) setCustomBusinessType(data.customBusinessType);
         if (data.businessDescription) setBusinessDescription(data.businessDescription);
-        if (Array.isArray(data.services)) setServices(data.services);
+        if (data.services) {
+          const loadedServices = parseTagList(data.services);
+          if (loadedServices.length > 0) setServices(loadedServices);
+        }
         if (data.logoUrl) setLogoUrl(data.logoUrl);
         if (data.yearsInBusiness) setYearsInBusiness(data.yearsInBusiness);
         if (data.uniqueSellingPoints) setUniqueSellingPoints(data.uniqueSellingPoints);
@@ -523,7 +529,10 @@ export default function DashboardPage() {
         if (data.stateRegion) setStateRegion(data.stateRegion);
         if (data.zipPostalCode) setZipPostalCode(data.zipPostalCode);
         if (data.country) setCountry(data.country);
-        if (Array.isArray(data.serviceAreas)) setServiceAreas(data.serviceAreas);
+        if (data.serviceAreas || data.locations || data.serviceAreasList) {
+          const loadedAreas = parseLocationList(data.serviceAreas || data.locations || data.serviceAreasList);
+          if (loadedAreas.length > 0) setServiceAreas(loadedAreas);
+        }
         if (data.phone) setPhone(data.phone);
         if (data.email) setEmail(data.email);
         if (data.businessHours) setBusinessHours(data.businessHours);
@@ -721,29 +730,81 @@ export default function DashboardPage() {
   };
 
   // Add / Remove Chips for Services
-  const handleAddService = () => {
-    const trimmed = serviceInput.trim();
-    if (trimmed && !services.includes(trimmed)) {
-      setServices([...services, trimmed]);
-      setServiceInput("");
-    }
+  const handleAddService = (inputOverride?: unknown) => {
+    const raw = typeof inputOverride === "string" ? inputOverride : serviceInput;
+    if (!raw || !raw.trim()) return;
+
+    const parsed = parseTagList(raw);
+    if (parsed.length === 0) return;
+
+    const merged = parseTagList([...services, ...parsed]);
+    setServices(merged);
+    setServiceInput("");
   };
 
   const handleRemoveService = (item: string) => {
-    setServices(services.filter((s) => s !== item));
+    setServices(services.filter((s) => s.toLowerCase() !== item.toLowerCase()));
   };
 
-  // Add / Remove Chips for Service Areas
-  const handleAddArea = () => {
-    const trimmed = areaInput.trim();
-    if (trimmed && !serviceAreas.includes(trimmed)) {
-      setServiceAreas([...serviceAreas, trimmed]);
-      setAreaInput("");
+  const handlePasteServices = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    if (pastedText.includes(",") || pastedText.includes("\n") || pastedText.includes("\r") || pastedText.includes(";")) {
+      e.preventDefault();
+      const parsed = parseTagList(pastedText);
+      if (parsed.length === 0) return;
+
+      const merged = parseTagList([...services, ...parsed]);
+      const addedCount = merged.length - services.length;
+      setServices(merged);
+      setServiceInput("");
+
+      addToast({
+        type: "info",
+        title: "Services Parsed",
+        message: `Recognized and added ${addedCount} service${addedCount === 1 ? "" : "s"} from pasted text.`,
+      });
     }
   };
 
+  // Add / Remove Chips for Service Areas
+  const handleAddArea = (inputOverride?: unknown) => {
+    const raw = typeof inputOverride === "string" ? inputOverride : areaInput;
+    if (!raw || !raw.trim()) return;
+
+    const parsed = parseLocationList(raw);
+    if (parsed.length === 0) return;
+
+    const merged = parseLocationList([...serviceAreas, ...parsed]);
+    setServiceAreas(merged);
+    setAreaInput("");
+  };
+
   const handleRemoveArea = (item: string) => {
-    setServiceAreas(serviceAreas.filter((a) => a !== item));
+    setServiceAreas(serviceAreas.filter((a) => a.toLowerCase() !== item.toLowerCase()));
+  };
+
+  const handlePasteAreas = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pastedText = e.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    if (pastedText.includes(",") || pastedText.includes("\n") || pastedText.includes("\r") || pastedText.includes(";")) {
+      e.preventDefault();
+      const parsed = parseLocationList(pastedText);
+      if (parsed.length === 0) return;
+
+      const merged = parseLocationList([...serviceAreas, ...parsed]);
+      const addedCount = merged.length - serviceAreas.length;
+      setServiceAreas(merged);
+      setAreaInput("");
+
+      addToast({
+        type: "info",
+        title: "Locations Parsed",
+        message: `Recognized and added ${addedCount} location${addedCount === 1 ? "" : "s"} from pasted text.`,
+      });
+    }
   };
 
   // Add / Remove Chips for Keywords
@@ -977,6 +1038,16 @@ export default function DashboardPage() {
     if (!businessDescription.trim()) {
       errors.businessDescription = "A short business description is required.";
     }
+
+    // Auto-commit any pending service input so user doesn't lose it
+    if (serviceInput.trim()) {
+      const pendingServices = parseTagList(serviceInput);
+      if (pendingServices.length > 0) {
+        setServices((prev) => parseTagList([...prev, ...pendingServices]));
+        setServiceInput("");
+      }
+    }
+
     setStepErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -992,6 +1063,15 @@ export default function DashboardPage() {
     }
     if (!phone.trim()) {
       errors.phone = "Phone number is required for customer calls.";
+    }
+
+    // Auto-commit any pending area input so user doesn't lose it
+    if (areaInput.trim()) {
+      const pendingAreas = parseLocationList(areaInput);
+      if (pendingAreas.length > 0) {
+        setServiceAreas((prev) => parseLocationList([...prev, ...pendingAreas]));
+        setAreaInput("");
+      }
     }
 
     // Auto-commit any pending keyword input so user doesn't lose it
@@ -1155,14 +1235,15 @@ export default function DashboardPage() {
       schemaType: currentNichePack.schemaType,
       businessDescription: businessDescription.trim(),
       servicesOffered: services.join(", "),
-      services: services,
+      services: parseTagList(services),
       streetAddress: streetAddress.trim(),
       city: city.trim(),
       stateRegion: stateRegion.trim(),
       zipPostalCode: zipPostalCode.trim(),
       country: country.trim(),
-      serviceAreas: serviceAreas.join(", "),
-      serviceAreasList: serviceAreas,
+      serviceAreas: formatLocationsForStorage(serviceAreas),
+      serviceAreasList: parseLocationList(serviceAreas),
+      locations: parseLocationList(serviceAreas),
       serviceAreaCities: serviceAreaCities.map((c) => ({
         city: c.city,
         stateId: c.stateId,
@@ -2036,19 +2117,32 @@ export default function DashboardPage() {
                         <input
                           type="text"
                           value={serviceInput}
-                          onChange={(e) => setServiceInput(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.includes(",") || val.includes("\n") || val.includes(";")) {
+                              handleAddService(val);
+                            } else {
+                              setServiceInput(val);
+                            }
+                          }}
+                          onPaste={handlePasteServices}
+                          onBlur={() => {
+                            if (serviceInput.trim()) {
+                              handleAddService();
+                            }
+                          }}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "Enter" || e.key === ",") {
                               e.preventDefault();
                               handleAddService();
                             }
                           }}
-                          placeholder="e.g. Slab Leak Detection"
+                          placeholder="e.g. Drain Cleaning, Water Heater Repair (comma separated)"
                           className="input-base flex-1"
                         />
                         <button
                           type="button"
-                          onClick={handleAddService}
+                          onClick={() => handleAddService()}
                           className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
                         >
                           + Add
@@ -2273,19 +2367,32 @@ export default function DashboardPage() {
                         <input
                           type="text"
                           value={areaInput}
-                          onChange={(e) => setAreaInput(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.includes(",") || val.includes("\n") || val.includes(";")) {
+                              handleAddArea(val);
+                            } else {
+                              setAreaInput(val);
+                            }
+                          }}
+                          onPaste={handlePasteAreas}
+                          onBlur={() => {
+                            if (areaInput.trim()) {
+                              handleAddArea();
+                            }
+                          }}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter") {
+                            if (e.key === "Enter" || e.key === ",") {
                               e.preventDefault();
                               handleAddArea();
                             }
                           }}
-                          placeholder="e.g. Plano, Frisco, McKinney"
+                          placeholder="e.g. Hollidaysburg, Duncansville, Bellwood (comma separated)"
                           className="input-base flex-1"
                         />
                         <button
                           type="button"
-                          onClick={handleAddArea}
+                          onClick={() => handleAddArea()}
                           className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
                         >
                           + Add
@@ -2407,10 +2514,22 @@ export default function DashboardPage() {
                           <input
                             type="text"
                             value={keywordInput}
-                            onChange={(e) => setKeywordInput(e.target.value)}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val.includes(",") || val.includes("\n") || val.includes(";")) {
+                                handleAddKeyword(val);
+                              } else {
+                                setKeywordInput(val);
+                              }
+                            }}
                             onPaste={handlePasteKeywords}
+                            onBlur={() => {
+                              if (keywordInput.trim()) {
+                                handleAddKeyword();
+                              }
+                            }}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") {
+                              if (e.key === "Enter" || e.key === ",") {
                                 e.preventDefault();
                                 handleAddKeyword();
                               }

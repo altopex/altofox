@@ -1,5 +1,6 @@
 import { SectionJSON } from "../../lib/generator/content-schema";
 import { ResolvedImage } from "../../lib/photos/photo-service";
+import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export function renderGallery(
   section: SectionJSON,
@@ -33,10 +34,17 @@ export function renderGallery(
           .map(
             (img, idx) => `
         <div class="gallery-item reveal" tabindex="0" role="button" aria-label="View photo ${idx + 1}">
-          <picture>
-            <source srcset="${img.localWebpPath || img.localPath || img.url}" type="image/webp">
-            <img src="${img.localPath || img.url}" data-remote-src="${img.url}" alt="${img.alt || "Completed service project"}" class="img-gallery" width="800" height="600" loading="lazy">
-          </picture>
+          ${renderStaticImageTag({
+            src: img.url || img.localPath || "",
+            alt: img.alt || "Completed service project",
+            fallbackUrl: img.fallbackUrl,
+            allFallbacks: img.allFallbacks,
+            localSvg: img.localSvgFallback,
+            width: 800,
+            height: 600,
+            loading: "lazy",
+            className: "img-gallery",
+          })}
         </div>`
           )
           .join("\n        ")}

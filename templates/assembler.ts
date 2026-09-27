@@ -24,9 +24,11 @@ import {
 } from "../lib/registry/page-registry";
 import {
   createImagePlan,
+  resolveImagePlanWithValidation,
   bundleImagesFromPlan,
   ImagePlanSlot,
 } from "../lib/photos/image-bundler";
+import { IMAGE_FALLBACK_SCRIPT } from "../lib/photos/image-provider";
 import {
   validateAndRepairSection,
   scanHtmlForForbiddenTokens,
@@ -130,6 +132,9 @@ function buildHead(
 
   <!-- Design System CSS -->
   <link rel="stylesheet" href="${cssHref}">
+
+  <!-- Instant inline image fallback handler -->
+  <script>${IMAGE_FALLBACK_SCRIPT}</script>
 
   <!-- Shared App Script (Single source of truth) -->
   <script src="${jsHref}" defer></script>`;
@@ -273,8 +278,8 @@ export async function assembleWebsite(
     hasAreasHub: effectiveAreaCities.length > 0,
   });
 
-  // 2. Create Image Plan & Bundle Images into files
-  const imagePlan = createImagePlan(
+  // 2. Create Image Plan & Bundle Images into files (with pre-validation and guaranteed local SVG fallbacks)
+  const initialPlan = createImagePlan(
     data.pages.map((p) => ({
       slug: p.slug,
       title: p.seo?.title || p.seo?.h1,
@@ -289,7 +294,23 @@ export async function assembleWebsite(
       state: data.site.address?.state,
     }
   );
-  const bundledImages = bundleImagesFromPlan(imagePlan);
+
+  const imagePlan = await resolveImagePlanWithValidation(
+    initialPlan,
+    mainTrade,
+    data.site.address?.city || "Local",
+    {
+      preferredSource: options?.preferredSource,
+      state: data.site.address?.state,
+      pexelsKey: options?.pexelsKey,
+      pixabayKey: options?.pixabayKey,
+    }
+  );
+
+  const bundledImages = bundleImagesFromPlan(imagePlan, {
+    mainTrade,
+    city: data.site.address?.city || "Local",
+  });
 
   // Read base.css and base.js
   let baseCss = "";
@@ -433,7 +454,13 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
       section.content = validation.content;
 
       // Find planned images for this section
-      const plannedSlots = imagePlan.filter((p) => p.pageSlug === slug && p.slot === (section.type === "hero" ? "hero" : "service"));
+      let targetSlot: "hero" | "service" | "about" | "gallery" = "service";
+      if (section.type === "hero") targetSlot = "hero";
+      else if (section.type === "about") targetSlot = "about";
+      else if (section.type === "gallery") targetSlot = "gallery";
+      else if (section.type === "services" || section.type === "serviceHighlights" || section.type === "serviceGrid") targetSlot = "service";
+
+      const plannedSlots = imagePlan.filter((p) => p.pageSlug === slug && p.slot === targetSlot);
       const sectionImages: any[] = [];
 
       for (let i = 0; i < Math.max(plannedSlots.length, 1); i++) {
@@ -442,6 +469,8 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
           sectionImages.push({
             url: pSlot.remoteUrl || pSlot.fallbackUrl,
             fallbackUrl: pSlot.fallbackUrl,
+            allFallbacks: pSlot.allFallbacks || (pSlot.fallbackUrl ? [pSlot.fallbackUrl] : []),
+            localSvgFallback: pSlot.localSvgFallback,
             localPath: assetPath(currentPage, pSlot.localPath),
             localWebpPath: assetPath(currentPage, pSlot.localWebpPath),
             alt: pSlot.alt,
@@ -745,6 +774,8 @@ ${mobileCallBarHtml}
           localPath: locHeroPlanned.localPath,
           url: locHeroPlanned.remoteUrl || locHeroPlanned.fallbackUrl,
           fallbackUrl: locHeroPlanned.fallbackUrl,
+          allFallbacks: locHeroPlanned.allFallbacks || (locHeroPlanned.fallbackUrl ? [locHeroPlanned.fallbackUrl] : []),
+          localSvgFallback: locHeroPlanned.localSvgFallback,
           alt: locHeroPlanned.alt,
           width: locHeroPlanned.width,
           height: locHeroPlanned.height,

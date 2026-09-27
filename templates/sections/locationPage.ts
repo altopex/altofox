@@ -2,6 +2,7 @@ import { Theme } from "../../lib/themes";
 import { SiteInfoJSON } from "../../lib/generator/content-schema";
 import { PageRegistry, RegistryPage, linkTo, LinkStyle, assetPath, renderBreadcrumbs } from "../../lib/registry/page-registry";
 import { safeText, safeButton } from "../../lib/generator/safe-helpers";
+import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export interface LocationPageContext {
   city: string;
@@ -27,6 +28,8 @@ export interface LocationPageContext {
     localPath?: string;
     url?: string;
     fallbackUrl?: string;
+    allFallbacks?: string[];
+    localSvgFallback?: string;
     alt: string;
     width: number;
     height: number;
@@ -153,15 +156,17 @@ ${breadcrumbsHtml}
       <!-- Hero Visual: Local Photo + Interactive Map -->
       <div class="location-hero-media">
         <div class="location-media-card">
-          <img
-            src="${heroImageSrc}"
-            alt="${heroImageAlt}"
-            class="img-hero"
-            width="${ctx.heroImage?.width || 1200}"
-            height="${ctx.heroImage?.height || 800}"
-            loading="eager"
-            fetchpriority="high"${fallbackAttr}
-          >
+          ${renderStaticImageTag({
+            src: heroImageSrc,
+            alt: heroImageAlt,
+            width: ctx.heroImage?.width || 1200,
+            height: ctx.heroImage?.height || 800,
+            className: "img-hero",
+            loading: "eager",
+            fetchPriority: "high",
+            fallbacks: ctx.heroImage?.allFallbacks || (ctx.heroImage?.fallbackUrl ? [ctx.heroImage.fallbackUrl] : []),
+            localSvgFallback: ctx.heroImage?.localSvgFallback
+          })}
           <div class="map-embed-container" style="margin-top: 1rem; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--color-border); background: var(--color-surface, #F8FAFC);">
             <div style="height: 200px;">
               <iframe

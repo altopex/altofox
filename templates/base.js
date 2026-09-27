@@ -292,3 +292,43 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+/**
+ * 9. Bulletproof Multi-Source Image Fallback Engine
+ * Recovers broken images, clears blocking <picture> sources, and falls back to local SVG.
+ */
+window.handleImageFallback = function(img) {
+  if (!img || img.dataset.failed === 'true') return;
+
+  // Clear any parent <picture> sources so they don't override <img> src
+  var pic = img.closest('picture');
+  if (pic) {
+    var sources = pic.querySelectorAll('source');
+    for (var i = 0; i < sources.length; i++) {
+      sources[i].remove();
+    }
+  }
+
+  var fallbacks = (img.dataset.fallbacks || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var currentIdx = parseInt(img.dataset.fallbackIdx || '0', 10);
+
+  if (currentIdx < fallbacks.length) {
+    var nextUrl = fallbacks[currentIdx];
+    img.dataset.fallbackIdx = String(currentIdx + 1);
+    img.src = nextUrl;
+  } else {
+    img.dataset.failed = 'true';
+    img.removeAttribute('onerror');
+    var localSvg = img.dataset.localSvg;
+    if (localSvg && img.src !== localSvg) {
+      img.src = localSvg;
+    }
+  }
+};
+
+window.addEventListener('error', function(e) {
+  if (e.target && e.target.tagName === 'IMG') {
+    window.handleImageFallback(e.target);
+  }
+}, true);
+
