@@ -7,9 +7,10 @@ import {
   resolveValidatedPageImage,
   ImageProviderType,
   ImageDeduplicationTracker,
+  buildBingThumbnailUrl,
 } from "./image-provider";
 import { generateTradeSvgBuffer, generateTradeSvgDataUri } from "./trade-svg-fallback";
-import { detectTradeCategory } from "./photo-service";
+import { detectTradeCategory, extractPhotoId, resolvePhoto } from "./photo-service";
 
 export interface ImagePlanSlot {
   id: string;
@@ -45,6 +46,7 @@ export const VALID_WEBP_BUFFER = Buffer.from(
  * Creates a comprehensive, contextual image plan for all pages in the website.
  * Generates unique, contextual image queries based on page service, location,
  * keyword, and search intent.
+ * Enforces strict global deduplication (NO image used 2 times).
  */
 export function createImagePlan(
   pages: Array<{ slug: string; title?: string; sections?: any[] }>,
@@ -57,11 +59,12 @@ export function createImagePlan(
     state?: string;
     pexelsKey?: string;
     pixabayKey?: string;
+    deduplicationTracker?: ImageDeduplicationTracker;
   } = {}
 ): ImagePlanSlot[] {
   const plan: ImagePlanSlot[] = [];
+  const tracker = options.deduplicationTracker || new ImageDeduplicationTracker();
   const usedPaths = new Set<string>();
-  const usedQueries = new Set<string>();
   const tradeClean = trade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
   const tradeCategory = detectTradeCategory(trade);
 
@@ -92,6 +95,7 @@ export function createImagePlan(
         slotType = "about";
         defaultWidth = 800;
         defaultHeight = 600;
+        count = 2;
       } else if (type === "gallery") {
         slotType = "gallery";
         defaultWidth = 800;
@@ -126,7 +130,9 @@ export function createImagePlan(
           itemTitle = section?.content?.h1 || section?.content?.eyebrow || pageTitle;
           specificServiceName = isServicePage ? (serviceName || pageTitle) : undefined;
         } else if (slotType === "about") {
-          itemTitle = section?.content?.title || "Craftsman & Technician Team";
+          itemTitle = i === 0
+            ? (section?.content?.title || section?.content?.eyebrow || "Craftsman & Dedicated Team")
+            : (section?.content?.headline || "Licensed Specialists in Action");
         } else if (slotType === "gallery") {
           const galleryTitles = [
             "Precision System Installation",
@@ -168,7 +174,7 @@ export function createImagePlan(
           },
           {
             preferredSource: options.preferredSource,
-            usedQueries: explicitQuery ? undefined : usedQueries,
+            deduplicationTracker: tracker,
             pexelsKey: options.pexelsKey,
             pixabayKey: options.pixabayKey,
           }
@@ -201,7 +207,7 @@ export function createImagePlan(
     }
   }
 
-  // 2. Plan hero images for Location Pages with unique city queries
+  // 2. Plan hero images for Location Pages with unique city queries & copyright-free photos
   if (locationPages && locationPages.length > 0) {
     for (const loc of locationPages) {
       const locCityClean = loc.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -228,7 +234,7 @@ export function createImagePlan(
           },
           {
             preferredSource: options.preferredSource,
-            usedQueries,
+            deduplicationTracker: tracker,
             pexelsKey: options.pexelsKey,
             pixabayKey: options.pixabayKey,
           }
@@ -261,6 +267,7 @@ export function createImagePlan(
 /**
  * Pre-validates all image slots in the plan using the multi-source fallback chain.
  * Guarantees that every planned slot has an accessible URL or a safe local fallback.
+ * Strictly enforces that NO image is used 2 times.
  */
 export async function resolveImagePlanWithValidation(
   plan: ImagePlanSlot[],
@@ -280,13 +287,15 @@ export async function resolveImagePlanWithValidation(
       organizationId?: string;
       providerName?: string;
     };
+    deduplicationTracker?: ImageDeduplicationTracker;
     validateNetwork?: boolean;
     fastOfflinePreview?: boolean;
     maxValidationTimeMs?: number;
   } = {}
 ): Promise<ImagePlanSlot[]> {
   const validatedPlan: ImagePlanSlot[] = [];
-  const deduplicationTracker = new ImageDeduplicationTracker();
+  const deduplicationTracker = options.deduplicationTracker || new ImageDeduplicationTracker();
+  const tradeCategory = detectTradeCategory(trade);
 
   if (options.fastOfflinePreview || options.validateNetwork === false) {
     for (const slot of plan) {
@@ -318,66 +327,103 @@ export async function resolveImagePlanWithValidation(
         status: "found",
       });
     }
-    return validatedPlan;
+  } else {
+    const startTime = Date.now();
+    const maxBudgetMs = options.maxValidationTimeMs ?? 3500;
+    let networkAllowed: boolean = options.validateNetwork ?? true;
+
+    // Process in concurrent batches of 6 with aggregate timeout budget
+    const BATCH_SIZE = 6;
+    for (let i = 0; i < plan.length; i += BATCH_SIZE) {
+      const chunk = plan.slice(i, i + BATCH_SIZE);
+
+      if (networkAllowed && Date.now() - startTime >= maxBudgetMs) {
+        networkAllowed = false;
+      }
+
+      const chunkResults = await Promise.all(
+        chunk.map(async (slot) => {
+          try {
+            const resolved = await resolveValidatedPageImage(
+              {
+                trade,
+                city,
+                state: options.state,
+                serviceName: slot.serviceName,
+                slot: slot.slot,
+                width: slot.width,
+                height: slot.height,
+                customAlt: slot.alt,
+                pageSlug: slot.pageSlug,
+              },
+              {
+                preferredSource: options.preferredSource,
+                pexelsKey: options.pexelsKey,
+                pixabayKey: options.pixabayKey,
+                openaiKey: options.openaiKey,
+                providerCredentials: options.providerCredentials,
+                deduplicationTracker,
+                validateNetwork: networkAllowed,
+              }
+            );
+
+            return {
+              ...slot,
+              query: resolved.query,
+              remoteUrl: resolved.url,
+              fallbackUrl: resolved.fallbackUrl,
+              allFallbacks: resolved.allFallbacks,
+              localSvgFallback: resolved.localSvgFallback,
+              status: resolved.status === "local_fallback" ? ("local_fallback" as const) : ("found" as const),
+            };
+          } catch {
+            return slot;
+          }
+        })
+      );
+
+      validatedPlan.push(...chunkResults);
+    }
   }
 
-  const startTime = Date.now();
-  const maxBudgetMs = options.maxValidationTimeMs ?? 3500;
-  let networkAllowed: boolean = options.validateNetwork ?? true;
+  // =========================================================================
+  // POST-PLAN STRICT VERIFICATION PASS:
+  // Zero duplicate images permitted! If any collision is detected, mutate immediately!
+  // =========================================================================
+  const seenPhotoIds = new Set<string>();
+  const seenUrls = new Set<string>();
 
-  // Process in concurrent batches of 6 with aggregate timeout budget
-  const BATCH_SIZE = 6;
-  for (let i = 0; i < plan.length; i += BATCH_SIZE) {
-    const chunk = plan.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < validatedPlan.length; i++) {
+    const slot = validatedPlan[i];
+    const photoId = extractPhotoId(slot.remoteUrl);
+    const isDuplicate =
+      (photoId && seenPhotoIds.has(photoId)) ||
+      (slot.remoteUrl && seenUrls.has(slot.remoteUrl));
 
-    // If aggregate network budget is exhausted, switch remaining slots to instant non-blocking
-    if (networkAllowed && Date.now() - startTime >= maxBudgetMs) {
-      networkAllowed = false;
+    if (isDuplicate) {
+      if (slot.slot === "hero") {
+        // Hero MUST be copyright-free photo
+        const replacement = resolvePhoto(tradeCategory, "hero", slot.query, i + 50, seenPhotoIds);
+        slot.remoteUrl = replacement.url;
+        slot.fallbackUrl = replacement.url;
+        slot.allFallbacks = [replacement.url, slot.localSvgFallback];
+        const newId = extractPhotoId(replacement.url);
+        if (newId) seenPhotoIds.add(newId);
+        seenUrls.add(replacement.url);
+      } else {
+        // Small image: mutate keywords dynamically
+        const uniqueQ = deduplicationTracker.generateUniqueBingQuery(`${slot.query}+item${i}`, tradeCategory, slot.slot, i);
+        const newUrl = buildBingThumbnailUrl(uniqueQ, slot.width, slot.height, i + 1);
+        slot.remoteUrl = newUrl;
+        slot.query = uniqueQ;
+        const newId = extractPhotoId(newUrl);
+        if (newId) seenPhotoIds.add(newId);
+        seenUrls.add(newUrl);
+      }
+    } else {
+      if (photoId) seenPhotoIds.add(photoId);
+      if (slot.remoteUrl) seenUrls.add(slot.remoteUrl);
     }
-
-    const chunkResults = await Promise.all(
-      chunk.map(async (slot) => {
-        try {
-          const resolved = await resolveValidatedPageImage(
-            {
-              trade,
-              city,
-              state: options.state,
-              serviceName: slot.serviceName,
-              slot: slot.slot,
-              width: slot.width,
-              height: slot.height,
-              customAlt: slot.alt,
-              pageSlug: slot.pageSlug,
-            },
-            {
-              preferredSource: options.preferredSource,
-              pexelsKey: options.pexelsKey,
-              pixabayKey: options.pixabayKey,
-              openaiKey: options.openaiKey,
-              providerCredentials: options.providerCredentials,
-              deduplicationTracker,
-              validateNetwork: networkAllowed,
-            }
-          );
-
-          return {
-            ...slot,
-            query: resolved.query,
-            remoteUrl: resolved.url,
-            fallbackUrl: resolved.fallbackUrl,
-            allFallbacks: resolved.allFallbacks,
-            localSvgFallback: resolved.localSvgFallback,
-            status: resolved.status === "local_fallback" ? ("local_fallback" as const) : ("found" as const),
-          };
-        } catch {
-          // Fallback on exception: keep original slot with guaranteed local SVG
-          return slot;
-        }
-      })
-    );
-
-    validatedPlan.push(...chunkResults);
   }
 
   return validatedPlan;
@@ -404,7 +450,6 @@ export function bundleImagesFromPlan(
   const processedPaths = new Set<string>();
 
   for (const slot of plan) {
-    // Generate high-resolution trade SVG buffer
     const svgBuffer = generateTradeSvgBuffer({
       trade: resolvedTrade,
       slot: slot.slot,
@@ -414,33 +459,32 @@ export function bundleImagesFromPlan(
       height: slot.height,
     });
 
-    // 1. Bundle SVG file
     if (slot.localSvgPath && !processedPaths.has(slot.localSvgPath)) {
       processedPaths.add(slot.localSvgPath);
       files.push({
         path: slot.localSvgPath,
-        content: svgBuffer,
+        content: svgBuffer.toString("utf8"),
         mimeType: "image/svg+xml",
       });
     }
 
-    // 2. Bundle JPEG fallback file
-    if (!processedPaths.has(slot.localPath)) {
+    if (slot.localPath && !processedPaths.has(slot.localPath)) {
       processedPaths.add(slot.localPath);
       files.push({
         path: slot.localPath,
-        content: svgBuffer, // Serving SVG markup under local path ensures immediate offline rendering
+        content: VALID_JPEG_BUFFER.toString("base64"),
         mimeType: "image/jpeg",
+        isBase64: true,
       });
     }
 
-    // 3. Bundle WebP file
     if (slot.localWebpPath && !processedPaths.has(slot.localWebpPath)) {
       processedPaths.add(slot.localWebpPath);
       files.push({
         path: slot.localWebpPath,
-        content: VALID_WEBP_BUFFER,
+        content: VALID_WEBP_BUFFER.toString("base64"),
         mimeType: "image/webp",
+        isBase64: true,
       });
     }
   }

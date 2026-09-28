@@ -1,5 +1,5 @@
 import { SectionJSON, SiteContentJSON } from "../../lib/generator/content-schema";
-import { ResolvedImage } from "../../lib/photos/photo-service";
+import { ResolvedImage, detectTradeCategory, resolvePhoto } from "../../lib/photos/photo-service";
 import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export function renderHero(
@@ -100,11 +100,8 @@ export function renderHero(
         </div>`;
   }
 
-  const fallbackImg: ResolvedImage = {
-    url: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80",
-    alt: h1,
-    slot: "main",
-  };
+  const tradeCat = detectTradeCategory((site as any)?.trade || (site as any)?.niche || (site as any)?.primaryService || h1);
+  const fallbackImg: ResolvedImage = images[0] || resolvePhoto(tradeCat, "hero", h1, 0);
   const mainImage = images.find((img) => img.slot === "main") || images[0] || fallbackImg;
 
   const renderTrustBadges = () => {

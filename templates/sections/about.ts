@@ -1,5 +1,5 @@
 import { SectionJSON } from "../../lib/generator/content-schema";
-import { ResolvedImage } from "../../lib/photos/photo-service";
+import { ResolvedImage, detectTradeCategory, resolvePhoto } from "../../lib/photos/photo-service";
 import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export function renderAbout(
@@ -21,13 +21,9 @@ export function renderAbout(
     "Lifetime workmanship warranty on all installations",
   ];
 
-  const fallbackImg: ResolvedImage = {
-    url: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&w=1000&q=80",
-    alt: headline,
-    slot: "main",
-  };
-  const mainImage = images[0] || fallbackImg;
-  const secondImage = images[1] || mainImage;
+  const tradeCat = detectTradeCategory(siteName || headline);
+  const mainImage = images[0] || resolvePhoto(tradeCat, "about", headline, 0);
+  const secondImage = images[1] || resolvePhoto(tradeCat, "about", `${headline} dedicated craftsmanship`, 1);
 
   const checkListSvg = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
 

@@ -1,4 +1,4 @@
-import { detectTradeCategory, resolvePhoto, ResolvedImage } from "./photo-service";
+import { detectTradeCategory, resolvePhoto, ResolvedImage, extractPhotoId } from "./photo-service";
 import { validateImageUrl } from "./image-validator";
 import { generateTradeSvgDataUri, generateTradeSvg } from "./trade-svg-fallback";
 import { tryGenerateAiImage } from "./ai-image-service";
@@ -90,18 +90,32 @@ export interface ImageUsageRecord {
 }
 
 /**
- * Tracks used image URLs and queries across the entire website generation session
- * to guarantee that different sections and pages never unnecessarily reuse the same image.
+ * Tracks used image URLs, photo IDs, and queries across the entire website generation session
+ * to strictly guarantee that NO image is EVER used 2 times anywhere on the website.
  */
 export class ImageDeduplicationTracker {
   private usedUrls = new Set<string>();
+  private usedPhotoIds = new Set<string>();
   private usedQueries = new Set<string>();
   private records: ImageUsageRecord[] = [];
 
   public isUrlUsed(url: string): boolean {
     if (!url) return false;
+    if (this.usedUrls.has(url)) return true;
+
+    const photoId = extractPhotoId(url);
+    if (photoId && this.usedPhotoIds.has(photoId)) return true;
+
     const normalized = url.toLowerCase().split("?")[0].replace(/^https?:\/\//, "");
-    return this.usedUrls.has(normalized);
+    if (this.usedUrls.has(normalized)) return true;
+
+    return false;
+  }
+
+  public isQueryUsed(query: string): boolean {
+    if (!query) return false;
+    const clean = normalizeBingQuery(query);
+    return this.usedQueries.has(clean);
   }
 
   public isUrlUsedOnPage(url: string, page: string): boolean {
@@ -118,9 +132,22 @@ export class ImageDeduplicationTracker {
     metadata?: { source?: string; page?: string; section?: string; subject?: string }
   ): void {
     if (!url) return;
+    this.usedUrls.add(url);
+
+    const photoId = extractPhotoId(url);
+    if (photoId) {
+      this.usedPhotoIds.add(photoId);
+      this.usedUrls.add(photoId);
+    }
+
     const normalized = url.toLowerCase().split("?")[0].replace(/^https?:\/\//, "");
     this.usedUrls.add(normalized);
-    if (query) this.usedQueries.add(query.toLowerCase().trim());
+
+    if (query) {
+      this.usedQueries.add(query.toLowerCase().trim());
+      this.usedQueries.add(normalizeBingQuery(query));
+    }
+
     this.records.push({
       url,
       source: metadata?.source || "unknown",
@@ -136,6 +163,57 @@ export class ImageDeduplicationTracker {
     this.recordUrl(url, query, { section: slot });
   }
 
+  /**
+   * Generates a guaranteed unique Bing query by dynamically modifying keywords
+   * (q=keywords+change) if a collision or duplicate query is detected.
+   */
+  public generateUniqueBingQuery(
+    baseQuery: string,
+    trade: string = "service",
+    slot: string = "service",
+    index: number = 0
+  ): string {
+    let clean = normalizeBingQuery(baseQuery);
+    if (!this.isQueryUsed(clean)) {
+      this.usedQueries.add(clean);
+      return clean;
+    }
+
+    // Dynamic keyword modifier pool to guarantee distinct Bing results
+    const actionModifiers = [
+      "repair+technician",
+      "installation+specialist",
+      "diagnostic+inspection",
+      "maintenance+tuneup",
+      "residential+troubleshooting",
+      "certified+tradesman",
+      "hardware+replacement",
+      "precision+workmanship",
+      "commercial+service",
+      "emergency+dispatch",
+      "professional+tools",
+      "jobsite+solution",
+      "equipment+servicing",
+      "onsite+contractor",
+      "system+testing",
+      "expert+craftsmanship",
+    ];
+
+    for (let i = 0; i < actionModifiers.length; i++) {
+      const mod = actionModifiers[(index + i) % actionModifiers.length];
+      const candidate = `${clean}+${mod}`;
+      if (!this.isQueryUsed(candidate)) {
+        this.usedQueries.add(candidate);
+        return candidate;
+      }
+    }
+
+    // Secondary fallback with distinct index seed
+    const uniqueCandidate = `${clean}+expert+trade+slot${index + 1}`;
+    this.usedQueries.add(uniqueCandidate);
+    return uniqueCandidate;
+  }
+
   public getUsedUrlsSet(): Set<string> {
     return this.usedUrls;
   }
@@ -148,7 +226,6 @@ export class ImageDeduplicationTracker {
     return this.records;
   }
 }
-
 
 /**
  * Dynamic Query Generator:
@@ -316,7 +393,6 @@ export function determineImageIntent(context: ImageContext): ImageIntent {
     slot.includes("trust") ? "trust" :
     slot.includes("location") ? "location" : "service";
 
-  // Establish explicit subject
   let subject = "";
   if (service) {
     subject = service;
@@ -334,7 +410,6 @@ export function determineImageIntent(context: ImageContext): ImageIntent {
 
   const { query, alt } = generateDynamicImageQuery(context);
 
-  // Extract core keywords
   const keywords = Array.from(
     new Set(
       `${subject} ${query}`
@@ -372,10 +447,10 @@ export function evaluateImageRelevance(
   ].join(" ").toLowerCase();
 
   const subjectLower = intent.subject.toLowerCase();
-  let score = 35; // Base score (requires subject/keyword match to cross threshold of 50)
+  let score = 35;
   const matchedTerms: string[] = [];
 
-  // 1. Direct Subject Match
+  // Direct Subject Match
   const subjectTokens = subjectLower.split(/\s+/).filter((t) => t.length > 2);
   for (const token of subjectTokens) {
     if (textCorpus.includes(token)) {
@@ -384,7 +459,7 @@ export function evaluateImageRelevance(
     }
   }
 
-  // 2. Keyword relevance
+  // Keyword relevance
   for (const kw of intent.searchKeywords) {
     if (!matchedTerms.includes(kw) && textCorpus.includes(kw)) {
       score += 15;
@@ -392,7 +467,7 @@ export function evaluateImageRelevance(
     }
   }
 
-  // 3. Negative keyword detection (mismatched trade / topic)
+  // Negative keyword detection (mismatched trade / topic)
   const tradeTopics: Record<string, string[]> = {
     drain: ["furnace", "shingle", "mow", "lawn", "car", "brake"],
     heater: ["lawn", "tree", "pruning", "roof", "brake", "mow"],
@@ -413,7 +488,6 @@ export function evaluateImageRelevance(
     }
   }
 
-  // 4. Purpose Suitability
   if (intent.purpose === "about" && (textCorpus.includes("team") || textCorpus.includes("technician"))) {
     score += 20;
   }
@@ -435,16 +509,12 @@ export function evaluateImageRelevance(
 
 /**
  * Resolves an image result with multi-tier fallback, subject-specific matching,
- * pre-validation, and cross-section deduplication.
- * 
- * 5-Source Fallback Chain:
- * 1. Primary external source (Bing Image Search or preferred provider)
- * 2. Secondary source (Curated trade stock photo with subject matching)
- * 3. Tertiary source (Pexels / Pixabay with subject-specific query)
- * 4. Quaternary source (Secondary Bing with semantic action query)
- * 5. Quinary source (Semantic Trade Curated Photo Registry)
- * 6. AI image generation fallback (configured AI provider)
- * 7. Guaranteed local trade & service SVG vector asset (100% offline, zero network, zero broken image)
+ * pre-validation, and STRICT GLOBAL DEDUPLICATION (zero reused images).
+ *
+ * RULES:
+ * 1. HERO section images MUST be high-resolution copyright-free photos (Pexels, Pixabay, Unsplash).
+ * 2. Small size images (service cards, about, gallery) can call from Bing with dynamically altered q= keywords.
+ * 3. NO image may ever be used 2 times across the entire website.
  */
 export async function resolveValidatedPageImage(
   context: ImageContext,
@@ -463,17 +533,18 @@ export async function resolveValidatedPageImage(
       providerName?: string;
     };
     deduplicationTracker?: ImageDeduplicationTracker;
-    validateNetwork?: boolean; // Set false in fast unit tests or when offline
+    validateNetwork?: boolean;
   } = {}
 ): Promise<PageImageResult> {
   const tradeCategory = detectTradeCategory(context.trade || context.serviceName || "");
   const slot = context.slot || (context as any).sectionType || "hero";
+  const isHero = slot === "hero";
   const index = context.index || 0;
   const validateNetwork = options.validateNetwork ?? true;
   const tracker = options.deduplicationTracker;
 
-  const defaultWidth = slot === "hero" ? 1920 : slot === "avatar" ? 200 : 800;
-  const defaultHeight = slot === "hero" ? 1080 : slot === "avatar" ? 200 : 533;
+  const defaultWidth = isHero ? 1920 : slot === "avatar" ? 200 : 800;
+  const defaultHeight = isHero ? 1080 : slot === "avatar" ? 200 : 533;
   const width = context.width || defaultWidth;
   const height = context.height || defaultHeight;
 
@@ -488,7 +559,7 @@ export async function resolveValidatedPageImage(
   const query = intent.query;
   const alt = context.customAlt || intent.alt;
 
-  // 2. Generate guaranteed local SVG fallback (Never fails, zero network requirement)
+  // 2. Generate guaranteed local SVG fallback
   const localSvgFallback = generateTradeSvgDataUri({
     trade: tradeCategory,
     slot,
@@ -510,58 +581,116 @@ export async function resolveValidatedPageImage(
   const localSvgPath = `images/${cleanSlug}.svg`;
 
   // 3. Assemble candidate sources in order of preference
-  const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
   const candidates: Array<{ url: string; source: string; alt?: string; title?: string }> = [];
 
-  // Candidate 1: Primary Source with subject-specific query
-  if (provider === "bing") {
-    candidates.push({
-      url: buildBingThumbnailUrl(query, width, height, index + 1),
-      source: "Bing",
-      alt,
-      title: intent.subject,
-    });
-  } else if (provider === "unsplash") {
-    const curated = resolvePhoto(tradeCategory, slot, intent.subject || query, index, tracker ? tracker.getUsedUrlsSet() : undefined);
-    candidates.push({ url: curated.url, source: "Unsplash", alt: curated.alt, title: intent.subject });
-  }
+  if (isHero) {
+    // =========================================================================
+    // HERO IMAGES: EXCLUSIVELY COPYRIGHT-FREE HIGH-RES PHOTOS (Pexels / Pixabay / Unsplash)
+    // =========================================================================
 
-  // Candidate 2: Curated trade stock photo with subject matching
-  const curatedFallback = resolvePhoto(tradeCategory, slot, intent.subject || query, index, tracker ? tracker.getUsedUrlsSet() : undefined);
-  if (!candidates.some((c) => c.url === curatedFallback.url)) {
-    candidates.push({ url: curatedFallback.url, source: "Curated Trade Photo", alt: curatedFallback.alt, title: intent.subject });
-  }
+    // Candidate 1: Pexels API (if key available)
+    if (options.pexelsKey) {
+      try {
+        const pexelsResults = await searchPexels(query, options.pexelsKey, "landscape", 1920);
+        for (const p of pexelsResults) {
+          if (!tracker || !tracker.isUrlUsed(p.url)) {
+            candidates.push({ url: p.url, source: "Pexels", alt: p.photographer, title: intent.subject });
+            break;
+          }
+        }
+      } catch (_) {}
+    }
 
-  // Candidate 3: Pexels or Pixabay if keys available
-  if (options.pexelsKey) {
-    try {
-      const pexelsResults = await searchPexels(query, options.pexelsKey, slot === "hero" ? "landscape" : "landscape", width);
-      if (pexelsResults.length > 0 && (!tracker || !tracker.isUrlUsed(pexelsResults[0].url))) {
-        candidates.push({ url: pexelsResults[0].url, source: "Pexels", alt: pexelsResults[0].photographer, title: intent.subject });
+    // Candidate 2: Pixabay API (if key available)
+    if (options.pixabayKey) {
+      try {
+        const pixabayResults = await searchPixabay(query, options.pixabayKey, "landscape");
+        for (const p of pixabayResults) {
+          if (!tracker || !tracker.isUrlUsed(p.url)) {
+            candidates.push({ url: p.url, source: "Pixabay", alt: p.photographer, title: intent.subject });
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Candidate 3: Curated Royalty-Free Copyright-Free Unsplash Hero Registry
+    const usedSet = tracker ? tracker.getUsedUrlsSet() : undefined;
+    const curatedHero = resolvePhoto(tradeCategory, "hero", intent.subject || query, index, usedSet);
+    if (!tracker || !tracker.isUrlUsed(curatedHero.url)) {
+      candidates.push({ url: curatedHero.url, source: "Curated Unsplash", alt: curatedHero.alt, title: intent.subject });
+    }
+
+    // Candidate 4 & 5: Additional offset copyright-free heroes
+    for (let offset = 1; offset <= 4; offset++) {
+      const nextHero = resolvePhoto(tradeCategory, "hero", query, index + offset, usedSet);
+      if (!candidates.some((c) => c.url === nextHero.url) && (!tracker || !tracker.isUrlUsed(nextHero.url))) {
+        candidates.push({ url: nextHero.url, source: "Curated Unsplash", alt: nextHero.alt, title: intent.subject });
       }
-    } catch (_) {}
-  }
+    }
+  } else {
+    // =========================================================================
+    // SMALL SIZE IMAGES: CAN CALL FROM BING WITH DYNAMICALLY ALTERED UNIQUE KEYWORDS (q=keywords+change)
+    // =========================================================================
 
-  if (options.pixabayKey) {
-    try {
-      const pixabayResults = await searchPixabay(query, options.pixabayKey, slot === "hero" ? "landscape" : "landscape");
-      if (pixabayResults.length > 0 && (!tracker || !tracker.isUrlUsed(pixabayResults[0].url))) {
-        candidates.push({ url: pixabayResults[0].url, source: "Pixabay", alt: pixabayResults[0].photographer, title: intent.subject });
-      }
-    } catch (_) {}
-  }
+    const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
 
-  // Candidate 4: Secondary Bing with semantic action query
-  const secondaryBingQuery = `${tradeCategory} ${intent.subject || context.serviceName || "technician"} residential service`;
-  const secondaryBingUrl = buildBingThumbnailUrl(secondaryBingQuery, width, height, index + 2);
-  if (!candidates.some((c) => c.url === secondaryBingUrl)) {
-    candidates.push({ url: secondaryBingUrl, source: "Bing Fallback", alt: secondaryBingQuery, title: intent.subject });
-  }
+    // Candidate 1: Bing with dynamically altered unique keywords
+    const uniqueBingQuery = tracker
+      ? tracker.generateUniqueBingQuery(query, tradeCategory, slot, index)
+      : normalizeBingQuery(query);
+    const bingUrl = buildBingThumbnailUrl(uniqueBingQuery, width, height, index + 1);
 
-  // Candidate 5: Quinary fallback from photo registry with index offset
-  const quinaryPhoto = resolvePhoto(tradeCategory, slot, query, index + 3, tracker ? tracker.getUsedUrlsSet() : undefined);
-  if (!candidates.some((c) => c.url === quinaryPhoto.url)) {
-    candidates.push({ url: quinaryPhoto.url, source: "Trade Stock Registry", alt: quinaryPhoto.alt, title: intent.subject });
+    if (provider !== "unsplash") {
+      candidates.push({
+        url: bingUrl,
+        source: "Bing",
+        alt,
+        title: intent.subject,
+      });
+    }
+
+    // Candidate 2: Curated Royalty-Free Copyright-Free Stock
+    const usedSet = tracker ? tracker.getUsedUrlsSet() : undefined;
+    const curatedStock = resolvePhoto(tradeCategory, slot, intent.subject || query, index, usedSet);
+    if (!candidates.some((c) => c.url === curatedStock.url) && (!tracker || !tracker.isUrlUsed(curatedStock.url))) {
+      candidates.push({ url: curatedStock.url, source: "Curated Stock", alt: curatedStock.alt, title: intent.subject });
+    }
+
+    // Candidate 3: Pexels API (if key available)
+    if (options.pexelsKey) {
+      try {
+        const pexelsResults = await searchPexels(query, options.pexelsKey, "landscape", width);
+        for (const p of pexelsResults) {
+          if (!tracker || !tracker.isUrlUsed(p.url)) {
+            candidates.push({ url: p.url, source: "Pexels", alt: p.photographer, title: intent.subject });
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Candidate 4: Pixabay API (if key available)
+    if (options.pixabayKey) {
+      try {
+        const pixabayResults = await searchPixabay(query, options.pixabayKey, "landscape");
+        for (const p of pixabayResults) {
+          if (!tracker || !tracker.isUrlUsed(p.url)) {
+            candidates.push({ url: p.url, source: "Pixabay", alt: p.photographer, title: intent.subject });
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Candidate 5: Secondary Bing with further modified semantic action query
+    const secondaryBingQuery = tracker
+      ? tracker.generateUniqueBingQuery(`${tradeCategory} ${intent.subject || context.serviceName || "technician"} residential service`, tradeCategory, slot, index + 2)
+      : normalizeBingQuery(`${tradeCategory} ${intent.subject || context.serviceName || "technician"} residential service`);
+    const secondaryBingUrl = buildBingThumbnailUrl(secondaryBingQuery, width, height, index + 2);
+    if (!candidates.some((c) => c.url === secondaryBingUrl)) {
+      candidates.push({ url: secondaryBingUrl, source: "Bing Fallback", alt: secondaryBingQuery, title: intent.subject });
+    }
   }
 
   // 4. Validate candidates sequentially and enforce deduplication + relevance
@@ -571,7 +700,7 @@ export async function resolveValidatedPageImage(
   const allFallbacks: string[] = [];
 
   for (const cand of candidates) {
-    // Deduplication check: reject if already used elsewhere in the site
+    // STRICT DEDUPLICATION: reject if already used anywhere on the website
     if (tracker && tracker.isUrlUsed(cand.url)) {
       continue;
     }
@@ -604,8 +733,8 @@ export async function resolveValidatedPageImage(
     }
   }
 
-  // If network validation was off and nothing selected (e.g. all candidates were used), pick first
-  if (!selectedUrl && !validateNetwork && candidates.length > 0) {
+  // If network validation was off and nothing selected, pick first unused candidate
+  if (!selectedUrl && candidates.length > 0) {
     for (const cand of candidates) {
       if (!tracker || !tracker.isUrlUsed(cand.url)) {
         selectedUrl = cand.url;
@@ -620,8 +749,16 @@ export async function resolveValidatedPageImage(
       }
     }
     if (!selectedUrl) {
-      selectedUrl = candidates[0].url;
-      selectedSource = candidates[0].source;
+      // If all candidates collided, generate a guaranteed unique fresh photo
+      const freshPhoto = resolvePhoto(tradeCategory, slot, query, index + 10, tracker ? tracker.getUsedUrlsSet() : undefined);
+      selectedUrl = freshPhoto.url;
+      selectedSource = freshPhoto.source || "Curated";
+      tracker?.recordUrl(freshPhoto.url, query, {
+        source: selectedSource,
+        page: context.pageSlug || context.pageTitle,
+        section: slot,
+        subject: intent.subject,
+      });
     }
   }
 
@@ -641,7 +778,7 @@ export async function resolveValidatedPageImage(
       7000
     );
 
-    if (aiResult?.url) {
+    if (aiResult?.url && (!tracker || !tracker.isUrlUsed(aiResult.url))) {
       selectedUrl = aiResult.url;
       selectedSource = "AI-Generated";
       status = "ai_generated";
@@ -686,7 +823,11 @@ export async function resolveValidatedPageImage(
 }
 
 /**
- * Synchronous resolver for backward compatibility (defaults to curated fallback if unvalidated)
+ * Synchronous resolver for initial planning and offline generation.
+ * Enforces:
+ * 1. Hero images are strictly high-res copyright-free photography (Unsplash/Pexels).
+ * 2. Small size images can use Bing thumbnails with unique altered q= keywords.
+ * 3. NO image URL may ever be used 2 times.
  */
 export function resolvePageImage(
   context: ImageContext,
@@ -700,11 +841,12 @@ export function resolvePageImage(
 ): PageImageResult {
   const tradeCategory = detectTradeCategory(context.trade || context.serviceName || "");
   const slot = context.slot || "hero";
+  const isHero = slot === "hero";
   const index = context.index || 0;
   const tracker = options.deduplicationTracker;
 
-  const defaultWidth = slot === "hero" ? 1920 : slot === "avatar" ? 200 : 800;
-  const defaultHeight = slot === "hero" ? 1080 : slot === "avatar" ? 200 : 533;
+  const defaultWidth = isHero ? 1920 : slot === "avatar" ? 200 : 800;
+  const defaultHeight = isHero ? 1080 : slot === "avatar" ? 200 : 533;
   const width = context.width || defaultWidth;
   const height = context.height || defaultHeight;
 
@@ -718,14 +860,54 @@ export function resolvePageImage(
   const query = intent.query;
   const alt = context.customAlt || intent.alt;
 
-  const curatedFallback = resolvePhoto(
+  // Resolve copyright-free curated photo
+  const usedSet = tracker ? tracker.getUsedUrlsSet() : undefined;
+  const curatedPhoto = resolvePhoto(
     tradeCategory,
     slot,
     intent.subject || query,
     index,
-    tracker ? tracker.getUsedUrlsSet() : undefined
+    usedSet
   );
-  const fallbackUrl = curatedFallback.url;
+
+  let primaryUrl = "";
+  let source = "Curated";
+
+  if (isHero) {
+    // HERO: MUST be high-res copyright-free photography
+    primaryUrl = curatedPhoto.url;
+    source = "Unsplash";
+  } else {
+    // SMALL SIZE: Can call from Bing with dynamically altered unique keywords
+    const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
+    if (provider === "unsplash") {
+      primaryUrl = curatedPhoto.url;
+      source = "Unsplash";
+    } else {
+      const uniqueQuery = tracker
+        ? tracker.generateUniqueBingQuery(query, tradeCategory, slot, index)
+        : normalizeBingQuery(query);
+      primaryUrl = buildBingThumbnailUrl(uniqueQuery, width, height, index + 1);
+      source = "Bing";
+    }
+  }
+
+  // If primaryUrl was already used, pick guaranteed fresh unused photo
+  if (tracker && tracker.isUrlUsed(primaryUrl)) {
+    const freshPhoto = resolvePhoto(tradeCategory, slot, query, index + 20, tracker.getUsedUrlsSet());
+    primaryUrl = freshPhoto.url;
+    source = "Curated";
+  }
+
+  // Register chosen URL in tracker
+  if (tracker) {
+    tracker.recordUrl(primaryUrl, query, {
+      source,
+      page: context.pageSlug || context.pageTitle,
+      section: slot,
+      subject: intent.subject,
+    });
+  }
 
   const localSvgFallback = generateTradeSvgDataUri({
     trade: tradeCategory,
@@ -744,35 +926,22 @@ export function resolvePageImage(
     .slice(0, 45)
     .replace(/-+$/, "") || `image-${slot}-${index + 1}`;
 
-  const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
-  const primaryUrl = provider === "unsplash" ? fallbackUrl : buildBingThumbnailUrl(query, width, height, index + 1);
-
-  if (tracker) {
-    tracker.recordUrl(provider === "unsplash" ? fallbackUrl : primaryUrl, query, {
-      source: provider === "unsplash" ? "Unsplash" : "Bing",
-      page: context.pageSlug || context.pageTitle,
-      section: slot,
-      subject: intent.subject,
-    });
-  }
-
   return {
     query,
     url: primaryUrl,
-    fallbackUrl,
-    allFallbacks: [fallbackUrl, localSvgFallback],
+    fallbackUrl: curatedPhoto.url !== primaryUrl ? curatedPhoto.url : localSvgFallback,
+    allFallbacks: [curatedPhoto.url, localSvgFallback].filter((u) => u !== primaryUrl),
     localSvgFallback,
     localPath: `images/${cleanSlug}.jpg`,
     localSvgPath: `images/${cleanSlug}.svg`,
     alt,
     width,
     height,
-    source: provider === "unsplash" ? "Unsplash" : "Bing",
+    source,
     slot,
     status: "validated",
   };
 }
-
 
 /**
  * Renders an accessible, SEO-optimized static HTML <img> tag with:
@@ -835,14 +1004,11 @@ export function renderStaticImageTag(options: {
 
 /**
  * Global Browser-Side Image Fallback Script
- * Safely cycles through fallback URLs, removes parent <picture> <source> locks,
- * and falls back to local SVG data URI without infinite loops.
  */
 export const IMAGE_FALLBACK_SCRIPT = `
 function handleImageFallback(img) {
   if (!img || img.dataset.failed === 'true') return;
 
-  // 1. If wrapped in <picture>, remove <source> elements so they do not block <img> fallback
   var pic = img.closest('picture');
   if (pic) {
     var sources = pic.querySelectorAll('source');
@@ -851,7 +1017,6 @@ function handleImageFallback(img) {
     }
   }
 
-  // 2. Parse fallback URLs
   var fallbacks = (img.dataset.fallbacks || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   var currentIdx = parseInt(img.dataset.fallbackIdx || '0', 10);
 
@@ -860,7 +1025,6 @@ function handleImageFallback(img) {
     img.dataset.fallbackIdx = String(currentIdx + 1);
     img.src = nextUrl;
   } else {
-    // 3. All remote fallbacks exhausted -> switch to local trade SVG
     img.dataset.failed = 'true';
     img.removeAttribute('onerror');
     var localSvg = img.dataset.localSvg;

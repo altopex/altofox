@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { SiteContentJSON, PageContentJSON, SectionJSON } from "../lib/generator/content-schema";
 import { Theme } from "../lib/themes";
-import { detectTradeCategory } from "../lib/photos/photo-service";
+import { detectTradeCategory, resolvePhoto } from "../lib/photos/photo-service";
 import { resolveStockPhoto, buildCreditsTxt, StockPhoto } from "../lib/photos/stock-service";
 import { findNicheByIndustry } from "../niches";
 import { PAGE_LAYOUTS, detectPageLayoutType } from "./layouts";
@@ -28,7 +28,7 @@ import {
   bundleImagesFromPlan,
   ImagePlanSlot,
 } from "../lib/photos/image-bundler";
-import { IMAGE_FALLBACK_SCRIPT } from "../lib/photos/image-provider";
+import { IMAGE_FALLBACK_SCRIPT, ImageDeduplicationTracker } from "../lib/photos/image-provider";
 import {
   validateAndRepairSection,
   scanHtmlForForbiddenTokens,
@@ -312,6 +312,8 @@ export async function assembleWebsite(
   });
 
   // 2. Create Image Plan & Bundle Images into files (with pre-validation and guaranteed local SVG fallbacks)
+  const deduplicationTracker = new ImageDeduplicationTracker();
+
   const initialPlan = createImagePlan(
     data.pages.map((p) => ({
       slug: p.slug,
@@ -325,6 +327,7 @@ export async function assembleWebsite(
     {
       preferredSource: options?.preferredSource,
       state: data.site.address?.state,
+      deduplicationTracker,
     }
   );
 
@@ -341,6 +344,7 @@ export async function assembleWebsite(
       validateNetwork: options?.fastOfflinePreview ? false : (options?.validateNetwork ?? false),
       fastOfflinePreview: options?.fastOfflinePreview,
       maxValidationTimeMs: 3000,
+      deduplicationTracker,
     }
   );
 
@@ -776,6 +780,7 @@ ${mobileCallBarHtml}
     });
 
     // B. Dedicated Location Landing Page per City
+    const usedLocationHeroIds = new Set<string>();
     for (let i = 0; i < effectiveAreaCities.length; i++) {
       const c = effectiveAreaCities[i];
       const cityClean = c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -797,15 +802,45 @@ ${mobileCallBarHtml}
       const locHeader = Sections.renderHeader(data.site, "standard", registry, locPage, linkStyle);
       const locFooter = Sections.renderFooter(data.site, registry, locPage, linkStyle);
 
-      // Hero image planned for location (strictly matches this city/location)
+      // Hero image planned for location (strictly matches this city/location, no duplicate heroes)
       const locCleanSlug = citySlug.replace(/\.html$/, "").toLowerCase();
-      const locHeroPlanned =
+      let locHeroPlanned =
         imagePlan.find(
           (p) =>
-            p.pageSlug.toLowerCase() === locCleanSlug ||
-            p.pageSlug.toLowerCase().includes(cityClean) ||
-            p.id === `img-loc-${locCleanSlug}`
-        ) || imagePlan.find((p) => p.slot === "hero");
+            (p.pageSlug.toLowerCase() === locCleanSlug ||
+              p.pageSlug.toLowerCase().includes(cityClean) ||
+              p.id === `img-loc-${locCleanSlug}`) &&
+            !usedLocationHeroIds.has(p.id)
+        );
+
+      if (!locHeroPlanned) {
+        // Resolve a guaranteed unique fresh photo using deduplication tracker
+        const freshLocPhoto = resolvePhoto(
+          detectTradeCategory(mainTrade),
+          "hero",
+          `${mainTrade} in ${c.city}`,
+          i + 60,
+          deduplicationTracker.getUsedUrlsSet()
+        );
+        locHeroPlanned = {
+          id: `img-loc-${locCleanSlug}-${i}`,
+          slot: "hero",
+          query: `${mainTrade} in ${c.city}`,
+          alt: `${mainTrade} service in ${c.city}, ${c.stateId}`,
+          width: 1920,
+          height: 1080,
+          localPath: `images/hero-${locCleanSlug}.jpg`,
+          localWebpPath: `images/hero-${locCleanSlug}.webp`,
+          localSvgPath: `images/hero-${locCleanSlug}.svg`,
+          localSvgFallback: "",
+          pageSlug: locCleanSlug,
+          status: "found",
+          remoteUrl: freshLocPhoto.url,
+          fallbackUrl: freshLocPhoto.url,
+          allFallbacks: [freshLocPhoto.url],
+        };
+      }
+      usedLocationHeroIds.add(locHeroPlanned.id);
 
       const nearestCities = getNearestSelectedCities(
         { lat: c.lat, lng: c.lng, city: c.city, stateId: c.stateId },

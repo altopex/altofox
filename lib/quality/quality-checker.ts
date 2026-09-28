@@ -60,6 +60,7 @@ export interface AssembleFile {
   path: string;
   content: string | Buffer;
   mimeType?: string | null;
+  isBase64?: boolean;
 }
 
 /**
