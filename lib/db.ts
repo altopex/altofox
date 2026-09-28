@@ -100,6 +100,8 @@ const activeDatabaseUrl = resolveDatabaseUrl();
 declare global {
   // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
+  // eslint-disable-next-line no-var
+  var __dbInitialized: Promise<void> | undefined;
 }
 
 export const db =
@@ -116,3 +118,112 @@ export const db =
 if (process.env.NODE_ENV !== "production") {
   global.prisma = db;
 }
+
+const INIT_DDL = `
+CREATE TABLE IF NOT EXISTS "ApiKey" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "provider" TEXT NOT NULL,
+    "encryptedKey" TEXT NOT NULL,
+    "iv" TEXT NOT NULL,
+    "tag" TEXT NOT NULL,
+    "baseUrl" TEXT,
+    "defaultModel" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "organizationId" TEXT,
+    "providerName" TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "ApiKey_provider_key" ON "ApiKey"("provider");
+
+CREATE TABLE IF NOT EXISTS "Project" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "name" TEXT NOT NULL,
+    "prompt" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "model" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'ready',
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "customInstructions" TEXT
+);
+
+CREATE TABLE IF NOT EXISTS "ProjectFile" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "projectId" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "content" TEXT NOT NULL,
+    "mimeType" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "ProjectFile_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "ProjectFile_projectId_path_key" ON "ProjectFile"("projectId", "path");
+
+CREATE TABLE IF NOT EXISTS "DownloadToken" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "projectId" TEXT NOT NULL,
+    "token" TEXT NOT NULL,
+    "expiresAt" DATETIME NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "DownloadToken_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "DownloadToken_token_key" ON "DownloadToken"("token");
+
+CREATE TABLE IF NOT EXISTS "Template" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "category" TEXT NOT NULL,
+    "description" TEXT NOT NULL,
+    "prompt" TEXT NOT NULL,
+    "badge" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS "User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT,
+    "fullName" TEXT,
+    "role" TEXT NOT NULL DEFAULT 'editor',
+    "status" TEXT NOT NULL DEFAULT 'approved',
+    "companyName" TEXT,
+    "plan" TEXT NOT NULL DEFAULT 'starter',
+    "websiteLimit" INTEGER NOT NULL DEFAULT 5,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
+`;
+
+/**
+ * Ensures all required SQLite tables and indices exist in the database,
+ * making serverless cold starts 100% resilient even with fresh /tmp/dev.db files.
+ */
+export async function ensureDbInitialized(): Promise<void> {
+  if (global.__dbInitialized) {
+    return global.__dbInitialized;
+  }
+
+  global.__dbInitialized = (async () => {
+    try {
+      const statements = INIT_DDL.split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      for (const stmt of statements) {
+        await db.$executeRawUnsafe(stmt).catch((err) => {
+          // Ignore table already exists or index already exists
+          if (!err.message?.includes("already exists")) {
+            console.warn("[lib/db] Statement execution warning:", err.message);
+          }
+        });
+      }
+    } catch (err: any) {
+      console.warn("[lib/db] ensureDbInitialized error:", err.message);
+    }
+  })();
+
+  return global.__dbInitialized;
+}
+

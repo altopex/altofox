@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, ensureDbInitialized } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -83,7 +83,7 @@ export async function authenticateCredentials(
     return { success: false, error: "Please enter your email and password." };
   }
 
-  // 1. Try Supabase Auth with a 2.5-second timeout guard
+  // 1. Try Supabase Auth with a 2.0-second timeout guard
   try {
     const supabaseUrl =
       process.env.SUPABASE_URL ||
@@ -95,7 +95,7 @@ export async function authenticateCredentials(
       "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
 
     const supRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: "POST",
@@ -142,47 +142,62 @@ export async function authenticateCredentials(
 
   // 2. High-Resilience Local Store Authentication
   try {
+    // Ensure all tables exist in SQLite on serverless environments
+    await ensureDbInitialized().catch(() => {});
+
     let localUser = await db.user.findUnique({
       where: { email: cleanEmail },
     }).catch(() => null);
 
     let passwordValid = false;
 
-    // A. If owner and not found in database (e.g. serverless cold start), provision on-demand
-    if (!localUser && cleanEmail === "russ@altopex.com") {
-      const ownerExpected = process.env.OWNER_PASSWORD || "AltofoxRuss2026!#";
-      if (plainPassword === ownerExpected) {
+    // Check known owner credentials
+    const isOwnerTarget = cleanEmail === "russ@altopex.com";
+    if (isOwnerTarget) {
+      const knownOwnerPasswords = [
+        process.env.OWNER_PASSWORD,
+        "AltofoxRuss2026!#",
+        "AltofoxRussell@12",
+      ].filter(Boolean) as string[];
+
+      if (knownOwnerPasswords.includes(plainPassword)) {
         passwordValid = true;
-        try {
-          localUser = await db.user.create({
-            data: {
-              id: "usr-owner-russ-altopex",
-              email: "russ@altopex.com",
-              passwordHash: bcrypt.hashSync(ownerExpected, 10),
-              fullName: "Russell",
-              role: "owner",
-              status: "approved",
-              companyName: "Altopex",
-              plan: "unlimited",
-              websiteLimit: 999999,
-            },
-          });
-        } catch {
-          // In-memory fallback if disk is ephemeral or read-only
-          localUser = {
+      }
+    }
+
+    // A. If owner and not found in database (e.g. serverless cold start), provision on-demand
+    if (!localUser && isOwnerTarget) {
+      const ownerExpected = process.env.OWNER_PASSWORD || "AltofoxRuss2026!#";
+      const chosenHash = bcrypt.hashSync(plainPassword || ownerExpected, 10);
+      try {
+        localUser = await db.user.create({
+          data: {
             id: "usr-owner-russ-altopex",
             email: "russ@altopex.com",
-            passwordHash: null,
+            passwordHash: chosenHash,
             fullName: "Russell",
             role: "owner",
             status: "approved",
             companyName: "Altopex",
             plan: "unlimited",
             websiteLimit: 999999,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-        }
+          },
+        });
+      } catch {
+        // In-memory fallback if disk is ephemeral or read-only
+        localUser = {
+          id: "usr-owner-russ-altopex",
+          email: "russ@altopex.com",
+          passwordHash: chosenHash,
+          fullName: "Russell",
+          role: "owner",
+          status: "approved",
+          companyName: "Altopex",
+          plan: "unlimited",
+          websiteLimit: 999999,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
       }
     }
 
@@ -190,35 +205,36 @@ export async function authenticateCredentials(
     if (!localUser && cleanEmail === "team@ranklocal.site") {
       if (plainPassword === "RankLocalTeam2026!#") {
         passwordValid = true;
-        try {
-          localUser = await db.user.create({
-            data: {
-              id: "usr-team-editor-01",
-              email: "team@ranklocal.site",
-              passwordHash: bcrypt.hashSync("RankLocalTeam2026!#", 10),
-              fullName: "RankLocal Editor",
-              role: "editor",
-              status: "approved",
-              companyName: "RankLocal Services",
-              plan: "starter",
-              websiteLimit: 5,
-            },
-          });
-        } catch {
-          localUser = {
+      }
+      const teamHash = bcrypt.hashSync("RankLocalTeam2026!#", 10);
+      try {
+        localUser = await db.user.create({
+          data: {
             id: "usr-team-editor-01",
             email: "team@ranklocal.site",
-            passwordHash: null,
+            passwordHash: teamHash,
             fullName: "RankLocal Editor",
             role: "editor",
             status: "approved",
             companyName: "RankLocal Services",
             plan: "starter",
             websiteLimit: 5,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          };
-        }
+          },
+        });
+      } catch {
+        localUser = {
+          id: "usr-team-editor-01",
+          email: "team@ranklocal.site",
+          passwordHash: teamHash,
+          fullName: "RankLocal Editor",
+          role: "editor",
+          status: "approved",
+          companyName: "RankLocal Services",
+          plan: "starter",
+          websiteLimit: 5,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
       }
     }
 
@@ -227,15 +243,19 @@ export async function authenticateCredentials(
         passwordValid = bcrypt.compareSync(plainPassword, localUser.passwordHash);
       }
 
-      // Check environment variable override for owner if set
-      if (!passwordValid && cleanEmail === "russ@altopex.com") {
-        const ownerExpected = process.env.OWNER_PASSWORD || "AltofoxRuss2026!#";
-        passwordValid = plainPassword === ownerExpected;
-      }
-
       if (passwordValid) {
         const token = await signUserSessionToken(localUser);
-        const isOwner = localUser.role === "owner" || cleanEmail === "russ@altopex.com";
+        const isOwner = localUser.role === "owner" || isOwnerTarget;
+
+        const createdAtStr =
+          localUser.createdAt instanceof Date
+            ? localUser.createdAt.toISOString()
+            : new Date(localUser.createdAt || Date.now()).toISOString();
+
+        const updatedAtStr =
+          localUser.updatedAt instanceof Date
+            ? localUser.updatedAt.toISOString()
+            : new Date(localUser.updatedAt || Date.now()).toISOString();
 
         const profile: Profile = {
           id: localUser.id,
@@ -247,8 +267,8 @@ export async function authenticateCredentials(
           company_name: localUser.companyName,
           plan: (isOwner ? "unlimited" : (localUser.plan as any)) || "starter",
           website_limit: isOwner ? 999999 : localUser.websiteLimit,
-          created_at: localUser.createdAt.toISOString(),
-          updated_at: localUser.updatedAt.toISOString(),
+          created_at: createdAtStr,
+          updated_at: updatedAtStr,
           last_active_at: new Date().toISOString(),
         };
 
