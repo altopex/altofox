@@ -140,6 +140,7 @@ import {
 import { ensureProjectVersions } from "@/lib/storage/project-versions";
 import { AppShell, NavTab } from "@/components/navigation/AppShell";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { GenerationDecisionModal } from "@/components/GenerationDecisionModal";
 
 const LoginCard = nextDynamic(
   () => import("@/components/auth/LoginCard").then((mod) => mod.LoginCard),
@@ -433,6 +434,12 @@ export default function DashboardPage() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const generationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastFormDataRef = useRef<any>(null);
+
+  // Post-Generation Storage Decision State (Default: Ephemeral Preview & Download; Explicit Choice to Save)
+  const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
+  const [pendingGeneratedSite, setPendingGeneratedSite] = useState<any>(null);
+  const [isSavingDecisionProject, setIsSavingDecisionProject] = useState(false);
+  const [isCurrentProjectSaved, setIsCurrentProjectSaved] = useState(false);
 
   // Image Key States
   const [hasImageKey, setHasImageKey] = useState(false);
@@ -1186,73 +1193,19 @@ export default function DashboardPage() {
           customContentInstructions: customContentInstructions.trim(),
         };
         setCurrentProject(projData);
+        setIsCurrentProjectSaved(Boolean(data.isSaved));
+        setPendingGeneratedSite({ data, usedFormData, projData });
 
-        // Auto-save permanent project into IndexedDB
-        try {
-          const initialKeywordMap: ProjectKeywordItem[] = data.files
-            .filter((f: any) => f.path.endsWith(".html"))
-            .map((f: any) => {
-              const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
-              const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
-              return {
-                pagePath: f.path,
-                primaryKeyword: sug.primary,
-                secondaryKeywords: sug.secondaries,
-                seoScore: audit.totalScore,
-              };
-            });
-
-          const newSavedProject: SavedProject = {
-            id: data.projectId || `proj-${Date.now()}`,
-            name: businessName || "Local Business Website",
-            createdAt: Date.now(),
-            lastEditedAt: Date.now(),
-            customContentInstructions: customContentInstructions.trim(),
-            formData: usedFormData,
-            theme: activeTheme,
-            nicheId: currentNichePack.id,
-            schemaType: currentNichePack.schemaType,
-            businessDetails: {
-              businessName,
-              phone,
-              email,
-              streetAddress,
-              city,
-              stateRegion,
-              zipPostalCode,
-              businessHours,
-              websiteDomain,
-              socialLinks,
-            },
-            serviceAreaCities,
-            keywordMap: initialKeywordMap,
-            customBlocks: [],
-            mustIncludeText: "",
-            pageContentMap: {},
-            blogPosts: [],
-            files: data.files.map((f: any) => ({
-              path: f.path,
-              content: f.content,
-              mimeType: f.mimeType || undefined,
-            })),
-            changeLog: [
-              {
-                id: `log-${Date.now()}`,
-                timestamp: Date.now(),
-                dateStr: new Date().toLocaleDateString(),
-                summary: "Initial website generation",
-                affectedPages: data.files.map((f: any) => f.path),
-              },
-            ],
-            redirects: [],
-          };
-
-          const finalSavedProject = ensureProjectVersions(newSavedProject);
-          await saveProjectToDB(finalSavedProject);
-          setActiveSavedProject(finalSavedProject);
-          await loadAllSavedProjects();
-        } catch (dbErr) {
-          console.warn("Could not save project to IndexedDB:", dbErr);
+        // If backend already persisted (explicit saveToDb), sync to dashboard
+        if (data.isSaved) {
+          try {
+            await handlePersistProjectToDashboard(data, usedFormData);
+          } catch (e) {
+            console.warn("Could not sync saved project:", e);
+          }
+        } else {
+          // Default: Open the decision modal (Save for future optimization vs Download only)
+          setIsDecisionModalOpen(true);
         }
 
         addToast({
@@ -1262,9 +1215,7 @@ export default function DashboardPage() {
             : data.qualityReviewApplied
             ? "Website Created & Quality Reviewed!"
             : "Website Created!",
-          message: data.qualityReviewApplied
-            ? `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages audited for 100% unique copy and SEO.`
-            : `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
+          message: `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready for inspection.`,
         });
         return true;
       } else {
@@ -1297,6 +1248,217 @@ export default function DashboardPage() {
       addToast,
     ]
   );
+
+  // Persists a generated website to database & IndexedDB ONLY when user chooses to save
+  const handlePersistProjectToDashboard = useCallback(
+    async (data: any, usedFormData: any) => {
+      try {
+        setIsSavingDecisionProject(true);
+
+        const initialKeywordMap: ProjectKeywordItem[] = (data.files || [])
+          .filter((f: any) => f.path.endsWith(".html"))
+          .map((f: any) => {
+            const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
+            const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
+            return {
+              pagePath: f.path,
+              primaryKeyword: sug.primary,
+              secondaryKeywords: sug.secondaries,
+              seoScore: audit.totalScore,
+            };
+          });
+
+        const resolvedId = data.projectId && !data.projectId.startsWith("temp-")
+          ? data.projectId
+          : `proj-${Date.now()}`;
+
+        const newSavedProject: SavedProject = {
+          id: resolvedId,
+          name: businessName || "Local Business Website",
+          createdAt: Date.now(),
+          lastEditedAt: Date.now(),
+          customContentInstructions: customContentInstructions.trim(),
+          formData: usedFormData,
+          theme: activeTheme,
+          nicheId: currentNichePack.id,
+          schemaType: currentNichePack.schemaType,
+          businessDetails: {
+            businessName,
+            phone,
+            email,
+            streetAddress,
+            city,
+            stateRegion,
+            zipPostalCode,
+            businessHours,
+            websiteDomain,
+            socialLinks,
+          },
+          serviceAreaCities,
+          keywordMap: initialKeywordMap,
+          customBlocks: [],
+          mustIncludeText: "",
+          pageContentMap: {},
+          blogPosts: [],
+          files: data.files.map((f: any) => ({
+            path: f.path,
+            content: f.content,
+            mimeType: f.mimeType || undefined,
+          })),
+          changeLog: [
+            {
+              id: `log-${Date.now()}`,
+              timestamp: Date.now(),
+              dateStr: new Date().toLocaleDateString(),
+              summary: "Initial website generation (Saved for Future Optimization)",
+              affectedPages: data.files.map((f: any) => f.path),
+            },
+          ],
+          redirects: [],
+        };
+
+        // A. Call server-side save API to persist structured project into SQLite
+        try {
+          await fetch("/api/projects/save", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              projectId: resolvedId,
+              name: newSavedProject.name,
+              businessName,
+              domain: websiteDomain,
+              theme: activeTheme,
+              themeName: activeTheme.name,
+              niche: businessType,
+              services,
+              keywords: parseKeywordList(keywords),
+              city,
+              state: stateRegion,
+              provider: data.provider,
+              model: data.model,
+              qualityReport: data.qualityReport,
+              customContentInstructions: customContentInstructions.trim(),
+              files: data.files,
+            }),
+          });
+        } catch (srvErr) {
+          console.warn("Server-side save warning:", srvErr);
+        }
+
+        // B. Save to local IndexedDB & Supabase store
+        const finalSavedProject = ensureProjectVersions(newSavedProject);
+        await saveProjectToDB(finalSavedProject);
+        setActiveSavedProject(finalSavedProject);
+        setIsCurrentProjectSaved(true);
+        setCurrentProject((prev) => (prev ? { ...prev, projectId: resolvedId } : null));
+        await loadAllSavedProjects();
+
+        addToast({
+          type: "success",
+          title: "Website Saved for Optimization",
+          message: `"${newSavedProject.name}" has been permanently saved to your dashboard library for future SEO and content updates.`,
+        });
+      } catch (err: any) {
+        console.error("Failed to persist project:", err);
+        addToast({
+          type: "error",
+          title: "Save Failed",
+          message: err?.message || "Could not save project to database.",
+        });
+      } finally {
+        setIsSavingDecisionProject(false);
+      }
+    },
+    [
+      businessName,
+      businessType,
+      city,
+      stateRegion,
+      services,
+      customContentInstructions,
+      activeTheme,
+      currentNichePack,
+      phone,
+      email,
+      streetAddress,
+      zipPostalCode,
+      businessHours,
+      websiteDomain,
+      socialLinks,
+      serviceAreaCities,
+      keywords,
+      loadAllSavedProjects,
+      addToast,
+    ]
+  );
+
+  // Handle post-generation decision choice
+  const handleConfirmSaveDecision = useCallback(
+    async (choice: "download-only" | "save-future") => {
+      setIsDecisionModalOpen(false);
+
+      if (choice === "download-only") {
+        setIsCurrentProjectSaved(false);
+        addToast({
+          type: "info",
+          title: "Session Active (Download Only)",
+          message: "Website ready to preview & download. (Unsaved session — not permanently stored in database)",
+        });
+        return;
+      }
+
+      if (pendingGeneratedSite) {
+        await handlePersistProjectToDashboard(
+          pendingGeneratedSite.data,
+          pendingGeneratedSite.usedFormData
+        );
+      }
+    },
+    [pendingGeneratedSite, handlePersistProjectToDashboard, addToast]
+  );
+
+  // Quick download from decision modal
+  const handleDownloadFromDecisionModal = useCallback(async () => {
+    if (!currentProject || !currentProject.files) return;
+    try {
+      const JSZipModule = await import("jszip");
+      const JSZip = (JSZipModule as any).default?.default || (JSZipModule as any).default || JSZipModule;
+      const zip = new JSZip();
+
+      for (const file of currentProject.files) {
+        if (!file?.path) continue;
+        zip.file(file.path, file.content || "");
+      }
+
+      zip.file(
+        "README.md",
+        `# ${currentProject.name || "Website"}\n\nGenerated with ${BRAND.name} Static Website Builder.\n\n## How to Open\nDouble-click index.html to preview in any browser.\n`
+      );
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const safeBiz = (currentProject.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      a.download = `${safeBiz}-website.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      addToast({
+        type: "success",
+        title: "Download Started",
+        message: `Saved ${currentProject.files.length} website files to ${a.download}.`,
+      });
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Download Error",
+        message: err?.message || "Failed to download ZIP.",
+      });
+    }
+  }, [currentProject, addToast]);
 
   // Cancel in-flight generation
   const handleCancelGeneration = useCallback(() => {
@@ -1648,6 +1810,21 @@ export default function DashboardPage() {
 
   const renderModals = () => (
     <>
+      {/* Post-Generation Storage Decision Modal (Download Only vs Save for Future Optimization) */}
+      <GenerationDecisionModal
+        isOpen={isDecisionModalOpen}
+        businessName={businessName || currentProject?.name || "Local Business Website"}
+        pageCount={currentProject?.files?.filter((f) => f.path.endsWith(".html")).length || 6}
+        themeName={activeTheme.name}
+        isSaving={isSavingDecisionProject}
+        onPreview={() => {
+          setIsDecisionModalOpen(false);
+        }}
+        onDownload={handleDownloadFromDecisionModal}
+        onConfirm={handleConfirmSaveDecision}
+        onClose={() => setIsDecisionModalOpen(false)}
+      />
+
       {/* Theme Live Preview Modal */}
       <ThemePreviewModal
         theme={previewModalTheme}
@@ -1949,6 +2126,12 @@ export default function DashboardPage() {
               <ErrorBoundary fallbackTitle="Live Preview Encountered an Issue">
                 <LivePreview
                   project={currentProject}
+                  isSaved={isCurrentProjectSaved}
+                  onSaveForFuture={
+                    !isCurrentProjectSaved && pendingGeneratedSite
+                      ? () => handlePersistProjectToDashboard(pendingGeneratedSite.data, pendingGeneratedSite.usedFormData)
+                      : undefined
+                  }
                   onNewWebsite={() => {
                     setCurrentProject(null);
                     setCurrentStep(1);

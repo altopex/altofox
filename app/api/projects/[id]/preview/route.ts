@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { preparePreviewHtml } from "@/lib/export/preview-renderer";
+import { tempStorage } from "@/lib/storage/temp-storage";
 
 export const dynamic = "force-dynamic";
 
@@ -11,13 +12,22 @@ export async function GET(
   try {
     const projectId = params.id;
 
-    const project = await db.project.findUnique({
-      where: { id: projectId },
-      include: { files: true },
-    });
+    // 1. Check ephemeral temporary storage first (for unsaved generated websites)
+    const tempProject = tempStorage.get(projectId);
+    let targetFiles: any[] = tempProject?.files || [];
+    let targetName: string = tempProject?.name || "Website";
 
-    if (!project) {
-      return new Response("Project not found", { status: 404 });
+    if (!tempProject) {
+      const project = await db.project.findUnique({
+        where: { id: projectId },
+        include: { files: true },
+      });
+
+      if (!project) {
+        return new Response("Project not found", { status: 404 });
+      }
+      targetFiles = project.files;
+      targetName = project.name;
     }
 
     const { searchParams } = new URL(req.url);
@@ -25,10 +35,10 @@ export async function GET(
 
     const renderedHtml = preparePreviewHtml({
       pagePath: targetPage,
-      files: project.files,
+      files: targetFiles,
       photos: [],
       businessDetails: {
-        name: project.name,
+        name: targetName,
       },
     });
 

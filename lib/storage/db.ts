@@ -176,7 +176,14 @@ export async function getProjectByIdFromDB(id: string): Promise<SavedProject | n
  * Deletes a project by ID from Supabase and IndexedDB.
  */
 export async function deleteProjectFromDB(id: string): Promise<void> {
-  // Delete from Supabase
+  // 1. Delete from Server SQLite API if in browser
+  if (typeof window !== "undefined") {
+    try {
+      await fetch(`/api/projects/${id}`, { method: "DELETE" }).catch(() => {});
+    } catch {}
+  }
+
+  // 2. Delete from Supabase
   try {
     await deleteProjectFromSupabase(id);
   } catch (err) {

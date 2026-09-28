@@ -22,6 +22,7 @@ import {
   parseLocationList,
   formatLocationsForStorage,
 } from "@/lib/keywords/keyword-parser";
+import { tempStorage } from "@/lib/storage/temp-storage";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
@@ -187,9 +188,30 @@ export async function POST(req: NextRequest) {
       const assembled = await assembleWebsite(defaultContent, activeTheme, assembleOptions);
 
       const projectName = websiteData.businessName || "Static Website";
+      const demoId = `temp-demo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      tempStorage.register({
+        id: demoId,
+        name: projectName,
+        files: assembled.files.map((f) => ({
+          path: f.path,
+          content: f.content,
+          mimeType: f.mimeType || "text/plain",
+        })),
+        photos: assembled.photos || [],
+        qualityReport: assembled.qualityReport,
+        notes: `Complete static website assembled from section templates + real photos for ${activeTheme.name}.`,
+        provider: "demo",
+        model: "section-templates",
+        domain: websiteData.websiteDomain,
+        themeName: activeTheme.name,
+        formData,
+      });
+
       return NextResponse.json({
         success: true,
-        projectId: "demo-" + Date.now(),
+        projectId: demoId,
+        isSaved: false,
         name: projectName,
         notes: `Complete static website assembled from section templates + real photos for ${activeTheme.name}.`,
         provider: "demo",
@@ -197,7 +219,8 @@ export async function POST(req: NextRequest) {
         createdAt: new Date().toISOString(),
         files: assembled.files,
         photos: assembled.photos || [],
-        downloadUrl: `/api/projects/demo-${Date.now()}/download`,
+        qualityReport: assembled.qualityReport,
+        downloadUrl: `/api/projects/${demoId}/download`,
       });
     }
 
@@ -445,37 +468,78 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
 
     const projectName = websiteData.businessName || "Static Website";
 
-    // 5. Optional non-blocking database record
-    let projectId = "site-" + Date.now();
-    try {
-      const project = await db.project.create({
-        data: {
-          name: projectName,
-          prompt: `Theme: ${activeTheme.name} | Pages: ${assembled.files.filter((f) => f.path.endsWith(".html")).length} | Biz: ${websiteData.businessName}`,
-          provider: providerType,
-          model: targetModel,
-          status: "ready",
-          notes: qualityReviewApplied
-            ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
-            : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
-          customInstructions: websiteData.customContentInstructions || null,
-          files: {
-            create: assembled.files.map((f) => ({
-              path: f.path,
-              content: typeof f.content === "string" ? f.content : f.content.toString("base64"),
-              mimeType: f.mimeType || "text/plain",
-            })),
+    // 5. Ephemeral Temporary Storage Lifecycle (GENERATE -> PREVIEW -> DOWNLOAD -> NOT SAVED PERMANENTLY by default)
+    const saveToDb = Boolean(body.saveToDb);
+    let projectId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let isSaved = false;
+
+    // Register in ephemeral temporary in-memory store with 1-hour auto-expiring TTL
+    tempStorage.register({
+      id: projectId,
+      name: projectName,
+      files: assembled.files.map((f) => ({
+        path: f.path,
+        content: f.content,
+        mimeType: f.mimeType || "text/plain",
+      })),
+      photos: assembled.photos || [],
+      qualityReport: assembled.qualityReport,
+      notes: qualityReviewApplied
+        ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
+        : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
+      provider: providerType,
+      model: targetModel,
+      domain: websiteData.websiteDomain,
+      themeName: activeTheme.name,
+      customContentInstructions: websiteData.customContentInstructions || undefined,
+      formData,
+    });
+
+    // Only save permanently to database if explicitly chosen by user
+    if (saveToDb) {
+      try {
+        const project = await db.project.create({
+          data: {
+            name: projectName,
+            prompt: `Theme: ${activeTheme.name} | Pages: ${assembled.files.filter((f) => f.path.endsWith(".html")).length} | Biz: ${websiteData.businessName}`,
+            provider: providerType,
+            model: targetModel,
+            status: "saved",
+            notes: JSON.stringify({
+              notes: qualityReviewApplied
+                ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
+                : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
+              businessName: websiteData.businessName,
+              domain: websiteData.websiteDomain,
+              themeName: activeTheme.name,
+              themeId: activeTheme.id,
+              niche: websiteData.businessType,
+              city: websiteData.city,
+              state: websiteData.stateRegion,
+              overallScore: assembled.qualityReport?.overallScore,
+              lastOptimizedAt: Date.now(),
+            }),
+            customInstructions: websiteData.customContentInstructions || null,
+            files: {
+              create: assembled.files.map((f) => ({
+                path: f.path,
+                content: typeof f.content === "string" ? f.content : f.content.toString("base64"),
+                mimeType: f.mimeType || "text/plain",
+              })),
+            },
           },
-        },
-      });
-      projectId = project.id;
-    } catch (dbErr) {
-      console.warn("Database storage skipped (stateless execution):", dbErr);
+        });
+        projectId = project.id;
+        isSaved = true;
+      } catch (dbErr) {
+        console.warn("Database storage skipped (stateless execution):", dbErr);
+      }
     }
 
     return NextResponse.json({
       success: true,
       projectId,
+      isSaved,
       name: projectName,
       notes: qualityReviewApplied
         ? `Complete static website assembled successfully with two-pass Quality Review audit and real photos.`

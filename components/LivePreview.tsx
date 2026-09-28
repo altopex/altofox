@@ -26,6 +26,7 @@ import {
   BookOpen,
   Search,
   FileEdit,
+  Database,
 } from "lucide-react";
 import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
 import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
@@ -89,6 +90,8 @@ interface LivePreviewProps {
   onOpenFindReplace?: () => void;
   onOpenBlogManager?: () => void;
   onUpdateProject?: (updatedProject: ProjectData) => void;
+  isSaved?: boolean;
+  onSaveForFuture?: () => void;
 }
 
 export function LivePreview({
@@ -101,6 +104,8 @@ export function LivePreview({
   onOpenFindReplace,
   onOpenBlogManager,
   onUpdateProject,
+  isSaved,
+  onSaveForFuture,
 }: LivePreviewProps) {
   // Show mobile preview by default next to desktop preview ("split" mode)
   const [viewMode, setViewMode] = useState<"split" | "desktop" | "mobile" | "tablet">("split");
@@ -720,6 +725,17 @@ export function LivePreview({
 
         {/* Quick actions on mobile header */}
         <div className="flex items-center space-x-2">
+          {!isSaved && onSaveForFuture && (
+            <button
+              type="button"
+              onClick={onSaveForFuture}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[10px] border border-emerald-500/50 bg-emerald-50 hover:bg-emerald-100 text-xs font-semibold text-emerald-800 transition shadow-sm"
+              title="Save this website to your dashboard for future SEO & content optimization"
+            >
+              <Database className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Save for Future</span>
+            </button>
+          )}
           {onOpenManager && (
             <button
               type="button"

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { bundleProjectToZipStream } from "@/lib/export/zip-bundler";
 import { PrismaClient } from "@prisma/client";
+import { tempStorage } from "@/lib/storage/temp-storage";
 import path from "path";
 import fs from "fs";
 
@@ -77,6 +78,35 @@ export async function GET(
   console.log(`[ZIP Export API] Received GET download request for project ID: "${projectId}" (version: ${requestedVersion || requestedVersionId || "current"})`);
 
   try {
+    // 1. Check ephemeral temporary storage first (for unsaved generated websites)
+    const tempProject = tempStorage.get(projectId);
+    if (tempProject && tempProject.files && tempProject.files.length > 0) {
+      console.log(`[ZIP Export API] Serving temporary unsaved website "${tempProject.name}" (${tempProject.files.length} files) from ephemeral memory`);
+      const { stream, safeFilename, stats } = await bundleProjectToZipStream({
+        projectId: tempProject.id,
+        projectName: tempProject.name,
+        files: tempProject.files,
+        provider: tempProject.provider,
+        model: tempProject.model,
+        domain: tempProject.domain,
+        formData: tempProject.formData,
+        photos: tempProject.photos,
+      });
+
+      return new NextResponse(stream, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="${safeFilename}"`,
+          "X-Total-Files": String(stats.totalFiles),
+          "X-Omitted-Assets": String(stats.omittedAssets),
+          "X-Storage-Type": "ephemeral-temp",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+        },
+      });
+    }
+
+    // 2. Query persistent database if not found in temporary cache
     const project = await findProjectWithFallback(projectId);
 
     if (!project) {

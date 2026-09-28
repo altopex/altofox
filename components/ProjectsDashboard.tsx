@@ -145,10 +145,10 @@ export function ProjectsDashboard({
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2.5">
             <FolderKanban className="w-7 h-7 text-indigo-600" />
-            <span>Website Library</span>
+            <span>Saved Websites Library</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            All generated client websites saved in one place. Return anytime to view versions, import Search Console data, and optimize.
+            Permanent websites saved for future SEO, internal linking, and monthly updates. Unsaved generations remain ephemeral for your session and do not consume database storage.
           </p>
         </div>
 
