@@ -7,9 +7,6 @@ const nextConfig = {
     unoptimized: true,
   },
   experimental: {
-    outputFileTracingIncludes: {
-      "/api/**/*": ["./prisma/dev.db", "./prisma/schema.prisma"],
-    },
     optimizePackageImports: [
       "lucide-react",
       "@supabase/supabase-js",
