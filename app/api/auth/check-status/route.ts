@@ -19,30 +19,37 @@ export async function GET(req: NextRequest) {
       email: auth.user.email,
     });
 
+    const isSecure = process.env.NODE_ENV === "production";
+
     // Keep the cookies refreshed with current status and token
     response.cookies.set("ranklocal_status", auth.profile.status, {
       path: "/",
       maxAge: 604800,
       sameSite: "lax",
+      secure: isSecure,
     });
     response.cookies.set("altofox_status", auth.profile.status, {
       path: "/",
       maxAge: 604800,
       sameSite: "lax",
+      secure: isSecure,
     });
     response.cookies.set("ranklocal_token", auth.accessToken, {
       path: "/",
       maxAge: 604800,
       sameSite: "lax",
+      secure: isSecure,
     });
     response.cookies.set("altofox_token", auth.accessToken, {
       path: "/",
       maxAge: 604800,
       sameSite: "lax",
+      secure: isSecure,
     });
 
     return response;
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch {
+    // Do not expose internal error details to clients
+    return NextResponse.json({ authenticated: false, status: null }, { status: 500 });
   }
 }

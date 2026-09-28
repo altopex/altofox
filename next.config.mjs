@@ -1,11 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  swcMinify: true,
   compress: true,
   images: {
     unoptimized: true,
   },
+  // Ensure Prisma is not bundled into Next.js server bundles (required for serverless)
+  serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
     optimizePackageImports: [
       "lucide-react",
@@ -24,10 +25,6 @@ const nextConfig = {
           {
             key: "X-Frame-Options",
             value: "SAMEORIGIN",
-          },
-          {
-            key: "X-XSS-Protection",
-            value: "1; mode=block",
           },
           {
             key: "Referrer-Policy",
