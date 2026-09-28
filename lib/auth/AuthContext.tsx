@@ -377,15 +377,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithOtp = async (email: string) => {
+    // Wrap in a timeout so a paused/unreachable Supabase project doesn't hang the UI forever
+    const timeoutMs = 7000;
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
-        },
-      });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), timeoutMs)
+      );
+      const { error } = await Promise.race([
+        supabase.auth.signInWithOtp({
+          email: email.trim(),
+          options: {
+            shouldCreateUser: false,
+            emailRedirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
+          },
+        }),
+        timeout,
+      ]) as any;
 
       if (error) {
         return { success: false, error: error.message };
@@ -395,16 +403,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message: "Login link sent! Please check your email inbox.",
       };
     } catch (err: any) {
-      return { success: false, error: err.message || "Failed to send magic link" };
+      if (err?.message === "timeout" || err?.message?.includes("fetch")) {
+        return {
+          success: false,
+          error: "Email service is temporarily unavailable. Please use your password to sign in instead.",
+        };
+      }
+      return { success: false, error: err.message || "Failed to send magic link." };
     }
   };
 
   const resetPasswordForEmail = async (email: string) => {
+    // Wrap in a timeout so a paused/unreachable Supabase project doesn't hang the UI forever
+    const timeoutMs = 7000;
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
-      });
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), timeoutMs)
+      );
+      const { error } = await Promise.race([
+        supabase.auth.resetPasswordForEmail(email.trim(), {
+          redirectTo: typeof window !== "undefined" ? `${window.location.origin}/reset-password` : undefined,
+        }),
+        timeout,
+      ]) as any;
 
       if (error) {
         return { success: false, error: error.message };
@@ -414,7 +436,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message: "Password reset link sent! Please check your email inbox.",
       };
     } catch (err: any) {
-      return { success: false, error: err.message || "Failed to send reset link" };
+      if (err?.message === "timeout" || err?.message?.includes("fetch")) {
+        return {
+          success: false,
+          error: "Email service is temporarily unavailable. To reset your password, please contact support at russ@altopex.com.",
+        };
+      }
+      return { success: false, error: err.message || "Failed to send reset link." };
     }
   };
 

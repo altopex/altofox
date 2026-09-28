@@ -3,20 +3,32 @@ import { authenticateCredentials } from "@/lib/auth/auth-service";
 
 export const dynamic = "force-dynamic";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
-};
+// Restrict CORS to our own domain in production; allow any origin in dev
+function getCorsHeaders(req: NextRequest) {
+  const origin = req.headers.get("origin") || "";
+  const allowed =
+    process.env.NODE_ENV !== "production" ||
+    origin === "https://www.ranklocal.site" ||
+    origin === "https://ranklocal.site" ||
+    origin === "";
 
-export async function OPTIONS() {
+  return {
+    "Access-Control-Allow-Origin": allowed ? (origin || "*") : "https://www.ranklocal.site",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+    "Access-Control-Allow-Credentials": "true",
+  };
+}
+
+export async function OPTIONS(req: NextRequest) {
   return new NextResponse(null, {
     status: 204,
-    headers: corsHeaders,
+    headers: getCorsHeaders(req),
   });
 }
 
 export async function POST(req: NextRequest) {
+  const corsHeaders = getCorsHeaders(req);
   try {
     const body = await req.json().catch(() => ({}));
     const { email, password } = body;
@@ -37,6 +49,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Guard against unexpected missing session/profile fields
+    if (!result.session?.access_token || !result.profile) {
+      return NextResponse.json(
+        { success: false, error: "Authentication failed. Please try again." },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
     const response = NextResponse.json(
       {
         success: true,
@@ -53,30 +73,16 @@ export async function POST(req: NextRequest) {
     const status = result.profile.status || "approved";
 
     // Set authoritative auth cookies for middleware & client
-    response.cookies.set("ranklocal_token", token, {
+    const cookieOpts = {
       path: "/",
       maxAge: 604800,
-      sameSite: "lax",
+      sameSite: "lax" as const,
       secure: isSecure,
-    });
-    response.cookies.set("ranklocal_status", status, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
-    response.cookies.set("altofox_token", token, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
-    response.cookies.set("altofox_status", status, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
+    };
+    response.cookies.set("ranklocal_token", token, cookieOpts);
+    response.cookies.set("ranklocal_status", status, cookieOpts);
+    response.cookies.set("altofox_token", token, cookieOpts);
+    response.cookies.set("altofox_status", status, cookieOpts);
 
     return response;
   } catch (error: any) {

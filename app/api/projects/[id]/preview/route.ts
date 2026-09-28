@@ -14,20 +14,36 @@ export async function GET(
 
     // 1. Check ephemeral temporary storage first (for unsaved generated websites)
     const tempProject = tempStorage.get(projectId);
-    let targetFiles: any[] = tempProject?.files || [];
-    let targetName: string = tempProject?.name || "Website";
+    let targetFiles: any[] = [];
+    let targetName = "Website";
+    let targetPhotos: any[] = [];
 
-    if (!tempProject) {
+    if (tempProject) {
+      targetFiles = tempProject.files || [];
+      targetName = tempProject.name || "Website";
+      targetPhotos = tempProject.photos || [];
+    } else {
+      // 2. Fall back to persistent database
       const project = await db.project.findUnique({
         where: { id: projectId },
         include: { files: true },
       });
 
       if (!project) {
-        return new Response("Project not found", { status: 404 });
+        return new Response(
+          `<!DOCTYPE html><html><head><title>Not Found</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h2>Preview not available</h2><p>This project was not found. It may have expired or been removed.</p></body></html>`,
+          { status: 404, headers: { "Content-Type": "text/html; charset=utf-8" } }
+        );
       }
-      targetFiles = project.files;
-      targetName = project.name;
+      targetFiles = project.files || [];
+      targetName = project.name || "Website";
+    }
+
+    if (targetFiles.length === 0) {
+      return new Response(
+        `<!DOCTYPE html><html><head><title>No Files</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h2>No pages to preview</h2><p>This project has no files.</p></body></html>`,
+        { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
+      );
     }
 
     const { searchParams } = new URL(req.url);
@@ -36,7 +52,7 @@ export async function GET(
     const renderedHtml = preparePreviewHtml({
       pagePath: targetPage,
       files: targetFiles,
-      photos: [],
+      photos: targetPhotos,
       businessDetails: {
         name: targetName,
       },
@@ -47,10 +63,15 @@ export async function GET(
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "X-Frame-Options": "SAMEORIGIN",
+        // Prevent CDN/browser caching of preview — always serve fresh
+        "Cache-Control": "no-store, no-cache, must-revalidate",
       },
     });
   } catch (error) {
     console.error("Preview render error:", error);
-    return new Response("Failed to render preview", { status: 500 });
+    return new Response(
+      `<!DOCTYPE html><html><head><title>Error</title></head><body style="font-family:sans-serif;padding:2rem;text-align:center"><h2>Preview failed</h2><p>An error occurred while rendering this page. Please try again.</p></body></html>`,
+      { status: 500, headers: { "Content-Type": "text/html; charset=utf-8" } }
+    );
   }
 }

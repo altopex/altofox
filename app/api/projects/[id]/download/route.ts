@@ -9,7 +9,8 @@ import fs from "fs";
 export const dynamic = "force-dynamic";
 
 /**
- * Fallback helper to query SQLite in explicit read-only mode if primary connection fails with lock/permission errors.
+ * Fallback helper to query SQLite in explicit read-only mode if primary connection
+ * fails with lock/permission errors. Properly disconnects all clients in all paths.
  */
 async function findProjectWithFallback(projectId: string) {
   try {
@@ -18,7 +19,7 @@ async function findProjectWithFallback(projectId: string) {
       include: { files: true },
     });
   } catch (primaryErr: any) {
-    console.warn(`[ZIP Export API] Primary db lookup encountered error: ${primaryErr?.message || primaryErr}. Attempting read-only fallback...`);
+    console.warn(`[ZIP Export API] Primary db lookup error: ${primaryErr?.message || primaryErr}. Attempting read-only fallback...`);
 
     // Candidate db files to open with ?mode=ro
     const candidates = [
@@ -29,35 +30,34 @@ async function findProjectWithFallback(projectId: string) {
       "/var/task/dev.db",
     ];
 
-    let fallbackClient: PrismaClient | null = null;
     for (const cand of candidates) {
-      if (fs.existsSync(cand)) {
-        try {
-          fallbackClient = new PrismaClient({
-            datasources: {
-              db: {
-                url: `file:${cand}?mode=ro`,
-              },
-            },
-          });
-          const res = await fallbackClient.project.findUnique({
-            where: { id: projectId },
-            include: { files: true },
-          });
-          if (res) {
-            console.log(`[ZIP Export API] Successfully retrieved project "${projectId}" via read-only fallback.`);
-            await fallbackClient.$disconnect().catch(() => {});
-            return res;
-          }
-        } catch {
-          if (fallbackClient) {
-            await fallbackClient.$disconnect().catch(() => {});
-          }
+      if (!fs.existsSync(cand)) continue;
+
+      let fallbackClient: PrismaClient | null = null;
+      try {
+        fallbackClient = new PrismaClient({
+          datasources: { db: { url: `file:${cand}?mode=ro` } },
+        });
+        const res = await fallbackClient.project.findUnique({
+          where: { id: projectId },
+          include: { files: true },
+        });
+        // Always disconnect before returning or continuing — fixes connection leak
+        await fallbackClient.$disconnect().catch(() => {});
+        fallbackClient = null;
+        if (res) {
+          console.log(`[ZIP Export API] Retrieved project via read-only fallback from ${cand}`);
+          return res;
+        }
+      } catch {
+        // Ensure disconnect even on error
+        if (fallbackClient) {
+          await fallbackClient.$disconnect().catch(() => {});
         }
       }
     }
 
-    // Re-throw primary error if fallback could not resolve
+    // Re-throw primary error if no fallback could resolve
     throw primaryErr;
   }
 }
@@ -75,13 +75,13 @@ export async function GET(
   const requestedVersion = req.nextUrl?.searchParams?.get("version") || req.nextUrl?.searchParams?.get("versionNumber");
   const requestedVersionId = req.nextUrl?.searchParams?.get("versionId");
 
-  console.log(`[ZIP Export API] Received GET download request for project ID: "${projectId}" (version: ${requestedVersion || requestedVersionId || "current"})`);
+  console.log(`[ZIP Export API] GET download for project: "${projectId}" (version: ${requestedVersion || requestedVersionId || "current"})`);
 
   try {
     // 1. Check ephemeral temporary storage first (for unsaved generated websites)
     const tempProject = tempStorage.get(projectId);
     if (tempProject && tempProject.files && tempProject.files.length > 0) {
-      console.log(`[ZIP Export API] Serving temporary unsaved website "${tempProject.name}" (${tempProject.files.length} files) from ephemeral memory`);
+      console.log(`[ZIP Export API] Serving temp website "${tempProject.name}" (${tempProject.files.length} files)`);
       const { stream, safeFilename, stats } = await bundleProjectToZipStream({
         projectId: tempProject.id,
         projectName: tempProject.name,
@@ -99,7 +99,6 @@ export async function GET(
           "Content-Type": "application/zip",
           "Content-Disposition": `attachment; filename="${safeFilename}"`,
           "X-Total-Files": String(stats.totalFiles),
-          "X-Omitted-Assets": String(stats.omittedAssets),
           "X-Storage-Type": "ephemeral-temp",
           "Cache-Control": "no-store, no-cache, must-revalidate",
         },
@@ -110,9 +109,9 @@ export async function GET(
     const project = await findProjectWithFallback(projectId);
 
     if (!project) {
-      console.warn(`[ZIP Export API] Project not found in database: "${projectId}"`);
+      console.warn(`[ZIP Export API] Project not found: "${projectId}"`);
       return NextResponse.json(
-        { success: false, error: `Project "${projectId}" not found in database.` },
+        { success: false, error: `Project not found. It may have been deleted or the link has expired.` },
         { status: 404 }
       );
     }
@@ -120,13 +119,11 @@ export async function GET(
     // Parse optional metadata, versions, and optimization history safely
     let targetFiles = project.files || [];
     let optimizationScore: number | undefined = undefined;
-    let optimizationHistory: any = null;
 
     if (project.notes) {
       try {
         const parsedNotes = JSON.parse(project.notes);
 
-        // Case A / B: Retrieve actual optimization score if present; never invent or force 95%
         if (typeof parsedNotes.overallScore === "number") {
           optimizationScore = parsedNotes.overallScore;
         } else if (typeof parsedNotes.qualityScore === "number") {
@@ -135,10 +132,8 @@ export async function GET(
           optimizationScore = parsedNotes.score;
         }
 
-        // Case C: Check version history if a specific version was requested
+        // Check version history if a specific version was requested
         if (Array.isArray(parsedNotes.versions) && parsedNotes.versions.length > 0) {
-          optimizationHistory = parsedNotes.versions;
-
           let targetVersionObj: any = null;
           if (requestedVersionId) {
             targetVersionObj = parsedNotes.versions.find((v: any) => v.id === requestedVersionId);
@@ -156,19 +151,18 @@ export async function GET(
             if (typeof targetVersionObj.qualityScore === "number") {
               optimizationScore = targetVersionObj.qualityScore;
             }
-            console.log(`[ZIP Export API] Serving specific version ${targetVersionObj.versionNumber || targetVersionObj.id} (${targetFiles.length} files)`);
+            console.log(`[ZIP Export API] Serving version ${targetVersionObj.versionNumber || targetVersionObj.id} (${targetFiles.length} files)`);
           }
         }
       } catch {
-        // Case D: If notes parsing or score lookup fails, NEVER break the download.
-        // Plain string notes or unformatted data are safely ignored.
+        // Notes parsing failure must never break the download — silently skip
       }
     }
 
     if (!targetFiles || targetFiles.length === 0) {
       console.warn(`[ZIP Export API] Project has no files: "${projectId}"`);
       return NextResponse.json(
-        { success: false, error: "Project has no files to bundle into a ZIP archive." },
+        { success: false, error: "Project has no files to download." },
         { status: 404 }
       );
     }
@@ -182,7 +176,7 @@ export async function GET(
       createdAt: project.createdAt,
     });
 
-    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files, optimization score: ${optimizationScore ?? "none"})`);
+    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files)`);
 
     return new Response(stream, {
       status: 200,
@@ -196,16 +190,15 @@ export async function GET(
       },
     });
   } catch (error: any) {
-    console.error(`[ZIP Export API Fatal Exception] Failed to export project "${projectId}":`, {
+    console.error(`[ZIP Export API] Fatal exception for "${projectId}":`, {
       message: error?.message,
       name: error?.name,
-      stack: error?.stack,
     });
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create ZIP download.",
+        error: "Failed to create ZIP download. Please try again.",
         code: "ZIP_EXPORT_FAILED",
       },
       { status: 500 }
@@ -222,7 +215,7 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   const projectId = params.id;
-  console.log(`[ZIP Export API] Received POST streaming download request for project: "${projectId}"`);
+  console.log(`[ZIP Export API] POST streaming download for project: "${projectId}"`);
 
   try {
     const body = await req.json();
@@ -230,7 +223,7 @@ export async function POST(
 
     if (!Array.isArray(files) || files.length === 0) {
       return NextResponse.json(
-        { success: false, error: "No files provided in request body to export." },
+        { success: false, error: "No files provided in request body." },
         { status: 400 }
       );
     }
@@ -247,7 +240,7 @@ export async function POST(
       formData,
     });
 
-    console.log(`[ZIP Export API] Streaming direct client payload "${safeFilename}" (${stats.totalFiles} files)`);
+    console.log(`[ZIP Export API] Streaming client payload "${safeFilename}" (${stats.totalFiles} files)`);
 
     return new Response(stream, {
       status: 200,
@@ -261,16 +254,15 @@ export async function POST(
       },
     });
   } catch (error: any) {
-    console.error(`[ZIP Export API Fatal Exception] POST export failed for "${projectId}":`, {
+    console.error(`[ZIP Export API] POST fatal exception for "${projectId}":`, {
       message: error?.message,
       name: error?.name,
-      stack: error?.stack,
     });
 
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to create ZIP download.",
+        error: "Failed to create ZIP download. Please try again.",
         code: "ZIP_EXPORT_FAILED",
       },
       { status: 500 }

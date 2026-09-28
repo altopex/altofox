@@ -165,6 +165,12 @@ export function WebsiteManager({
     () => initialProject?.customContentInstructions || initialProject?.formData?.customContentInstructions || ""
   );
   const [settingsSavedToast, setSettingsSavedToast] = useState<string | null>(null);
+  const [managerError, setManagerError] = useState<string | null>(null);
+
+  const showManagerError = (msg: string) => {
+    setManagerError(msg);
+    setTimeout(() => setManagerError(null), 6000);
+  };
 
   useEffect(() => {
     if (project) {
@@ -266,10 +272,10 @@ export function WebsiteManager({
         await saveProjectToDB(data.project);
         setIsThemeModalOpen(false);
       } else {
-        alert("Could not switch theme: " + (data.error || "Unknown error"));
+        showManagerError("Could not switch theme: " + (data.error || "Unknown error"));
       }
     } catch (err: any) {
-      alert("Error switching theme: " + (err?.message || "Network error"));
+      showManagerError("Error switching theme: " + (err?.message || "Network error"));
     } finally {
       setIsSwitchingTheme(false);
     }
@@ -602,7 +608,7 @@ export function WebsiteManager({
       );
 
       if (validation && !validation.valid && validation.errors.length > 0) {
-        alert(`Validation check failed: ${validation.errors.join("; ")}`);
+        showManagerError(`Validation failed: ${validation.errors.join("; ")}`);
         return;
       }
 
@@ -624,7 +630,7 @@ export function WebsiteManager({
       setProject(updated);
     } catch (err: any) {
       console.error("Failed to generate or download ZIP:", err);
-      alert(`Could not download ZIP: ${err?.message || "Unknown error"}. Please check browser console.`);
+      showManagerError(`Could not download ZIP: ${err?.message || "Unknown error"}. Please try again.`);
     }
   };
 
@@ -654,6 +660,19 @@ export function WebsiteManager({
 
   return (
     <div className="flex flex-col h-screen bg-slate-100 overflow-hidden font-sans">
+      {/* Non-blocking error banner (replaces browser alert() dialogs) */}
+      {managerError && (
+        <div className="shrink-0 px-4 py-2 bg-rose-600 text-white text-xs font-medium flex items-center justify-between z-50">
+          <span>{managerError}</span>
+          <button
+            type="button"
+            onClick={() => setManagerError(null)}
+            className="ml-4 text-white/80 hover:text-white font-bold"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Top Header Bar */}
       <header className="h-14 bg-white border-b border-slate-200 px-4 flex items-center justify-between shrink-0 shadow-xs z-20">
         <div className="flex items-center space-x-3">

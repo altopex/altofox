@@ -1546,6 +1546,9 @@ export default function DashboardPage() {
 
   // Execute Website Generation
   const handleGenerateWebsite = async () => {
+    // Guard against double-click / duplicate submissions
+    if (generating) return;
+
     // Check website plan limits
     const userPlan = profile?.plan || "starter";
     const isUnlimited = isOwner || userPlan === "unlimited";
@@ -1783,7 +1786,9 @@ export default function DashboardPage() {
   ];
 
 
+
   const handleClearAllData = useCallback(() => {
+    // Clear React state
     setBusinessName("");
     setBusinessType("Plumber");
     setCustomBusinessType("");
@@ -1801,10 +1806,17 @@ export default function DashboardPage() {
     setDismissImageNotice(false);
     setCurrentStep(1);
     setMaxCompletedStep(1);
+    // Also clear the persisted cache so the reset survives page reload
+    try {
+      localStorage.removeItem("altofox_builder_state");
+      localStorage.removeItem("altofox_staged_form_data");
+    } catch {
+      // localStorage not available (SSR guard)
+    }
     addToast({
       type: "info",
-      title: "Data Reset",
-      message: "All saved builder form data, API keys, and preferences were cleared.",
+      title: "Form Reset",
+      message: "All builder form fields have been cleared.",
     });
   }, [addToast]);
 

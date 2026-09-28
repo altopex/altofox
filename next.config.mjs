@@ -5,9 +5,9 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  // Ensure Prisma is not bundled into Next.js server bundles (required for serverless)
-  serverExternalPackages: ["@prisma/client", "prisma"],
   experimental: {
+    // Ensure Prisma is not bundled into the server bundle (required for serverless / Vercel)
+    serverComponentsExternalPackages: ["@prisma/client", "prisma"],
     optimizePackageImports: [
       "lucide-react",
       "@supabase/supabase-js",
