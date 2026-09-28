@@ -6,6 +6,8 @@ export * from "./types";
 export * from "./factory";
 export * from "./generate-website";
 export * from "./keys";
+export * from "./provider-manager";
+export * from "./ai-engine";
 
 export interface ProviderGenerateOptions {
   model?: string;

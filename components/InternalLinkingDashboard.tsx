@@ -21,6 +21,7 @@ import {
   Link as LinkIcon,
   Maximize2,
   X,
+  BookOpen,
 } from "lucide-react";
 import { SavedProject } from "@/lib/storage/project-types";
 import {
@@ -43,7 +44,7 @@ export function InternalLinkingDashboard({
   onSelectPage,
 }: InternalLinkingDashboardProps) {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "orphan" | "weak" | "connected">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "orphan" | "weak" | "connected" | "blog">("all");
   const [selectedNode, setSelectedNode] = useState<PageRelationshipNode | null>(null);
   const [isAuditing, setIsAuditing] = useState(false);
   const [isAutoFixing, setIsAutoFixing] = useState(false);
@@ -167,7 +168,11 @@ export function InternalLinkingDashboard({
   // Filter nodes for the table
   const filteredNodes = useMemo(() => {
     return nodes.filter((node) => {
-      if (statusFilter !== "all" && node.connectivityStatus !== statusFilter) {
+      if (statusFilter === "blog") {
+        if (node.pageType !== "blog_post" && node.pageType !== "blog_hub" && !node.filePath.startsWith("blog/")) {
+          return false;
+        }
+      } else if (statusFilter !== "all" && node.connectivityStatus !== statusFilter) {
         return false;
       }
       if (searchTerm) {
@@ -365,6 +370,63 @@ export function InternalLinkingDashboard({
           <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
           <span>{auditReport.scoreExplanation}</span>
         </div>
+
+        {/* Dedicated Blog Internal Linking Architecture Card */}
+        {auditReport.blogMetrics && auditReport.blogMetrics.totalBlogPosts > 0 && (
+          <div className="p-4 bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-slate-50 border border-purple-200/80 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BookOpen className="w-4 h-4 text-purple-700" />
+                <h3 className="text-xs font-bold text-slate-900 tracking-tight">
+                  Blog Internal Linking Architecture
+                </h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                  {auditReport.blogMetrics.totalBlogPosts} {auditReport.blogMetrics.totalBlogPosts === 1 ? "Article" : "Articles"}
+                </span>
+              </div>
+              <div className="flex items-center space-x-1.5 text-[11px] font-medium text-slate-600">
+                <span className={`inline-block w-2 h-2 rounded-full ${auditReport.blogMetrics.blogHubConnected ? "bg-emerald-500" : "bg-amber-500"}`} />
+                <span>Blog Hub: {auditReport.blogMetrics.blogHubConnected ? "Connected to Site Nav" : "Requires Menu Link"}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 text-xs">
+              <div className="p-2.5 bg-white border border-purple-100 rounded-lg shadow-2xs">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Inbound &amp; Outbound</span>
+                <span className="text-base font-extrabold text-slate-800 mt-0.5 block">
+                  {auditReport.blogMetrics.blogsWithIncoming} In / {auditReport.blogMetrics.blogsWithOutgoing} Out
+                </span>
+                <span className="text-[10px] text-slate-400">100% crawlable internal links</span>
+              </div>
+
+              <div className="p-2.5 bg-white border border-purple-100 rounded-lg shadow-2xs">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Blog &rarr; Core Services</span>
+                <span className="text-base font-extrabold text-indigo-700 mt-0.5 block">
+                  {auditReport.blogMetrics.blogToServiceLinks} Links
+                </span>
+                <span className="text-[10px] text-slate-400">Contextual calls-to-action</span>
+              </div>
+
+              <div className="p-2.5 bg-white border border-purple-100 rounded-lg shadow-2xs">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Sibling Topic Clusters</span>
+                <span className="text-base font-extrabold text-purple-700 mt-0.5 block">
+                  {auditReport.blogMetrics.blogToBlogLinks} Cross-Links
+                </span>
+                <span className="text-[10px] text-slate-400">Related guides &amp; articles</span>
+              </div>
+
+              <div className="p-2.5 bg-white border border-purple-100 rounded-lg shadow-2xs">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Orphans &amp; Weak Articles</span>
+                <span className={`text-base font-extrabold mt-0.5 block ${auditReport.blogMetrics.orphanBlogPosts === 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  {auditReport.blogMetrics.orphanBlogPosts} Orphans / {auditReport.blogMetrics.weakBlogPosts} Weak
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  {auditReport.blogMetrics.orphanBlogPosts === 0 ? "Zero orphan articles" : "Needs incoming links"}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area: Filter Bar + Table + Detail Modal */}
@@ -394,6 +456,9 @@ export function InternalLinkingDashboard({
                 className="bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 py-1.5 px-2.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="all">All Pages ({nodes.length})</option>
+                {auditReport.blogMetrics && auditReport.blogMetrics.totalBlogPosts > 0 && (
+                  <option value="blog">Blog Posts Only ({auditReport.blogMetrics.totalBlogPosts})</option>
+                )}
                 <option value="orphan">Orphans Only ({auditReport.orphanNodes.length})</option>
                 <option value="weak">Weakly Connected ({auditReport.weakNodes.length})</option>
                 <option value="connected">Fully Connected</option>
@@ -453,6 +518,10 @@ export function InternalLinkingDashboard({
                                 ? "bg-blue-100 text-blue-700"
                                 : node.pageType === "service_location_page"
                                 ? "bg-emerald-100 text-emerald-800"
+                                : node.pageType === "blog_post" || node.pageType === "blog_page"
+                                ? "bg-purple-100 text-purple-800"
+                                : node.pageType === "blog_hub"
+                                ? "bg-fuchsia-100 text-fuchsia-800"
                                 : "bg-slate-100 text-slate-700"
                             }`}
                           >

@@ -4,6 +4,8 @@ import { ProviderType } from "@/lib/ai/types";
 import { renderBlogPostHtml, buildBlogPostSchema, BlogPostData } from "@/lib/blog/blog-engine";
 import { THEMES } from "@/lib/themes";
 import { SiteInfoJSON } from "@/lib/generator/content-schema";
+import { integrateNewPageIntoProject } from "@/lib/seo/connectivity-engine";
+import { db } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +19,9 @@ export async function POST(req: NextRequest) {
       model = "gemini-1.5-pro",
       apiKey,
       availablePages = [],
+      projectId,
+      project: clientProject,
+      files: requestFiles,
     } = body;
 
     if (!topic || !topic.title) {
@@ -137,11 +142,79 @@ Confirmed Facts: License ${businessInfo.licenseNumber || "State Licensed"}, ${bu
     const fullHtml = renderBlogPostHtml(postData, businessInfo as SiteInfoJSON, theme, domain);
     const schemaHtml = buildBlogPostSchema(postData, businessInfo as SiteInfoJSON, domain);
 
+    // If project files are available, connect new blog post into internal linking graph
+    let updatedFiles: { path: string; content: string | Buffer; mimeType?: string | null }[] | undefined;
+    let incomingLinksAdded: string[] | undefined;
+    let connectivityAudit: any;
+
+    let targetFiles = requestFiles || clientProject?.files;
+    if (!targetFiles && projectId) {
+      try {
+        const dbProject = await db.project.findUnique({
+          where: { id: projectId },
+          include: { files: true },
+        });
+        if (dbProject) {
+          targetFiles = dbProject.files.map((f) => ({
+            path: f.path,
+            content: f.content,
+            mimeType: f.mimeType || undefined,
+          }));
+        }
+      } catch (e) {
+        console.warn("[Blog Gen API] Could not fetch DB files:", e);
+      }
+    }
+
+    if (targetFiles && targetFiles.length > 0) {
+      const integration = integrateNewPageIntoProject(
+        {
+          newPagePath: `blog/${postData.slug}.html`,
+          newPageTitle: postData.title,
+          newPageContent: fullHtml,
+          primaryQuery: postData.primaryKeyword,
+          serviceName: topic.category || "Homeowner Guide",
+          locationCity: businessInfo.address?.city,
+          searchIntent: "informational",
+        },
+        targetFiles,
+        {
+          businessName: businessInfo.businessName,
+          primaryTrade: businessInfo.primaryTrade || businessInfo.businessType,
+          domain,
+        }
+      );
+
+      updatedFiles = integration.updatedFiles;
+      incomingLinksAdded = integration.incomingLinksAdded;
+      connectivityAudit = integration.auditReport;
+
+      // Sync to database if projectId exists
+      if (projectId) {
+        try {
+          await db.projectFile.deleteMany({ where: { projectId } });
+          await db.projectFile.createMany({
+            data: integration.updatedFiles.map((f) => ({
+              projectId,
+              path: f.path,
+              content: String(f.content),
+              mimeType: f.mimeType || "text/html",
+            })),
+          });
+        } catch (dbErr) {
+          console.warn("[Blog Gen API] Could not sync DB files:", dbErr);
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       postData,
       fullHtml,
       schemaHtml,
+      updatedFiles,
+      incomingLinksAdded,
+      connectivityAudit,
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

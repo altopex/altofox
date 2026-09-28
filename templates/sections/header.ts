@@ -75,7 +75,7 @@ export function renderHeader(
       </ul>
       <div style="margin-top: auto; padding-top: 1.5rem; border-top: 1px solid var(--color-border);">
         <a href="tel:${cleanPhone}" class="btn btn-primary" style="width: 100%; margin-bottom: 0.75rem;">Call Now: ${phone}</a>
-        <a href="contact.html" class="btn btn-outline" style="width: 100%;">Get a Free Quote</a>
+        <a href="tel:${cleanPhone}" class="btn btn-outline" style="width: 100%;">Call for Quote: ${phone}</a>
       </div>
     </div>
   </header>`;

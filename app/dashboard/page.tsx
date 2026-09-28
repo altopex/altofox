@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { BRAND } from "@/config/brand";
 import nextDynamic from "next/dynamic";
@@ -85,6 +85,8 @@ import {
   FileEdit,
   Search,
   Eye,
+  AlertTriangle,
+  Zap,
 } from "lucide-react";
 import type { SelectedServiceCity } from "@/components/ServiceAreaPicker";
 import type { KeywordMapEntry } from "@/components/KeywordMapModal";
@@ -425,7 +427,12 @@ export default function DashboardPage() {
   const [generating, setGenerating] = useState(false);
   const [generationProgressText, setGenerationProgressText] = useState("Planning your pages…");
   const [generationPercent, setGenerationPercent] = useState(10);
+  const [isGenerationTakingLong, setIsGenerationTakingLong] = useState(false);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
   const [currentProject, setCurrentProject] = useState<ProjectData | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const generationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastFormDataRef = useRef<any>(null);
 
   // Image Key States
   const [hasImageKey, setHasImageKey] = useState(false);
@@ -1156,6 +1163,225 @@ export default function DashboardPage() {
     }
   };
 
+  // Process & Store Generated Website
+  const handleProcessGeneratedSite = useCallback(
+    async (data: any, usedFormData: any) => {
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+        generationTimerRef.current = null;
+      }
+
+      if (data.success && Array.isArray(data.files)) {
+        const projData = {
+          projectId: data.projectId,
+          name: data.name,
+          notes: data.notes,
+          provider: data.provider,
+          model: data.model,
+          themeName: activeTheme.name,
+          websiteDomain: websiteDomain.trim(),
+          files: data.files,
+          photos: data.photos,
+          qualityReport: data.qualityReport,
+          customContentInstructions: customContentInstructions.trim(),
+        };
+        setCurrentProject(projData);
+
+        // Auto-save permanent project into IndexedDB
+        try {
+          const initialKeywordMap: ProjectKeywordItem[] = data.files
+            .filter((f: any) => f.path.endsWith(".html"))
+            .map((f: any) => {
+              const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
+              const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
+              return {
+                pagePath: f.path,
+                primaryKeyword: sug.primary,
+                secondaryKeywords: sug.secondaries,
+                seoScore: audit.totalScore,
+              };
+            });
+
+          const newSavedProject: SavedProject = {
+            id: data.projectId || `proj-${Date.now()}`,
+            name: businessName || "Local Business Website",
+            createdAt: Date.now(),
+            lastEditedAt: Date.now(),
+            customContentInstructions: customContentInstructions.trim(),
+            formData: usedFormData,
+            theme: activeTheme,
+            nicheId: currentNichePack.id,
+            schemaType: currentNichePack.schemaType,
+            businessDetails: {
+              businessName,
+              phone,
+              email,
+              streetAddress,
+              city,
+              stateRegion,
+              zipPostalCode,
+              businessHours,
+              websiteDomain,
+              socialLinks,
+            },
+            serviceAreaCities,
+            keywordMap: initialKeywordMap,
+            customBlocks: [],
+            mustIncludeText: "",
+            pageContentMap: {},
+            blogPosts: [],
+            files: data.files.map((f: any) => ({
+              path: f.path,
+              content: f.content,
+              mimeType: f.mimeType || undefined,
+            })),
+            changeLog: [
+              {
+                id: `log-${Date.now()}`,
+                timestamp: Date.now(),
+                dateStr: new Date().toLocaleDateString(),
+                summary: "Initial website generation",
+                affectedPages: data.files.map((f: any) => f.path),
+              },
+            ],
+            redirects: [],
+          };
+
+          const finalSavedProject = ensureProjectVersions(newSavedProject);
+          await saveProjectToDB(finalSavedProject);
+          setActiveSavedProject(finalSavedProject);
+          await loadAllSavedProjects();
+        } catch (dbErr) {
+          console.warn("Could not save project to IndexedDB:", dbErr);
+        }
+
+        addToast({
+          type: "success",
+          title: data.qualityReport?.overallScore
+            ? `Website Ready (Quality Score: ${data.qualityReport.overallScore}/100)`
+            : data.qualityReviewApplied
+            ? "Website Created & Quality Reviewed!"
+            : "Website Created!",
+          message: data.qualityReviewApplied
+            ? `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages audited for 100% unique copy and SEO.`
+            : `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
+        });
+        return true;
+      } else {
+        addToast({
+          type: "error",
+          title: "Generation Incomplete",
+          message: data.error || "The AI model encountered an issue. Please verify your API key or model name.",
+        });
+        return false;
+      }
+    },
+    [
+      activeTheme,
+      websiteDomain,
+      customContentInstructions,
+      businessType,
+      city,
+      stateRegion,
+      services,
+      businessName,
+      currentNichePack,
+      phone,
+      email,
+      streetAddress,
+      zipPostalCode,
+      businessHours,
+      socialLinks,
+      serviceAreaCities,
+      loadAllSavedProjects,
+      addToast,
+    ]
+  );
+
+  // Cancel in-flight generation
+  const handleCancelGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (generationTimerRef.current) {
+      clearInterval(generationTimerRef.current);
+      generationTimerRef.current = null;
+    }
+    setGenerating(false);
+    setIsGenerationTakingLong(false);
+    addToast({
+      type: "info",
+      title: "Generation Stopped",
+      message: "Website generation cancelled. All your entered business details were safely preserved.",
+    });
+  }, [addToast]);
+
+  // Instant Safe Template Generation fallback (0s generation)
+  const handleInstantSafeGeneration = useCallback(async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    if (generationTimerRef.current) {
+      clearInterval(generationTimerRef.current);
+      generationTimerRef.current = null;
+    }
+
+    setGenerating(true);
+    setIsGenerationTakingLong(false);
+    setGenerationPercent(85);
+    setGenerationProgressText("Assembling instant high-converting trade website…");
+
+    const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
+    const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
+    const preferredSource =
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
+
+    const targetFormData = lastFormDataRef.current || {
+      businessName: businessName.trim() || "Local Service Co",
+      businessType: effectiveIndustry,
+      nicheId: currentNichePack.id,
+      city: city.trim() || "Local Area",
+      targetKeywords: formatKeywordsForStorage(keywords),
+      keywords: parseKeywordList(keywords),
+    };
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          demo: true,
+          formData: targetFormData,
+          pexelsKey,
+          pixabayKey,
+          preferredSource,
+        }),
+      });
+
+      const data = await res.json();
+      await handleProcessGeneratedSite(data, targetFormData);
+    } catch (err: any) {
+      addToast({
+        type: "error",
+        title: "Instant Assembly Error",
+        message: err?.message || "Failed to assemble instant templates.",
+      });
+    } finally {
+      setGenerating(false);
+      setIsGenerationTakingLong(false);
+    }
+  }, [
+    businessName,
+    effectiveIndustry,
+    currentNichePack,
+    city,
+    keywords,
+    handleProcessGeneratedSite,
+    addToast,
+  ]);
+
   // Execute Website Generation
   const handleGenerateWebsite = async () => {
     // Check website plan limits
@@ -1189,45 +1415,10 @@ export default function DashboardPage() {
     const preferredSource =
       (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
 
-    setGenerating(true);
-    setGenerationPercent(15);
-    setGenerationProgressText("Planning site structure and pages…");
-
     const prefReview =
       (typeof window !== "undefined"
         ? localStorage.getItem("altofox_pref_quality_review")
         : null) !== "false";
-
-    // Dynamic rotating status text including photo resolution and Quality Review
-    const statusSequence = prefReview
-      ? [
-          { text: "Writing high-converting local copy (Pass 1)…", pct: 22, delay: 1800 },
-          { text: "Finding the perfect photos… (3 of 12 photos)", pct: 38, delay: 3800 },
-          { text: "Finding the perfect photos… (8 of 12 photos)", pct: 48, delay: 5500 },
-          { text: "Finding the perfect photos… (12 of 12 photos)", pct: 58, delay: 7200 },
-          { text: "Quality Review (Pass 2): auditing uniqueness, SEO & eliminating clichés…", pct: 72, delay: 9000 },
-          { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 85, delay: 11500 },
-          { text: "Designing responsive styles with brand palette…", pct: 92, delay: 13500 },
-          { text: "Connecting relative page navigation and scripts…", pct: 96, delay: 15500 },
-          { text: "Finalizing static website package…", pct: 98, delay: 17500 },
-        ]
-      : [
-          { text: "Writing high-converting local copy…", pct: 28, delay: 1800 },
-          { text: "Finding the perfect photos… (3 of 12 photos)", pct: 45, delay: 3800 },
-          { text: "Finding the perfect photos… (8 of 12 photos)", pct: 58, delay: 6000 },
-          { text: "Finding the perfect photos… (12 of 12 photos)", pct: 70, delay: 8200 },
-          { text: "Embedding LocalBusiness JSON-LD schema & meta tags…", pct: 82, delay: 10500 },
-          { text: "Designing responsive styles with brand palette…", pct: 90, delay: 13000 },
-          { text: "Connecting relative page navigation and scripts…", pct: 95, delay: 15500 },
-          { text: "Finalizing static website package…", pct: 98, delay: 18000 },
-        ];
-
-    const timers: NodeJS.Timeout[] = statusSequence.map((item) =>
-      setTimeout(() => {
-        setGenerationProgressText(item.text);
-        setGenerationPercent(item.pct);
-      }, item.delay)
-    );
 
     const savedLanguage =
       (typeof window !== "undefined" ? localStorage.getItem("altofox_pref_language") : null) || "English";
@@ -1299,10 +1490,68 @@ export default function DashboardPage() {
         .join(". "),
     };
 
+    lastFormDataRef.current = formData;
+    try {
+      localStorage.setItem("altofox_staged_form_data", JSON.stringify(formData));
+    } catch {}
+
+    setGenerating(true);
+    setIsGenerationTakingLong(false);
+    setGenerationElapsedSeconds(0);
+    setGenerationPercent(15);
+    setGenerationProgressText("Contacting AI model & initializing site structure…");
+
+    if (generationTimerRef.current) clearInterval(generationTimerRef.current);
+    const startTime = Date.now();
+
+    generationTimerRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setGenerationElapsedSeconds(elapsed);
+
+      if (elapsed >= 35) {
+        setIsGenerationTakingLong(true);
+      }
+
+      if (elapsed < 6) {
+        setGenerationProgressText("Contacting AI model & initializing site structure…");
+        setGenerationPercent(Math.min(25, 15 + elapsed * 2));
+      } else if (elapsed < 16) {
+        setGenerationProgressText("Writing high-converting local trade copy & calls-to-action…");
+        setGenerationPercent(Math.min(50, 25 + Math.floor((elapsed - 6) * 2.5)));
+      } else if (elapsed < 28) {
+        setGenerationProgressText(
+          prefReview
+            ? "Auditing copy uniqueness & LocalBusiness schema (Pass 1)…"
+            : "Structuring service landing pages, FAQs & LocalBusiness schema…"
+        );
+        setGenerationPercent(Math.min(72, 50 + Math.floor((elapsed - 16) * 1.8)));
+      } else if (elapsed < 42) {
+        setGenerationProgressText(
+          prefReview
+            ? "Quality Review (Pass 2): Auditing SEO, facts & eliminating clichés…"
+            : "Matching localized photos, vectors, and brand tokens…"
+        );
+        setGenerationPercent(Math.min(88, 72 + Math.floor((elapsed - 28) * 1.1)));
+      } else {
+        setGenerationProgressText("Assembling zero-build static pages & final packaging…");
+        setGenerationPercent(Math.min(96, 88 + Math.floor((elapsed - 42) * 0.4)));
+      }
+    }, 1000);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    const watchdogTimer = setTimeout(() => {
+      if (!abortController.signal.aborted) {
+        abortController.abort(new Error("Generation client budget (85s) exceeded."));
+      }
+    }, 85000);
+
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
         body: JSON.stringify({
           provider: activeProvider,
           model: activeModel,
@@ -1337,119 +1586,28 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      timers.forEach(clearTimeout);
-
-      if (data.success && Array.isArray(data.files)) {
-        const projData = {
-          projectId: data.projectId,
-          name: data.name,
-          notes: data.notes,
-          provider: data.provider,
-          model: data.model,
-          themeName: activeTheme.name,
-          websiteDomain: websiteDomain.trim(),
-          files: data.files,
-          photos: data.photos,
-          qualityReport: data.qualityReport,
-          customContentInstructions: customContentInstructions.trim(),
-        };
-        setCurrentProject(projData);
-
-        // Auto-save permanent project into IndexedDB
-        try {
-          const initialKeywordMap: ProjectKeywordItem[] = data.files
-            .filter((f: any) => f.path.endsWith(".html"))
-            .map((f: any) => {
-              const sug = suggestKeywordsForPage(f.path, businessType, city, stateRegion, services);
-              const audit = auditPageSEO(f.content, f.path, sug.primary, sug.secondaries);
-              return {
-                pagePath: f.path,
-                primaryKeyword: sug.primary,
-                secondaryKeywords: sug.secondaries,
-                seoScore: audit.totalScore,
-              };
-            });
-
-          const newSavedProject: SavedProject = {
-            id: data.projectId || `proj-${Date.now()}`,
-            name: businessName || "Local Business Website",
-            createdAt: Date.now(),
-            lastEditedAt: Date.now(),
-            customContentInstructions: customContentInstructions.trim(),
-            formData,
-            theme: activeTheme,
-            nicheId: currentNichePack.id,
-            schemaType: currentNichePack.schemaType,
-            businessDetails: {
-              businessName,
-              phone,
-              email,
-              streetAddress,
-              city,
-              stateRegion,
-              zipPostalCode,
-              businessHours,
-              websiteDomain,
-              socialLinks,
-            },
-            serviceAreaCities,
-            keywordMap: initialKeywordMap,
-            customBlocks: [],
-            mustIncludeText: "",
-            pageContentMap: {},
-            blogPosts: [],
-            files: data.files.map((f: any) => ({
-              path: f.path,
-              content: f.content,
-              mimeType: f.mimeType || undefined,
-            })),
-            changeLog: [
-              {
-                id: `log-${Date.now()}`,
-                timestamp: Date.now(),
-                dateStr: new Date().toLocaleDateString(),
-                summary: "Initial website generation",
-                affectedPages: data.files.map((f: any) => f.path),
-              },
-            ],
-            redirects: [],
-          };
-
-          const finalSavedProject = ensureProjectVersions(newSavedProject);
-          await saveProjectToDB(finalSavedProject);
-          setActiveSavedProject(finalSavedProject);
-          await loadAllSavedProjects();
-        } catch (dbErr) {
-          console.warn("Could not save project to IndexedDB:", dbErr);
-        }
-
-        addToast({
-          type: "success",
-          title: data.qualityReport?.overallScore
-            ? `Website Ready (Quality Score: ${data.qualityReport.overallScore}/100)`
-            : data.qualityReviewApplied
-            ? "Website Created & Quality Reviewed!"
-            : "Website Created!",
-          message: data.qualityReviewApplied
-            ? `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages audited for 100% unique copy and SEO.`
-            : `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready to inspect and download.`,
-        });
-      } else {
-        addToast({
-          type: "error",
-          title: "Generation Failed",
-          message: data.error || "The AI model encountered an issue. Please verify your API key or model name.",
-        });
+      await handleProcessGeneratedSite(data, formData);
+    } catch (err: any) {
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        return;
       }
-    } catch (err) {
-      timers.forEach(clearTimeout);
       addToast({
         type: "error",
         title: "Connection Error",
-        message: err instanceof Error ? err.message : "Network error generating website. Please check your internet connection.",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Network error generating website. Please check your internet connection.",
       });
     } finally {
+      clearTimeout(watchdogTimer);
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+        generationTimerRef.current = null;
+      }
+      abortControllerRef.current = null;
       setGenerating(false);
+      setIsGenerationTakingLong(false);
     }
   };
 
@@ -1857,6 +2015,11 @@ export default function DashboardPage() {
                 </p>
                 <p className="text-xs text-[#64748B] mt-1">
                   Writing zero-build static HTML, CSS, JavaScript, and Schema.org markup.
+                  {generationElapsedSeconds > 0 && (
+                    <span className="font-semibold text-slate-500 ml-1.5">
+                      ({generationElapsedSeconds}s elapsed)
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -1868,10 +2031,58 @@ export default function DashboardPage() {
                 />
               </div>
 
+              {/* Stuck Job Watchdog Recovery Panel */}
+              {isGenerationTakingLong && (
+                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-left space-y-3 animate-in fade-in duration-300">
+                  <div className="flex items-start space-x-2.5">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-900">
+                        Generation taking longer than expected ({generationElapsedSeconds}s elapsed)
+                      </h4>
+                      <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                        Your connected AI provider is taking longer to return the content payload. You can continue waiting or immediately complete your website using our curated trade template engine.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleInstantSafeGeneration}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                    >
+                      <Zap className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Use Safe Instant Templates (0s)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        addToast({
+                          type: "info",
+                          title: "Waiting for AI Provider",
+                          message: "Allowing your AI model additional time to finish the response.",
+                        });
+                      }}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition"
+                    >
+                      Continue Waiting
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelGeneration}
+                      className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-red-600 transition"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => setGenerating(false)}
+                  onClick={handleCancelGeneration}
                   className="text-xs font-semibold text-[#64748B] hover:text-[#EF4444] px-3 py-1.5 rounded-lg transition"
                 >
                   Cancel Generation

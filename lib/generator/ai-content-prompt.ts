@@ -140,7 +140,7 @@ AVAILABLE SECTION TYPES & VARIANTS TO CHOOSE:
 - testimonials: (rendered automatically by app only if user verified real reviews or Google Review link; DO NOT write quotes or names)
 - faq: content: { eyebrow, headline, questions: [{ q, a }] } (accessible accordion with trade-specific Q&As)
 - ctaBanner: variants: "gradient", "photo" | content: { headline, subheadline, buttonText, phone }
-- contactForm: content: { headline, subheadline, formHeadline, address, phone, email, hours }
+- contactForm: content: { headline, subheadline, address, phone, email, hours } (direct telephone dispatch & contact information)
 - footer (rendered automatically by app)
 - mobileCallBar (rendered automatically by app)
 `;
@@ -337,7 +337,7 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   lines.push("- serviceAreas: content: { eyebrow, headline, description, areas, guarantees }");
   lines.push("- faq: content: { eyebrow, headline, questions: [{ q, a }] }");
   lines.push("- ctaBanner: variants: 'gradient', 'photo' | content: { headline, subheadline, buttonText, phone }");
-  lines.push("- contactForm: content: { headline, subheadline, formHeadline, address, phone, email, hours }");
+  lines.push("- contactForm: content: { headline, subheadline, address, phone, email, hours } (direct telephone dispatch & contact information)");
 
   // === 9. EXACT JSON OUTPUT INSTRUCTION ===
   lines.push("");

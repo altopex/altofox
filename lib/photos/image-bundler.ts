@@ -282,12 +282,13 @@ export async function resolveImagePlanWithValidation(
     };
     validateNetwork?: boolean;
     fastOfflinePreview?: boolean;
+    maxValidationTimeMs?: number;
   } = {}
 ): Promise<ImagePlanSlot[]> {
   const validatedPlan: ImagePlanSlot[] = [];
   const deduplicationTracker = new ImageDeduplicationTracker();
 
-  if (options.fastOfflinePreview) {
+  if (options.fastOfflinePreview || options.validateNetwork === false) {
     for (const slot of plan) {
       const resolved = resolvePageImage(
         {
@@ -320,44 +321,63 @@ export async function resolveImagePlanWithValidation(
     return validatedPlan;
   }
 
-  for (const slot of plan) {
-    try {
-      const resolved = await resolveValidatedPageImage(
-        {
-          trade,
-          city,
-          state: options.state,
-          serviceName: slot.serviceName,
-          slot: slot.slot,
-          width: slot.width,
-          height: slot.height,
-          customAlt: slot.alt,
-          pageSlug: slot.pageSlug,
-        },
-        {
-          preferredSource: options.preferredSource,
-          pexelsKey: options.pexelsKey,
-          pixabayKey: options.pixabayKey,
-          openaiKey: options.openaiKey,
-          providerCredentials: options.providerCredentials,
-          deduplicationTracker,
-          validateNetwork: options.validateNetwork,
-        }
-      );
+  const startTime = Date.now();
+  const maxBudgetMs = options.maxValidationTimeMs ?? 3500;
+  let networkAllowed: boolean = options.validateNetwork ?? true;
 
-      validatedPlan.push({
-        ...slot,
-        query: resolved.query,
-        remoteUrl: resolved.url,
-        fallbackUrl: resolved.fallbackUrl,
-        allFallbacks: resolved.allFallbacks,
-        localSvgFallback: resolved.localSvgFallback,
-        status: resolved.status === "local_fallback" ? "local_fallback" : "found",
-      });
-    } catch {
-      // Fallback on exception: keep original slot with guaranteed local SVG
-      validatedPlan.push(slot);
+  // Process in concurrent batches of 6 with aggregate timeout budget
+  const BATCH_SIZE = 6;
+  for (let i = 0; i < plan.length; i += BATCH_SIZE) {
+    const chunk = plan.slice(i, i + BATCH_SIZE);
+
+    // If aggregate network budget is exhausted, switch remaining slots to instant non-blocking
+    if (networkAllowed && Date.now() - startTime >= maxBudgetMs) {
+      networkAllowed = false;
     }
+
+    const chunkResults = await Promise.all(
+      chunk.map(async (slot) => {
+        try {
+          const resolved = await resolveValidatedPageImage(
+            {
+              trade,
+              city,
+              state: options.state,
+              serviceName: slot.serviceName,
+              slot: slot.slot,
+              width: slot.width,
+              height: slot.height,
+              customAlt: slot.alt,
+              pageSlug: slot.pageSlug,
+            },
+            {
+              preferredSource: options.preferredSource,
+              pexelsKey: options.pexelsKey,
+              pixabayKey: options.pixabayKey,
+              openaiKey: options.openaiKey,
+              providerCredentials: options.providerCredentials,
+              deduplicationTracker,
+              validateNetwork: networkAllowed,
+            }
+          );
+
+          return {
+            ...slot,
+            query: resolved.query,
+            remoteUrl: resolved.url,
+            fallbackUrl: resolved.fallbackUrl,
+            allFallbacks: resolved.allFallbacks,
+            localSvgFallback: resolved.localSvgFallback,
+            status: resolved.status === "local_fallback" ? ("local_fallback" as const) : ("found" as const),
+          };
+        } catch {
+          // Fallback on exception: keep original slot with guaranteed local SVG
+          return slot;
+        }
+      })
+    );
+
+    validatedPlan.push(...chunkResults);
   }
 
   return validatedPlan;

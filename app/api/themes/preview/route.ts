@@ -4,6 +4,7 @@ import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
 import { buildDefaultTradeContentJSON } from "@/lib/generator/ai-content-prompt";
 import { assembleWebsite } from "@/templates/assembler";
 import { getProjectByIdFromDB } from "@/lib/storage/db";
+import { BlogPostData } from "@/lib/blog/blog-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -99,12 +100,67 @@ async function generateThemePreviewHtml(params: GeneratePreviewParams) {
     ];
   }
 
-  // 4. Assemble website with fastOfflinePreview for sub-second, zero-network generation
-  const assembled = await assembleWebsite(contentJSON, theme, {
-    domain,
-    serviceAreaCities,
-    fastOfflinePreview: true,
-  });
+    const previewBlogPosts: BlogPostData[] = [
+      {
+        title: "5 Early Warning Signs Your Plumbing Needs Immediate Attention",
+        slug: "warning-signs-need-repair",
+        primaryKeyword: "plumbing warning signs",
+        secondaryKeywords: ["emergency plumber", "Dallas repair"],
+        metaDescription: "Discover critical warning signs like sudden pressure drops, discolored water, and slow drains before an expensive emergency occurs.",
+        datePublished: "Oct 12, 2026",
+        dateModified: "Oct 14, 2026",
+        authorName: "Premier Master Plumbers",
+        authorBio: "Master-certified local technicians with 20+ years of field experience in Dallas, TX.",
+        wordCount: 1450,
+        contentHtml: "<p>Prompt diagnosis of common plumbing malfunctions protects residential foundation integrity and stops water damage early.</p>",
+        faqs: [{ question: "How fast can an emergency plumber arrive?", answer: "Our certified dispatch units arrive in 45 minutes or less throughout Dallas." }],
+        relatedSlugs: ["understanding-cost-factors", "when-to-call-emergency-plumber"],
+        imageUrl: "images/vector-article-1.svg",
+        imageAlt: "Technician inspecting residential plumbing fixture",
+      },
+      {
+        title: "How Much Does Water Heater Repair Typically Cost? Price Factors Explained",
+        slug: "understanding-cost-factors",
+        primaryKeyword: "water heater repair cost",
+        secondaryKeywords: ["transparent pricing", "Dallas plumbing rates"],
+        metaDescription: "An honest breakdown of parts, diagnostic fees, and efficiency factors that influence repair versus replacement decisions.",
+        datePublished: "Oct 08, 2026",
+        dateModified: "Oct 10, 2026",
+        authorName: "Premier Master Plumbers",
+        authorBio: "Master-certified local technicians with 20+ years of field experience in Dallas, TX.",
+        wordCount: 1520,
+        contentHtml: "<p>Evaluating heating element wear versus tank corrosion helps homeowners budget effectively for reliable hot water.</p>",
+        faqs: [{ question: "Is it worth repairing an 8-year-old water heater?", answer: "If repairs exceed 50% of replacement cost, an energy-efficient upgrade saves more over time." }],
+        relatedSlugs: ["warning-signs-need-repair", "when-to-call-emergency-plumber"],
+        imageUrl: "images/vector-article-2.svg",
+        imageAlt: "Transparent cost consultation for residential heating",
+      },
+      {
+        title: "When to Call an Emergency Plumber vs. Scheduling Routine Service",
+        slug: "when-to-call-emergency-plumber",
+        primaryKeyword: "emergency plumber",
+        secondaryKeywords: ["24/7 service", "burst pipe help"],
+        metaDescription: "Learn how to triage urgent home hazards like active slab leaks or sewer backups versus minor faucet drips that can wait.",
+        datePublished: "Sep 28, 2026",
+        dateModified: "Oct 01, 2026",
+        authorName: "Premier Master Plumbers",
+        authorBio: "Master-certified local technicians with 20+ years of field experience in Dallas, TX.",
+        wordCount: 1380,
+        contentHtml: "<p>Knowing when an issue poses immediate property hazard empowers homeowners to act quickly and minimize water damage.</p>",
+        faqs: [{ question: "What should I do while waiting for dispatch?", answer: "Shut off the property's main water meter immediately." }],
+        relatedSlugs: ["warning-signs-need-repair", "understanding-cost-factors"],
+        imageUrl: "images/vector-article-3.svg",
+        imageAlt: "Emergency dispatch truck arriving on scene",
+      },
+    ];
+
+    // 4. Assemble website with fastOfflinePreview for sub-second, zero-network generation
+    const assembled = await assembleWebsite(contentJSON, theme, {
+      domain,
+      serviceAreaCities,
+      blogPosts: previewBlogPosts,
+      fastOfflinePreview: true,
+    });
 
   const rawIndexHtml = assembled.files.find((f) => f.path === "index.html")?.content || "";
   const rawStyleCss = assembled.files.find((f) => f.path === "css/style.css")?.content || "";

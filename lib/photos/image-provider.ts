@@ -582,9 +582,9 @@ export async function resolveValidatedPageImage(
       continue;
     }
 
-    // Network check
+    // Network check with tight 1200ms timeout guard
     if (validateNetwork) {
-      const check = await validateImageUrl(cand.url, 2500);
+      const check = await validateImageUrl(cand.url, 1200);
       if (!check.valid) {
         continue;
       }

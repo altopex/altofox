@@ -33,7 +33,6 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "serviceAreas" },
       { type: "testimonials", variant: "grid" },
       { type: "faq" },
-      { type: "contactForm" },
       { type: "ctaBanner", variant: "locationMap" },
     ],
   },
@@ -68,7 +67,6 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "whyUs" },
       { type: "faq" },
       { type: "ctaBanner", variant: "gradient" },
-      { type: "contactForm" },
     ],
   },
   "service-area": {
@@ -80,7 +78,6 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "testimonials", variant: "grid" },
       { type: "serviceAreas" },
       { type: "ctaBanner", variant: "photo" },
-      { type: "contactForm" },
     ],
   },
   contact: {
@@ -99,7 +96,6 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "faq" },
       { type: "whyUs" },
       { type: "ctaBanner", variant: "gradient" },
-      { type: "contactForm" },
     ],
   },
   gallery: {
@@ -117,7 +113,6 @@ export const PAGE_LAYOUTS: Record<PageLayoutType, PageLayoutBlueprint> = {
       { type: "hero", variant: "split" },
       { type: "about", variant: "split" },
       { type: "ctaBanner", variant: "gradient" },
-      { type: "contactForm" },
     ],
   },
 };

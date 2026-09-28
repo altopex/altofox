@@ -81,7 +81,7 @@ export function renderCtaBanner(
             </div>
 
             <p class="final-cta-secondary-line">
-              Prefer to contact us online? <a href="contact.html">Send a message below</a>.
+              Need immediate service or real-time scheduling? <a href="tel:${cleanPhone}" style="color: var(--color-primary); font-weight: 700;">Call ${phone} directly</a> or <a href="contact.html">view dispatch details</a>.
             </p>
           </div>
 
@@ -104,7 +104,7 @@ export function renderCtaBanner(
     content.text ||
     "Our certified master technicians are on standby for immediate dispatch across the area.";
   const buttonText = content.buttonText || `Call Now: ${phone}`;
-  const secondaryBtnText = content.secondaryBtnText || "Book Online";
+  const secondaryBtnText = content.secondaryBtnText || "Schedule by Phone";
 
   const bgPhoto = images[0];
   const bgUrl =

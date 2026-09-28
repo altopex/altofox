@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { testConnection } from "@/lib/ai/generate-website";
+import { testProviderCapabilities } from "@/lib/ai/ai-engine";
+import { getProviderProfile } from "@/lib/ai/provider-manager";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType } from "@/lib/ai/types";
 
@@ -8,23 +9,41 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { provider, apiKey, baseUrl, model, organizationId, providerName } = body;
+    const { id, provider, apiKey, baseUrl, model, organizationId, providerName, apiType } = body;
 
-    if (!provider) {
-      return NextResponse.json(
-        { success: false, error: "Provider is required." },
-        { status: 400 }
-      );
+    // 1. If an ID is provided, look up the profile
+    if (id) {
+      const profile = await getProviderProfile(id);
+      if (profile && (profile.apiKey || apiKey)) {
+        const testApiKey = (apiKey || profile.apiKey || "").trim();
+        const result = await testProviderCapabilities({
+          ...profile,
+          apiKey: testApiKey,
+          model: model || profile.model,
+          baseUrl: baseUrl || profile.baseUrl,
+        });
+
+        return NextResponse.json({
+          success: result.success,
+          message: result.message,
+          latencyMs: result.latencyMs,
+          capabilities: result.capabilities,
+          model: result.model,
+          providerId: result.providerId,
+          providerName: result.providerName,
+        });
+      }
     }
 
-    // Resolve key from request body, localStorage pass-through, or stored/env
+    // 2. Direct or legacy credentials
     let keyToTest = (apiKey || "").trim();
     let urlToTest = (baseUrl || "").trim();
     let modelToTest = (model || "").trim();
     let orgToTest = (organizationId || "").trim();
     let nameToTest = (providerName || "").trim();
+    const targetProvider = provider || (apiType === "gemini" ? "gemini" : apiType === "openrouter" ? "openrouter" : "openai");
 
-    if (!keyToTest) {
+    if (!keyToTest && provider) {
       try {
         const credentials = await getProviderCredentials(
           provider as ProviderType,
@@ -50,16 +69,36 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await testConnection({
-      provider,
+    if (!keyToTest) {
+      return NextResponse.json(
+        { success: false, message: "API Key is required to test connection." },
+        { status: 400 }
+      );
+    }
+
+    const resolvedApiType =
+      apiType ||
+      (targetProvider === "gemini" ? "gemini" : targetProvider === "openrouter" ? "openrouter" : "openai-compatible");
+
+    const result = await testProviderCapabilities({
+      id: id || `test-${targetProvider}`,
+      name: nameToTest || targetProvider.toUpperCase(),
+      apiType: resolvedApiType,
       apiKey: keyToTest,
       baseUrl: urlToTest || undefined,
       model: modelToTest || undefined,
       organizationId: orgToTest || undefined,
-      providerName: nameToTest || undefined,
     });
 
-    return NextResponse.json(result);
+    return NextResponse.json({
+      success: result.success,
+      message: result.message,
+      latencyMs: result.latencyMs,
+      capabilities: result.capabilities,
+      model: result.model,
+      providerId: result.providerId,
+      providerName: result.providerName,
+    });
   } catch (error) {
     console.error("Test connection error:", error);
     return NextResponse.json(
@@ -71,3 +110,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+

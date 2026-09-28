@@ -425,7 +425,7 @@ export function buildMasterPageRegistry(options: RegistryBuilderOptions): PageRe
         pageType: "blog",
         title: `${b.title} | ${options.businessName}`,
         navLabel: b.title,
-        outputFilePath: useFolders ? `blog/${bSlug}/index.html` : `blog-${bSlug}.html`,
+        outputFilePath: useFolders ? `blog/${bSlug}/index.html` : `blog/${bSlug}.html`,
         parentPageId: hasBlogHub ? "blog-hub" : "home",
         order: 7,
         data: b,

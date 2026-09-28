@@ -38,6 +38,12 @@ import {
   enrichWebsiteConnectivity,
   ConnectivityAuditReport,
 } from "../lib/seo/connectivity-engine";
+import {
+  BlogPostData,
+  renderBlogPostHtml,
+  buildBlogPostSchema,
+  renderBlogIndexHtml,
+} from "../lib/blog/blog-engine";
 
 export interface AssembleOptions {
   domain?: string;
@@ -47,6 +53,8 @@ export interface AssembleOptions {
   preferredSource?: "bing" | "pexels" | "pixabay";
   linkStyle?: LinkStyle;
   useFolderStructure?: boolean;
+  blogPosts?: BlogPostData[];
+  hasBlog?: boolean;
   serviceAreaCities?: {
     city: string;
     stateId: string;
@@ -190,7 +198,12 @@ function buildSchemaOrg(
       email: site.email || undefined,
       url: `https://${domain}`,
       address: postalAddress,
-      areaServed: (site.serviceAreas || []).map((a) => ({
+      areaServed: (Array.isArray(site.serviceAreas)
+        ? site.serviceAreas
+        : typeof site.serviceAreas === "string"
+        ? (site.serviceAreas as string).split(",").map((s) => s.trim()).filter(Boolean)
+        : []
+      ).map((a) => ({
         "@type": "AdministrativeArea",
         name: a,
       })),
@@ -268,6 +281,7 @@ export async function assembleWebsite(
   const useFolderStructure = Boolean(options?.useFolderStructure);
 
   const effectiveAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+  const effectiveBlogPosts: BlogPostData[] = options?.blogPosts || (data as any).blogPosts || [];
 
   // 1. Build Master Page Registry BEFORE any HTML is generated
   const registry = buildMasterPageRegistry({
@@ -287,8 +301,14 @@ export async function assembleWebsite(
       lat: c.lat,
       lng: c.lng,
     })),
+    blogs: effectiveBlogPosts.map((b) => ({
+      slug: b.slug,
+      title: b.title,
+      date: b.datePublished,
+    })),
     hasServicesHub: true,
     hasAreasHub: effectiveAreaCities.length > 0,
+    hasBlogHub: effectiveBlogPosts.length > 0,
   });
 
   // 2. Create Image Plan & Bundle Images into files (with pre-validation and guaranteed local SVG fallbacks)
@@ -318,8 +338,9 @@ export async function assembleWebsite(
       pexelsKey: options?.pexelsKey,
       pixabayKey: options?.pixabayKey,
       providerCredentials: options?.fastOfflinePreview ? undefined : options?.providerCredentials,
-      validateNetwork: options?.fastOfflinePreview ? false : options?.validateNetwork,
+      validateNetwork: options?.fastOfflinePreview ? false : (options?.validateNetwork ?? false),
       fastOfflinePreview: options?.fastOfflinePreview,
+      maxValidationTimeMs: 3000,
     }
   );
 
@@ -448,6 +469,26 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
         if (idxB === -1) idxB = 99;
         return idxA - idxB;
       });
+    }
+
+    // If blog posts exist and home page doesn't have a blog section, insert one
+    if (isHomePage && effectiveBlogPosts.length > 0 && !activeSections.some((s) => s.type === "blog" || s.type === "articles")) {
+      const insertIdx = activeSections.findIndex((s) => s.type === "testimonials" || s.type === "faq" || s.type === "ctaBanner" || s.type === "contactForm");
+      const blogSectionObj: SectionJSON = {
+        type: "blog",
+        variant: "default",
+        content: {
+          eyebrow: "Helpful Advice & Guides",
+          headline: `Expert ${mainTrade} Tips & Homeowner Guides`,
+          subheadline: `Practical advice on diagnostics, preventative maintenance, and when to call a licensed specialist.`,
+        },
+        images: [],
+      };
+      if (insertIdx !== -1) {
+        activeSections.splice(insertIdx, 0, blogSectionObj);
+      } else {
+        activeSections.push(blogSectionObj);
+      }
     }
 
     // Apply theme section layout variants
@@ -601,6 +642,12 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
                 : undefined);
           renderedSectionsHtml.push(
             Sections.renderContactForm(section, data.site, contactMapEmbed, isHomePage)
+          );
+          break;
+        case "blog":
+        case "articles":
+          renderedSectionsHtml.push(
+            Sections.renderBlogSection(section, effectiveBlogPosts, data.site)
           );
           break;
         default:
@@ -860,6 +907,119 @@ ${mobileCallBarHtml}
       files.push({
         path: locPage.outputFilePath,
         content: locFullHtml,
+        mimeType: "text/html",
+      });
+    }
+  }
+
+  // 4.3 Generate Blog Directory Hub & Blog Posts
+  if (Array.isArray(effectiveBlogPosts) && effectiveBlogPosts.length > 0) {
+    const blogHubPage = registry.getByType("blog hub")[0] || registry.getById("blog-hub") || {
+      id: "blog-hub",
+      pageType: "blog hub" as const,
+      title: `Tips & Advice | ${data.site.businessName}`,
+      navLabel: "Blog",
+      outputFilePath: "blog.html",
+    };
+
+    const hubHeader = Sections.renderHeader(data.site, "standard", registry, blogHubPage, linkStyle);
+    const hubFooter = Sections.renderFooter(data.site, registry, blogHubPage, linkStyle);
+    const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
+
+    const hubBody = renderBlogIndexHtml(effectiveBlogPosts, data.site, theme);
+    const hubHead = buildHead(
+      {
+        title: `Homeowner Guides & Maintenance Tips | ${data.site.businessName}`,
+        description: `Expert guides, cost factors, and preventative care tips for homeowners across ${data.site.address?.city || "the area"}.`,
+        h1: `Expert Homeowner Tips & Maintenance Guides`,
+      },
+      data.site,
+      theme,
+      domain,
+      blogHubPage,
+      linkStyle
+    );
+
+    let hubFullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+${hubHead}
+</head>
+<body class="theme-${theme.id}">
+${hubHeader}
+<main>
+${hubBody}
+</main>
+${hubFooter}
+${mobileCallBarHtml}
+</body>
+</html>`;
+
+    hubFullHtml = resolveInternalLinks(hubFullHtml, blogHubPage, registry, linkStyle);
+
+    files.push({
+      path: blogHubPage.outputFilePath,
+      content: hubFullHtml,
+      mimeType: "text/html",
+    });
+
+    // Individual Blog Article Pages
+    for (const post of effectiveBlogPosts) {
+      const cleanSlug = post.slug.replace(/^blog\//, "").replace(/\.html$/, "");
+      const postPage = registry.getByType("blog").find(
+        (b) => b.outputFilePath === `blog/${cleanSlug}.html` || b.id === `blog-${cleanSlug}`
+      ) || {
+        id: `blog-${cleanSlug}`,
+        pageType: "blog" as const,
+        title: `${post.title} | ${data.site.businessName}`,
+        navLabel: post.title,
+        outputFilePath: `blog/${cleanSlug}.html`,
+      };
+
+      const postHeader = Sections.renderHeader(data.site, "standard", registry, postPage, linkStyle);
+      const postFooter = Sections.renderFooter(data.site, registry, postPage, linkStyle);
+      const postBody = renderBlogPostHtml(
+        post,
+        data.site,
+        theme,
+        domain,
+        effectiveBlogPosts.map((p) => ({ title: p.title, slug: p.slug, metaDescription: p.metaDescription }))
+      );
+      const postSchema = buildBlogPostSchema(post, data.site, domain);
+      const postHead = buildHead(
+        {
+          title: `${post.title} | ${data.site.businessName}`,
+          description: post.metaDescription,
+          h1: post.title,
+        },
+        data.site,
+        theme,
+        domain,
+        postPage,
+        linkStyle
+      );
+
+      let postFullHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+${postHead}
+${postSchema}
+</head>
+<body class="theme-${theme.id}">
+${postHeader}
+<main>
+${postBody}
+</main>
+${postFooter}
+${mobileCallBarHtml}
+</body>
+</html>`;
+
+      postFullHtml = resolveInternalLinks(postFullHtml, postPage, registry, linkStyle);
+
+      files.push({
+        path: postPage.outputFilePath,
+        content: postFullHtml,
         mimeType: "text/html",
       });
     }

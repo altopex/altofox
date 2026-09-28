@@ -26,6 +26,8 @@ export type PageType =
   | "about_page"
   | "contact_page"
   | "faq_page"
+  | "blog_hub"
+  | "blog_post"
   | "blog_page"
   | "other";
 
@@ -119,6 +121,19 @@ export const DEFAULT_RELEVANCE_WEIGHTS: RelevanceModelWeights = {
   unrelatedLocationPenalty: -30,
 };
 
+export interface BlogConnectivityMetrics {
+  totalBlogPosts: number;
+  blogsWithIncoming: number;
+  blogsWithOutgoing: number;
+  orphanBlogPosts: number;
+  weakBlogPosts: number;
+  brokenBlogLinks: number;
+  blogToServiceLinks: number;
+  blogToLocationLinks: number;
+  blogToBlogLinks: number;
+  blogHubConnected: boolean;
+}
+
 export interface ConnectivityAuditReport {
   totalNodes: number;
   totalInternalLinks: number;
@@ -146,6 +161,7 @@ export interface ConnectivityAuditReport {
   connectivityScore: number; // 0 - 100
   scoreExplanation: string;
   isCrawlHealthy: boolean;
+  blogMetrics?: BlogConnectivityMetrics;
 }
 
 export interface CrawlValidationReport {
@@ -427,6 +443,53 @@ export class PageConnectivityEngine {
     if (commonWords >= 2) {
       score += this.weights.strongKeywordTopicOverlap;
       factors.push({ name: `Topic keyword semantic overlap (${commonWords} matching terms)`, weight: this.weights.strongKeywordTopicOverlap });
+    }
+
+    // 7. Blog Topical & Informational Context Relationships
+    const isSourceBlog = source.pageType === "blog_post" || source.pageType === "blog_page";
+    const isTargetBlog = target.pageType === "blog_post" || target.pageType === "blog_page";
+    const isSourceBlogHub = source.pageType === "blog_hub" || source.filePath === "blog.html";
+    const isTargetBlogHub = target.pageType === "blog_hub" || target.filePath === "blog.html";
+
+    // Blog Post -> Core Service Page (Informational blog supporting core commercial service)
+    if (isSourceBlog && (target.pageType === "service_page" || target.pageType === "service_hub")) {
+      if (source.service && target.service && (source.service.toLowerCase().includes(target.service.toLowerCase()) || target.service.toLowerCase().includes(source.service.toLowerCase()) || this.isRelatedService(source.service, target.service))) {
+        score += 35;
+        factors.push({ name: `Supporting guide linking to primary commercial service (${target.service})`, weight: 35 });
+      } else if (target.pageType === "service_hub") {
+        score += 20;
+        factors.push({ name: "Blog guide linking to core Services Hub", weight: 20 });
+      }
+    }
+
+    // Service Page -> Blog Post (Commercial page recommending educational guide)
+    if ((source.pageType === "service_page" || source.pageType === "service_hub") && isTargetBlog) {
+      if (source.service && target.service && (source.service.toLowerCase().includes(target.service.toLowerCase()) || target.service.toLowerCase().includes(source.service.toLowerCase()) || this.isRelatedService(source.service, target.service))) {
+        score += 25;
+        factors.push({ name: `Service page referencing supporting educational guide (${target.title})`, weight: 25 });
+      }
+    }
+
+    // Blog Post <-> Blog Post (Topical Sibling Cluster)
+    if (isSourceBlog && isTargetBlog) {
+      if (source.service && target.service && (source.service.toLowerCase().includes(target.service.toLowerCase()) || target.service.toLowerCase().includes(source.service.toLowerCase()) || this.isRelatedService(source.service, target.service))) {
+        score += 30;
+        factors.push({ name: `Topical sibling blog cluster (${source.service})`, weight: 30 });
+      }
+    }
+
+    // Blog Post <-> Blog Hub
+    if ((isSourceBlog && isTargetBlogHub) || (isSourceBlogHub && isTargetBlog)) {
+      score += 30;
+      factors.push({ name: "Blog directory hub parent connection", weight: 30 });
+    }
+
+    // Blog Post -> Relevant Location / Service-Area
+    if (isSourceBlog && (target.pageType === "location_page" || target.pageType === "service_location_page")) {
+      if (source.location?.city && target.location?.city && source.location.city.toLowerCase() === target.location.city.toLowerCase()) {
+        score += 30;
+        factors.push({ name: `Local market blog connecting to ${target.location.city} service area`, weight: 30 });
+      }
     }
 
     // Determine tier
@@ -717,6 +780,47 @@ export class PageConnectivityEngine {
 
     const explanation = `Structural connectivity score (${score}/100) reflects crawl reachability, low orphan rate (${orphanNodes.length} orphans), zero broken links (${brokenLinks.length} broken), and natural topical clustering. This measures internal site discoverability, not Google rank.`;
 
+    // Compute dedicated Blog Internal Linking Metrics
+    const blogNodes = Array.from(this.nodes.values()).filter(
+      (n) => n.pageType === "blog_post" || n.pageType === "blog_page" || n.filePath.startsWith("blog/")
+    );
+    const blogHubNode = Array.from(this.nodes.values()).find(
+      (n) => n.pageType === "blog_hub" || n.filePath === "blog.html" || n.filePath === "blog/index.html"
+    );
+
+    let blogToServiceLinks = 0;
+    let blogToLocationLinks = 0;
+    let blogToBlogLinks = 0;
+    let brokenBlogLinks = 0;
+
+    for (const bNode of blogNodes) {
+      for (const link of bNode.outgoingLinks) {
+        const tgt = this.nodes.get(link.targetPageId) || this.nodesByPath.get(normalizeFilePath(link.targetFilePath));
+        if (!tgt) {
+          brokenBlogLinks++;
+        } else if (tgt.pageType === "service_page" || tgt.pageType === "service_hub") {
+          blogToServiceLinks++;
+        } else if (tgt.pageType === "location_page" || tgt.pageType === "service_location_page" || tgt.pageType === "location_hub") {
+          blogToLocationLinks++;
+        } else if (tgt.pageType === "blog_post" || tgt.pageType === "blog_page") {
+          blogToBlogLinks++;
+        }
+      }
+    }
+
+    const blogMetrics: BlogConnectivityMetrics = {
+      totalBlogPosts: blogNodes.length,
+      blogsWithIncoming: blogNodes.filter((b) => b.incomingLinks.length > 0).length,
+      blogsWithOutgoing: blogNodes.filter((b) => b.outgoingLinks.length > 0).length,
+      orphanBlogPosts: blogNodes.filter((b) => b.connectivityStatus === "orphan" || b.connectivityStatus === "unreachable").length,
+      weakBlogPosts: blogNodes.filter((b) => b.connectivityStatus === "weak").length,
+      brokenBlogLinks,
+      blogToServiceLinks,
+      blogToLocationLinks,
+      blogToBlogLinks,
+      blogHubConnected: Boolean(blogHubNode && blogHubNode.incomingLinks.length > 0),
+    };
+
     return {
       totalNodes: this.nodes.size,
       totalInternalLinks: totalLinks,
@@ -730,6 +834,7 @@ export class PageConnectivityEngine {
       connectivityScore: score,
       scoreExplanation: explanation,
       isCrawlHealthy: orphanNodes.length === 0 && brokenLinks.length === 0,
+      blogMetrics,
     };
   }
 
@@ -757,6 +862,26 @@ export class PageConnectivityEngine {
  */
 export function generateNaturalAnchors(target: PageRelationshipNode): string[] {
   const anchors: string[] = [];
+
+  if (target.pageType === "blog_post" || target.pageType === "blog_page") {
+    const cleanTitle = target.title.split("|")[0].trim();
+    anchors.push(cleanTitle);
+    anchors.push(`Read our guide: ${cleanTitle}`);
+    const svc = target.service || target.primaryKeyword;
+    if (svc && svc !== cleanTitle) {
+      anchors.push(`our guide on ${svc.toLowerCase()}`);
+      anchors.push(`troubleshooting ${svc.toLowerCase()}`);
+      anchors.push(`expert advice: ${cleanTitle}`);
+    }
+    return Array.from(new Set(anchors.filter((a) => a && a.length > 2)));
+  }
+
+  if (target.pageType === "blog_hub") {
+    anchors.push("Blog & Homeowner Guides");
+    anchors.push("Helpful Advice & Guides");
+    anchors.push("Homeowner Tips & Resources");
+    return anchors;
+  }
 
   const service = target.service || target.primaryKeyword || target.title.split("|")[0].trim();
   const city = target.location?.city;
@@ -835,8 +960,10 @@ export function buildConnectivityGraphFromHtmlFiles(
       pageType = "service_hub";
     } else if (cleanPath === "service-areas.html" || cleanPath === "areas/index.html") {
       pageType = "location_hub";
-    } else if (cleanPath.startsWith("blog/") || cleanPath === "blog.html") {
-      pageType = "blog_page";
+    } else if (cleanPath === "blog.html" || cleanPath === "blog/index.html") {
+      pageType = "blog_hub";
+    } else if (cleanPath.startsWith("blog/")) {
+      pageType = "blog_post";
     } else if (cleanPath === "about.html" || cleanPath.includes("about-us")) {
       pageType = "about_page";
     } else if (cleanPath === "contact.html" || cleanPath.includes("contact-us")) {
@@ -892,9 +1019,28 @@ export function buildConnectivityGraphFromHtmlFiles(
       service: detectedService,
       serviceCategory: projectMeta.primaryTrade,
       location: detectedCity ? { city: detectedCity } : undefined,
-      searchIntent: pageType === "service_page" || pageType === "service_location_page" ? "transactional" : "commercial",
-      parentPageId: pageType === "service_page" ? "services-hub" : pageType === "service_location_page" ? (detectedCity ? `loc-${detectedCity.toLowerCase().replace(/\s+/g, "-")}` : "areas-hub") : undefined,
-      hubPageId: pageType === "service_location_page" || pageType === "service_page" ? "services-hub" : undefined,
+      searchIntent:
+        pageType === "blog_post" || pageType === "blog_hub"
+          ? "informational"
+          : pageType === "service_page" || pageType === "service_location_page"
+          ? "transactional"
+          : "commercial",
+      parentPageId:
+        pageType === "blog_post"
+          ? "blog-hub"
+          : pageType === "blog_hub"
+          ? "home"
+          : pageType === "service_page"
+          ? "services-hub"
+          : pageType === "service_location_page"
+          ? (detectedCity ? `loc-${detectedCity.toLowerCase().replace(/\s+/g, "-")}` : "areas-hub")
+          : undefined,
+      hubPageId:
+        pageType === "blog_post"
+          ? "blog-hub"
+          : pageType === "service_location_page" || pageType === "service_page"
+          ? "services-hub"
+          : undefined,
       relatedServices: [],
       relatedLocations: [],
       incomingLinks: [],
@@ -903,7 +1049,12 @@ export function buildConnectivityGraphFromHtmlFiles(
       canonicalUrl,
       clickDepth: cleanPath === "index.html" ? 0 : -1,
       authorityFlow: 0,
-      importance: cleanPath === "index.html" ? 100 : pageType === "service_hub" || pageType === "location_hub" ? 85 : 70,
+      importance:
+        cleanPath === "index.html"
+          ? 100
+          : pageType === "service_hub" || pageType === "location_hub" || pageType === "blog_hub"
+          ? 85
+          : 70,
       connectivityStatus: "connected",
       statusReasons: [],
       recommendations: [],
@@ -1223,6 +1374,13 @@ export function enrichWebsiteConnectivity(
           engine.getNodeByPath("service-areas.html") ||
           engine.getNode("home") ||
           engine.getNodeByPath("index.html");
+      } else if (orphan.pageType === "blog_post" || orphan.pageType === "blog_page") {
+        candidateParent =
+          engine.getNode("blog-hub") ||
+          engine.getNodeByPath("blog.html") ||
+          engine.getNode("services-hub") ||
+          engine.getNode("home") ||
+          engine.getNodeByPath("index.html");
       } else {
         candidateParent = engine.getNode("home") || engine.getNodeByPath("index.html");
       }
@@ -1296,6 +1454,155 @@ export function enrichWebsiteConnectivity(
           }
         }
       }
+    }
+  }
+
+  // 2.5 Blog Architecture & Internal Linking Enrichment
+  const blogNodes = engine.getAllNodes().filter(
+    (n) => n.pageType === "blog_post" || n.pageType === "blog_page" || n.filePath.startsWith("blog/")
+  );
+  const blogHubNode = engine.getAllNodes().find(
+    (n) => n.pageType === "blog_hub" || n.filePath === "blog.html" || n.filePath === "blog/index.html"
+  );
+  const serviceNodes = engine.getAllNodes().filter(
+    (n) => n.pageType === "service_page" || n.pageType === "service_hub"
+  );
+
+  // A. Guarantee Hub <-> Blog Post bidirectional connections
+  if (blogHubNode && blogNodes.length > 0) {
+    const hubFile = fileMap.get(blogHubNode.filePath);
+    if (hubFile) {
+      let hubHtml = typeof hubFile.content === "string" ? hubFile.content : hubFile.content.toString("utf-8");
+      let hubModified = false;
+
+      for (const bNode of blogNodes) {
+        const relativeToPost = calculateRelativeHref(blogHubNode.filePath, bNode.filePath);
+        if (!hubHtml.includes(relativeToPost)) {
+          const { updatedHtml, injected } = injectContextualInternalLink(
+            hubHtml,
+            bNode.filePath,
+            blogHubNode.filePath,
+            bNode.title.split("|")[0].trim(),
+            `Comprehensive homeowner troubleshooting guide and preventative tips.`
+          );
+          if (injected) {
+            hubHtml = updatedHtml;
+            hubModified = true;
+          }
+        }
+      }
+
+      if (hubModified) {
+        fileMap.set(blogHubNode.filePath, { ...hubFile, content: hubHtml });
+      }
+    }
+
+    // Ensure index.html links to blog.html if present
+    const homeNode = engine.getNode("home") || engine.getNodeByPath("index.html");
+    if (homeNode) {
+      const homeFile = fileMap.get(homeNode.filePath);
+      if (homeFile) {
+        const homeHtml = typeof homeFile.content === "string" ? homeFile.content : homeFile.content.toString("utf-8");
+        const relToHub = calculateRelativeHref(homeNode.filePath, blogHubNode.filePath);
+        if (!homeHtml.includes(relToHub)) {
+          const { updatedHtml, injected } = injectContextualInternalLink(
+            homeHtml,
+            blogHubNode.filePath,
+            homeNode.filePath,
+            "Helpful Homeowner Guides & Tips",
+            "Explore expert diagnostic advice and preventative maintenance strategies."
+          );
+          if (injected) {
+            fileMap.set(homeNode.filePath, { ...homeFile, content: updatedHtml });
+          }
+        }
+      }
+    }
+  }
+
+  // B. Semantic Blog Post <-> Service Page Cross-Linking
+  for (const bNode of blogNodes) {
+    const bFile = fileMap.get(bNode.filePath);
+    if (!bFile) continue;
+    let bHtml = typeof bFile.content === "string" ? bFile.content : bFile.content.toString("utf-8");
+    let bModified = false;
+
+    // Find best matching service page based on relevance
+    let bestService: PageRelationshipNode | undefined;
+    let highestRel = 0;
+    for (const sNode of serviceNodes) {
+      const rel = engine.calculateRelevance(bNode, sNode);
+      if (rel.score > highestRel) {
+        highestRel = rel.score;
+        bestService = sNode;
+      }
+    }
+
+    if (!bestService && serviceNodes.length > 0) {
+      bestService = serviceNodes[0];
+    }
+
+    if (bestService) {
+      const relHref = calculateRelativeHref(bNode.filePath, bestService.filePath);
+      if (!bHtml.includes(relHref)) {
+        const srvAnchor = bestService.service || bestService.title.split("|")[0].trim();
+        const { updatedHtml, injected } = injectContextualInternalLink(
+          bHtml,
+          bestService.filePath,
+          bNode.filePath,
+          `professional ${srvAnchor.toLowerCase()} services`,
+          `If troubleshooting indicates complex utility wear, schedule licensed service immediately.`
+        );
+        if (injected) {
+          bHtml = updatedHtml;
+          bModified = true;
+        }
+      }
+
+      // Also ensure the service page links to this supporting guide
+      const sFile = fileMap.get(bestService.filePath);
+      if (sFile) {
+        const sHtml = typeof sFile.content === "string" ? sFile.content : sFile.content.toString("utf-8");
+        const relBack = calculateRelativeHref(bestService.filePath, bNode.filePath);
+        if (!sHtml.includes(relBack)) {
+          const guideAnchor = bNode.title.split("|")[0].trim();
+          const { updatedHtml: updatedSHtml, injected: sInjected } = injectContextualInternalLink(
+            sHtml,
+            bNode.filePath,
+            bestService.filePath,
+            `Read our guide: ${guideAnchor}`,
+            `Learn step-by-step diagnostic tips and common maintenance warning signs.`
+          );
+          if (sInjected) {
+            fileMap.set(bestService.filePath, { ...sFile, content: updatedSHtml });
+          }
+        }
+      }
+    }
+
+    // C. Sibling Blog Cross-Links (Link to another blog post if 2+ exist)
+    if (blogNodes.length >= 2) {
+      const sibling = blogNodes.find((other) => other.pageId !== bNode.pageId);
+      if (sibling) {
+        const siblingHref = calculateRelativeHref(bNode.filePath, sibling.filePath);
+        if (!bHtml.includes(siblingHref)) {
+          const { updatedHtml, injected } = injectContextualInternalLink(
+            bHtml,
+            sibling.filePath,
+            bNode.filePath,
+            sibling.title.split("|")[0].trim(),
+            `Related reading: Essential homeowner tips and cost prevention guide.`
+          );
+          if (injected) {
+            bHtml = updatedHtml;
+            bModified = true;
+          }
+        }
+      }
+    }
+
+    if (bModified) {
+      fileMap.set(bNode.filePath, { ...bFile, content: bHtml });
     }
   }
 
@@ -1375,14 +1682,27 @@ export function integrateNewPageIntoProject(
 
     scoredCandidates.sort((a, b) => b.score.score - a.score.score);
 
-    // Pick top 2-3 candidates (e.g. Same city service, Service hub, or Homepage)
+    // Pick top candidates
     const topCandidates = scoredCandidates.slice(0, 3);
+
+    // Ensure blog hub is included for new blog posts
+    if (normSlug.startsWith("blog/")) {
+      const blogHubNode = engine.getNode("blog-hub") || engine.getNodeByPath("blog.html");
+      if (blogHubNode && !topCandidates.some((c) => c.node.filePath === blogHubNode.filePath)) {
+        topCandidates.unshift({ node: blogHubNode, score: { score: 95, tier: "high", factors: [], rationale: "Blog Directory Hub" } });
+      }
+    }
+
     for (const candItem of topCandidates) {
       const candFile = fileMap.get(candItem.node.filePath);
       if (candFile) {
         const candHtml = typeof candFile.content === "string" ? candFile.content : candFile.content.toString("utf-8");
-        const anchor = `${options.serviceName}${options.locationCity ? ` in ${options.locationCity}` : ""}`;
-        const note = `Comprehensive diagnostic and installation support backed by our satisfaction guarantee.`;
+        const anchor = normSlug.startsWith("blog/")
+          ? options.newPageTitle.split("|")[0].trim()
+          : `${options.serviceName}${options.locationCity ? ` in ${options.locationCity}` : ""}`;
+        const note = normSlug.startsWith("blog/")
+          ? `Read our detailed homeowner guide and diagnostic tips.`
+          : `Comprehensive diagnostic and installation support backed by our satisfaction guarantee.`;
 
         const { updatedHtml, injected } = injectContextualInternalLink(
           candHtml,

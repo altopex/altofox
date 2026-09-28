@@ -419,8 +419,15 @@ export async function generateWebsiteZIP(
       if (orig && orig.content) {
         packagedFiles.push({ path, content: orig.content });
       } else {
-        const text = await entry.async("string");
-        packagedFiles.push({ path, content: text });
+        const ext = path.split(".").pop()?.toLowerCase() || "";
+        const isText = ["html", "css", "js", "json", "txt", "xml", "svg", "md"].includes(ext);
+        if (isText) {
+          const text = await entry.async("string");
+          packagedFiles.push({ path, content: text });
+        } else {
+          const u8 = await entry.async("uint8array");
+          packagedFiles.push({ path, content: Buffer.from(u8) });
+        }
       }
     }
   }
@@ -431,11 +438,16 @@ export async function generateWebsiteZIP(
     domain,
   });
 
-  const blob = await zip.generateAsync({
-    type: "blob",
-    compression: "DEFLATE",
-    compressionOptions: { level: 6 },
-  });
+  const blob = await Promise.race([
+    zip.generateAsync({
+      type: "blob",
+      compression: "DEFLATE",
+      compressionOptions: { level: 4 },
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Static website package generation timed out after 20 seconds")), 20000)
+    ),
+  ]);
 
   return {
     blob,

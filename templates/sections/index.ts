@@ -15,3 +15,4 @@ export * from "./ctaBanner";
 export * from "./contactForm";
 export * from "./footer";
 export * from "./mobileCallBar";
+export * from "./blogSection";

@@ -24,6 +24,10 @@ import {
   Languages,
   Server,
   Image as ImageIcon,
+  Plus,
+  Zap,
+  CheckSquare,
+  Layers,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
 
@@ -182,8 +186,16 @@ export function SettingsPanel({
     Record<string, { success: boolean; message: string }>
   >({});
 
+  // Provider capabilities & latency states
+  const [providerLatencies, setProviderLatencies] = useState<Record<string, number>>({});
+  const [providerCapabilities, setProviderCapabilities] = useState<
+    Record<string, { chatCompletion?: boolean; structuredJson?: boolean; systemInstructions?: boolean }>
+  >({});
+  const [smartFallback, setSmartFallback] = useState<boolean>(true);
+
   // Custom OpenAI-compatible Provider states
   const [providerTypeMode, setProviderTypeMode] = useState<"existing" | "custom">("existing");
+  const [customPreset, setCustomPreset] = useState<string>("custom");
   const [customProviderName, setCustomProviderName] = useState<string>("My Custom AI");
   const [customBaseUrl, setCustomBaseUrl] = useState<string>("https://example.com/v1");
   const [customApiKey, setCustomApiKey] = useState<string>("");
@@ -326,7 +338,94 @@ export function SettingsPanel({
     setPrefTheme(localStorage.getItem("altofox_pref_theme") || "modern-indigo");
     setPrefLanguage(localStorage.getItem("altofox_pref_language") || "English");
     setPrefQualityReview(localStorage.getItem("altofox_pref_quality_review") !== "false");
+
+    const storedFallback = localStorage.getItem("altofox_smart_fallback");
+    if (storedFallback !== null) {
+      setSmartFallback(storedFallback === "true");
+    }
+
+    // Fetch server profiles to sync tested latencies and capabilities
+    fetch("/api/keys")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.profiles)) {
+          const latencies: Record<string, number> = {};
+          const caps: Record<string, any> = {};
+          for (const prof of data.profiles) {
+            const key =
+              prof.presetId ||
+              (prof.id.includes("gemini")
+                ? "gemini"
+                : prof.id.includes("openai")
+                ? "openai"
+                : prof.id.includes("openrouter")
+                ? "openrouter"
+                : "custom");
+            if (prof.latencyMs) latencies[key] = prof.latencyMs;
+            if (prof.capabilities) caps[key] = prof.capabilities;
+          }
+          setProviderLatencies((prev) => ({ ...prev, ...latencies }));
+          setProviderCapabilities((prev) => ({ ...prev, ...caps }));
+          if (data.settings?.smartFallbackEnabled !== undefined) {
+            setSmartFallback(data.settings.smartFallbackEnabled);
+          }
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  const handleToggleSmartFallback = async (enabled: boolean) => {
+    setSmartFallback(enabled);
+    localStorage.setItem("altofox_smart_fallback", String(enabled));
+    try {
+      await fetch("/api/keys", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          settings: { smartFallbackEnabled: enabled },
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to sync smart fallback setting:", e);
+    }
+  };
+
+  const handleSelectCustomPreset = (presetKey: string) => {
+    setCustomPreset(presetKey);
+    const presets: Record<string, { name: string; baseUrl: string; model: string }> = {
+      deepseek: {
+        name: "DeepSeek",
+        baseUrl: "https://api.deepseek.com/v1",
+        model: "deepseek-chat",
+      },
+      groq: {
+        name: "Groq",
+        baseUrl: "https://api.groq.com/openai/v1",
+        model: "llama-3.3-70b-versatile",
+      },
+      ollama: {
+        name: "Ollama (Local)",
+        baseUrl: "http://localhost:11434/v1",
+        model: "llama3",
+      },
+      together: {
+        name: "Together AI",
+        baseUrl: "https://api.together.xyz/v1",
+        model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      },
+      custom: {
+        name: "My Custom AI",
+        baseUrl: "https://example.com/v1",
+        model: "model-name",
+      },
+    };
+    const p = presets[presetKey];
+    if (p) {
+      setCustomProviderName(p.name);
+      setCustomBaseUrl(p.baseUrl);
+      setCustomModelName(p.model);
+    }
+  };
 
   // Sync initial tab when panel opens
   useEffect(() => {
@@ -450,6 +549,12 @@ export function SettingsPanel({
           },
         }));
         setProviderStatuses((prev) => ({ ...prev, [providerId]: "connected" }));
+        if (data.latencyMs !== undefined) {
+          setProviderLatencies((prev) => ({ ...prev, [providerId]: data.latencyMs }));
+        }
+        if (data.capabilities) {
+          setProviderCapabilities((prev) => ({ ...prev, [providerId]: data.capabilities }));
+        }
       } else {
         setTestResults((prev) => ({
           ...prev,
@@ -596,6 +701,12 @@ export function SettingsPanel({
           latencyMs: data.latencyMs,
         });
         setProviderStatuses((prev) => ({ ...prev, custom: "connected" }));
+        if (data.latencyMs !== undefined) {
+          setProviderLatencies((prev) => ({ ...prev, custom: data.latencyMs }));
+        }
+        if (data.capabilities) {
+          setProviderCapabilities((prev) => ({ ...prev, custom: data.capabilities }));
+        }
       } else {
         setCustomTestResult({
           success: false,
@@ -1057,8 +1168,8 @@ export function SettingsPanel({
             {/* ================= TAB 1: AI MODELS ================= */}
             {activeTab === "models" && (
               <div className="space-y-5 animate-in fade-in duration-150">
-                {/* Default AI for generating Selector */}
-                <div className="bg-[#EEF2FF]/60 border border-[#C7D2FE] rounded-[12px] p-3.5 space-y-2">
+                {/* Default AI for generating Selector & Smart Fallback */}
+                <div className="bg-[#EEF2FF]/60 border border-[#C7D2FE] rounded-[12px] p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
                       <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
@@ -1089,7 +1200,7 @@ export function SettingsPanel({
                         ))}
                       </select>
                       <p className="text-[11px] text-[#64748B]">
-                        This model will build and optimize your static website when you run generation or SEO improvements.
+                        This model builds and optimizes your static website during generation and SEO audits.
                       </p>
                     </div>
                   ) : (
@@ -1097,6 +1208,33 @@ export function SettingsPanel({
                       No AI model connected yet. Add your API key to one of the providers below to get started.
                     </p>
                   )}
+
+                  {/* Smart Fallback Toggle */}
+                  <div className="pt-2 border-t border-[#C7D2FE]/70 flex items-center justify-between">
+                    <div className="space-y-0.5 pr-2">
+                      <div className="text-xs font-bold text-[#0F172A] flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Smart Multi-Provider Fallback</span>
+                      </div>
+                      <p className="text-[10px] text-[#64748B]">
+                        Automatically failover to secondary connected providers if your primary model hits rate limits, timeouts, or temporary outages.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSmartFallback(!smartFallback)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                        smartFallback ? "bg-[#4F46E5]" : "bg-slate-300"
+                      }`}
+                      aria-label="Toggle Smart Fallback"
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
+                          smartFallback ? "translate-x-4" : "translate-x-0"
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Local Storage Privacy Note */}
@@ -1185,8 +1323,18 @@ export function SettingsPanel({
                               </div>
                             </div>
 
-                            {/* Status Badge */}
-                            <div>
+                            {/* Badges: Active, Latency, Status */}
+                            <div className="flex items-center space-x-1.5">
+                              {defaultProvider === provider.id && isConnected && (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE]">
+                                  <span>★ Active</span>
+                                </span>
+                              )}
+                              {providerLatencies[provider.id] !== undefined && status === "connected" && (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <span>⚡ {providerLatencies[provider.id]}ms</span>
+                                </span>
+                              )}
                               {status === "connected" && (
                                 <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
@@ -1304,6 +1452,28 @@ export function SettingsPanel({
                               )}
                             </div>
 
+                            {/* Capabilities Pill Badges */}
+                            {providerCapabilities[provider.id] && (
+                              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                <span className="text-[10px] text-[#64748B] font-semibold">Capabilities:</span>
+                                {providerCapabilities[provider.id].chatCompletion && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Chat ✓
+                                  </span>
+                                )}
+                                {providerCapabilities[provider.id].structuredJson && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Structured JSON ✓
+                                  </span>
+                                )}
+                                {providerCapabilities[provider.id].systemInstructions && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                                    System Instructions ✓
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             {/* Inline Test Result Message */}
                             {testResult && (
                               <div
@@ -1322,7 +1492,7 @@ export function SettingsPanel({
                               </div>
                             )}
 
-                            {/* Action Buttons: Test, Save, Remove */}
+                            {/* Action Buttons: Test, Save, Use as Active, Remove */}
                             <div className="flex flex-wrap items-center gap-2 pt-1">
                               <button
                                 type="button"
@@ -1351,6 +1521,17 @@ export function SettingsPanel({
                                 <Check className="w-3.5 h-3.5" />
                                 <span>Save</span>
                               </button>
+
+                              {isConnected && defaultProvider !== provider.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDefaultAIChange(provider.id)}
+                                  className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] text-xs font-semibold transition"
+                                >
+                                  <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                                  <span>Use as Active</span>
+                                </button>
+                              )}
 
                               {isConnected && (
                                 <button
@@ -1382,13 +1563,23 @@ export function SettingsPanel({
                             Custom OpenAI-compatible
                           </h3>
                           <p className="text-[11px] text-[#64748B]">
-                            Connect any endpoint supporting the OpenAI API format
+                            Connect DeepSeek, Groq, Ollama, Together AI, or any custom endpoint
                           </p>
                         </div>
                       </div>
 
-                      {/* Status Badge */}
-                      <div>
+                      {/* Status & Latency Badges */}
+                      <div className="flex items-center space-x-1.5">
+                        {defaultProvider === "custom" && savedKeys["custom"] && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE]">
+                            <span>★ Active</span>
+                          </span>
+                        )}
+                        {providerLatencies["custom"] !== undefined && (
+                          <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span>⚡ {providerLatencies["custom"]}ms</span>
+                          </span>
+                        )}
                         {savedKeys["custom"] ? (
                           <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
                             <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
@@ -1404,6 +1595,35 @@ export function SettingsPanel({
                     </div>
 
                     <div className="p-3.5 sm:p-4 space-y-3.5">
+                      {/* Quick Presets */}
+                      <div className="space-y-1.5 pb-1">
+                        <label className="block text-xs font-semibold text-[#0F172A]">
+                          Quick Fill Preset
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[
+                            { id: "deepseek", label: "DeepSeek" },
+                            { id: "groq", label: "Groq" },
+                            { id: "ollama", label: "Ollama (Local)" },
+                            { id: "together", label: "Together AI" },
+                            { id: "custom", label: "Custom" },
+                          ].map((tmpl) => (
+                            <button
+                              key={tmpl.id}
+                              type="button"
+                              onClick={() => handleSelectCustomPreset(tmpl.id)}
+                              className={`px-2.5 py-1 text-[11px] font-semibold rounded-[6px] transition border ${
+                                customPreset === tmpl.id
+                                  ? "bg-[#EEF2FF] text-[#4F46E5] border-[#C7D2FE]"
+                                  : "bg-white text-slate-600 border-[#E2E8F0] hover:bg-slate-50"
+                              }`}
+                            >
+                              {tmpl.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
                       {/* Provider Name */}
                       <div>
                         <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -1518,6 +1738,28 @@ export function SettingsPanel({
                         </span>
                       </div>
 
+                      {/* Capabilities Badges */}
+                      {providerCapabilities["custom"] && (
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] text-[#64748B] font-semibold">Capabilities:</span>
+                          {providerCapabilities["custom"].chatCompletion && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Chat ✓
+                            </span>
+                          )}
+                          {providerCapabilities["custom"].structuredJson && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                              Structured JSON ✓
+                            </span>
+                          )}
+                          {providerCapabilities["custom"].systemInstructions && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                              System Instructions ✓
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Inline Test Result Message */}
                       {customTestResult && (
                         <div
@@ -1543,7 +1785,7 @@ export function SettingsPanel({
                         </div>
                       )}
 
-                      {/* Action Buttons: Test, Save, Remove */}
+                      {/* Action Buttons: Test, Save, Use as Active, Remove */}
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <button
                           type="button"
@@ -1572,6 +1814,17 @@ export function SettingsPanel({
                           <Check className="w-3.5 h-3.5" />
                           <span>Save Provider</span>
                         </button>
+
+                        {savedKeys["custom"] && defaultProvider !== "custom" && (
+                          <button
+                            type="button"
+                            onClick={() => handleDefaultAIChange("custom")}
+                            className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] text-xs font-semibold transition"
+                          >
+                            <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                            <span>Use as Active</span>
+                          </button>
+                        )}
 
                         {savedKeys["custom"] && (
                           <button

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
 import { generateWebsite } from "@/lib/ai/generate-website";
+import { getProviderProfile, listProviderProfiles } from "@/lib/ai/provider-manager";
 import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
 import {
   AI_CONTENT_SYSTEM_PROMPT,
@@ -202,15 +203,52 @@ export async function POST(req: NextRequest) {
 
     const providerType = provider as ProviderType;
 
-    // 1. Get credentials for the provider
-    let creds;
+    // 1. Get credentials for the provider (support active provider profile & providerId override)
+    let creds: any;
+    let resolvedProvider = provider;
     try {
-      creds = await getProviderCredentials(providerType, apiKey, baseUrl, model, organizationId, providerName);
+      const targetProviderId = body.providerId;
+      if (targetProviderId) {
+        const prof = await getProviderProfile(targetProviderId);
+        if (prof && prof.apiKey) {
+          creds = {
+            apiKey: prof.apiKey,
+            baseUrl: prof.baseUrl,
+            defaultModel: prof.model,
+            organizationId: prof.organizationId,
+            providerName: prof.name,
+          };
+          resolvedProvider = prof.presetId || prof.apiType || "custom";
+        }
+      }
+
+      if (!creds && !apiKey) {
+        const { profiles, settings } = await listProviderProfiles();
+        const active = profiles.find((p) => p.id === settings.activeProviderId && p.hasKey);
+        if (active) {
+          const fullProf = await getProviderProfile(active.id);
+          if (fullProf?.apiKey) {
+            creds = {
+              apiKey: fullProf.apiKey,
+              baseUrl: fullProf.baseUrl,
+              defaultModel: fullProf.model,
+              organizationId: fullProf.organizationId,
+              providerName: fullProf.name,
+            };
+            resolvedProvider = fullProf.presetId || fullProf.apiType || "custom";
+          }
+        }
+      }
+
+      if (!creds) {
+        creds = await getProviderCredentials(providerType, apiKey, baseUrl, model, organizationId, providerName);
+      }
+
       if (creds?.apiKey) {
         assembleOptions.providerCredentials = {
           apiKey: creds.apiKey,
           baseUrl: creds.baseUrl,
-          provider: providerType,
+          provider: resolvedProvider || providerType,
           model: model || creds.defaultModel,
         };
       }
@@ -261,6 +299,7 @@ export async function POST(req: NextRequest) {
         baseUrl: creds.baseUrl,
         organizationId: creds.organizationId,
         providerName: creds.providerName,
+        timeoutMs: 40000,
       });
 
       const parsed = extractAndParseJSON(rawText);
@@ -269,7 +308,7 @@ export async function POST(req: NextRequest) {
       console.warn("[Generate] Attempt 1 failed:", attempt1Err?.message || attempt1Err);
       lastError = attempt1Err?.message || String(attempt1Err);
 
-      // Attempt 2: Concise repair prompt with context
+      // Attempt 2: Concise repair prompt with context (25s budget)
       try {
         console.log(`[Generate] Attempt 2: Sending concise JSON repair prompt to ${providerType}...`);
         const repairPrompt = `The previous response was not valid JSON or was truncated.
@@ -296,6 +335,7 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
           baseUrl: creds.baseUrl,
           organizationId: creds.organizationId,
           providerName: creds.providerName,
+          timeoutMs: 25000,
         });
 
         const retryParsed = extractAndParseJSON(repairRaw);
@@ -305,14 +345,14 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
         console.warn("[Generate] Attempt 2 failed:", attempt2Err?.message || attempt2Err);
         lastError = attempt2Err?.message || String(attempt2Err);
 
-        // Attempt 3: Structured trade template engine with targeted data merging
+        // Attempt 3: Structured trade template engine with targeted data merging (guaranteed instant 0ms fallback)
         console.log("[Generate] Attempt 3: Using structured trade template engine with targeted data merging.");
         contentJSON = buildDefaultTradeContentJSON(websiteData, targetPages);
         generationMethod = "trade-template-engine";
       }
     }
 
-    // 3b. Optional Second AI Pass: "Quality Review"
+    // 3b. Optional Second AI Pass: "Quality Review" (25s budget)
     const enableQualityReview = body.qualityReview !== false && formData?.qualityReview !== false;
     let qualityReviewApplied = false;
 
@@ -330,6 +370,7 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
           baseUrl: creds.baseUrl,
           organizationId: creds.organizationId,
           providerName: creds.providerName,
+          timeoutMs: 25000,
         });
 
         const parsedReview = extractAndParseJSON(reviewRaw);
@@ -440,6 +481,7 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
         ? `Complete static website assembled successfully with two-pass Quality Review audit and real photos.`
         : `Complete static website assembled successfully with professional section templates and real photos.`,
       qualityReviewApplied,
+      generationMethod,
       provider: providerType,
       model: targetModel,
       createdAt: new Date().toISOString(),
