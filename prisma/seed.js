@@ -40,14 +40,77 @@ const templates = [
   },
 ];
 
+const bcrypt = require("bcryptjs");
+
 async function main() {
-  console.log("Updating and seeding local service templates...");
-  // Clear old templates so new local home service templates appear prominently
-  await prisma.template.deleteMany({});
+  console.log("Updating and seeding local service templates and user accounts...");
+
+  // 1. Seed Templates safely
   for (const t of templates) {
-    await prisma.template.create({ data: t });
+    const existing = await prisma.template.findFirst({ where: { title: t.title } });
+    if (!existing) {
+      await prisma.template.create({ data: t });
+    }
   }
-  console.log("Local service templates seeded successfully!");
+  console.log("✓ Local service templates verified.");
+
+  // 2. Seed Owner Account (russ@altopex.com)
+  const ownerEmail = "russ@altopex.com";
+  const ownerPassword = process.env.OWNER_PASSWORD || "AltofoxRuss2026!#";
+  const ownerHash = bcrypt.hashSync(ownerPassword, 10);
+
+  const existingOwner = await prisma.user.findUnique({ where: { email: ownerEmail } });
+  if (!existingOwner) {
+    await prisma.user.create({
+      data: {
+        id: "usr-owner-russ-altopex",
+        email: ownerEmail,
+        passwordHash: ownerHash,
+        fullName: "Russell",
+        role: "owner",
+        status: "approved",
+        companyName: "Altopex",
+        plan: "unlimited",
+        websiteLimit: 999999,
+      },
+    });
+    console.log("✓ Owner account seeded: russ@altopex.com");
+  } else {
+    await prisma.user.update({
+      where: { email: ownerEmail },
+      data: {
+        role: "owner",
+        status: "approved",
+        plan: "unlimited",
+        websiteLimit: 999999,
+        passwordHash: ownerHash,
+      },
+    });
+    console.log("✓ Owner account updated: russ@altopex.com");
+  }
+
+  // 3. Seed Secondary Team Account (team@ranklocal.site)
+  const teamEmail = "team@ranklocal.site";
+  const teamHash = bcrypt.hashSync("RankLocalTeam2026!#", 10);
+  const existingTeam = await prisma.user.findUnique({ where: { email: teamEmail } });
+  if (!existingTeam) {
+    await prisma.user.create({
+      data: {
+        id: "usr-team-editor-01",
+        email: teamEmail,
+        passwordHash: teamHash,
+        fullName: "RankLocal Editor",
+        role: "editor",
+        status: "approved",
+        companyName: "RankLocal Services",
+        plan: "starter",
+        websiteLimit: 5,
+      },
+    });
+    console.log("✓ Secondary user seeded: team@ranklocal.site");
+  } else {
+    console.log("✓ Secondary user verified: team@ranklocal.site");
+  }
 }
 
 main()
