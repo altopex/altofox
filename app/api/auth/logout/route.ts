@@ -2,8 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function POST(req: NextRequest) {
-  const response = NextResponse.json({ success: true, message: "Logged out successfully" });
+  const response = NextResponse.json(
+    { success: true, message: "Logged out successfully" },
+    { headers: corsHeaders }
+  );
   
   // Clear all auth cookies
   const cookieNames = ["ranklocal_token", "ranklocal_status", "altofox_token", "altofox_status"];

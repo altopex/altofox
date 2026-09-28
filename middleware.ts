@@ -19,6 +19,13 @@ const PUBLIC_FILE_EXTENSIONS = [
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
+  const host = req.headers.get("host") || "";
+
+  // 0. Canonical domain redirect for apex domain ranklocal.site -> www.ranklocal.site on page visits
+  if (host === "ranklocal.site" && !pathname.startsWith("/api") && req.method === "GET") {
+    const canonicalUrl = new URL(pathname + search, "https://www.ranklocal.site");
+    return NextResponse.redirect(canonicalUrl, 301);
+  }
 
   // 1. Skip static assets, Next internals, and favicon
   if (

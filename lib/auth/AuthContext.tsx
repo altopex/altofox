@@ -231,7 +231,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithPassword = async (email: string, password: string) => {
     try {
       // 1. Resilient server-side sign-in route (handles Supabase + local fallback with cookies)
-      const res = await fetch("/api/auth/login", {
+      const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+      const res = await fetch(`${baseUrl}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
@@ -253,7 +254,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || "Failed to sign in. Please try again." };
+      const msg = err?.message || "";
+      if (msg.toLowerCase().includes("failed to fetch")) {
+        return {
+          success: false,
+          error: "Connection error: Unable to reach authentication server. Please check your internet connection or try again.",
+        };
+      }
+      return { success: false, error: msg || "Failed to sign in. Please try again." };
     }
   };
 

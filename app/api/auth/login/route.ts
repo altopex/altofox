@@ -3,6 +3,19 @@ import { authenticateCredentials } from "@/lib/auth/auth-service";
 
 export const dynamic = "force-dynamic";
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -11,7 +24,7 @@ export async function POST(req: NextRequest) {
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: "Please provide both email and password." },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -20,17 +33,20 @@ export async function POST(req: NextRequest) {
     if (!result.success) {
       return NextResponse.json(
         { success: false, error: result.error },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       );
     }
 
-    const response = NextResponse.json({
-      success: true,
-      user: result.user,
-      session: result.session,
-      profile: result.profile,
-      source: result.source,
-    });
+    const response = NextResponse.json(
+      {
+        success: true,
+        user: result.user,
+        session: result.session,
+        profile: result.profile,
+        source: result.source,
+      },
+      { headers: corsHeaders }
+    );
 
     const isSecure = process.env.NODE_ENV === "production";
     const token = result.session.access_token;
@@ -67,7 +83,7 @@ export async function POST(req: NextRequest) {
     console.error("[Login API] Unexpected error:", error);
     return NextResponse.json(
       { success: false, error: "An unexpected error occurred during sign-in." },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
