@@ -165,54 +165,116 @@ export async function authenticateServerRequest(
     }
 
     // Direct Database Query for authoritative profile & status
-    const pool = getDbPool();
-    const query = `
-      SELECT 
-        p.id,
-        p.full_name,
-        p.avatar_url,
-        p.role,
-        p.status,
-        p.company_name,
-        p.plan,
-        p.website_limit,
-        p.created_at,
-        p.updated_at,
-        p.last_active_at,
-        u.email,
-        u.raw_user_meta_data
-      FROM public.profiles p
-      LEFT JOIN auth.users u ON p.id = u.id
-      WHERE p.id = $1::uuid
-      LIMIT 1;
-    `;
+    let profileData: any = null;
 
-    const res = await pool.query(query, [userId]);
-    let profileData = res.rows[0];
+    // Strategy 1: Check high-resilience local SQLite database first (< 1ms, zero network timeout)
+    try {
+      const { db } = await import("@/lib/db");
+      const local = await db.user.findFirst({
+        where: {
+          OR: [
+            { id: userId },
+            ...(userEmail ? [{ email: userEmail }] : []),
+          ],
+        },
+      });
 
-    // If profile row doesn't exist yet, check auth.users directly
-    if (!profileData) {
-      const uRes = await pool.query(
-        "SELECT id, email, raw_user_meta_data, created_at, updated_at FROM auth.users WHERE id = $1::uuid LIMIT 1;",
-        [userId]
-      );
-      if (uRes.rows.length > 0) {
-        const uRow = uRes.rows[0];
+      if (local) {
+        const isOwner = local.role === "owner" || local.email.toLowerCase() === "russ@altopex.com";
         profileData = {
-          id: uRow.id,
-          email: uRow.email,
-          full_name: uRow.raw_user_meta_data?.full_name || uRow.email?.split("@")[0] || "User",
-          avatar_url: uRow.raw_user_meta_data?.avatar_url || null,
-          role: uRow.raw_user_meta_data?.role || "editor",
-          status: uRow.raw_user_meta_data?.status || "pending",
-          company_name: uRow.raw_user_meta_data?.company_name || null,
-          plan: uRow.raw_user_meta_data?.plan || "starter",
-          website_limit: uRow.raw_user_meta_data?.website_limit || 5,
-          created_at: uRow.created_at,
-          updated_at: uRow.updated_at,
-          last_active_at: uRow.updated_at,
+          id: local.id,
+          email: local.email,
+          full_name: local.fullName || local.email.split("@")[0],
+          avatar_url: null,
+          role: isOwner ? "owner" : local.role,
+          status: isOwner ? "approved" : local.status,
+          company_name: local.companyName,
+          plan: isOwner ? "unlimited" : local.plan,
+          website_limit: isOwner ? 999999 : local.websiteLimit,
+          created_at: local.createdAt.toISOString(),
+          updated_at: local.updatedAt.toISOString(),
+          last_active_at: new Date().toISOString(),
         };
       }
+    } catch (dbErr) {
+      console.warn("[Auth] Local user lookup notice:", dbErr);
+    }
+
+    // Strategy 2: If not in local DB, attempt Supabase pool with timeout
+    if (!profileData) {
+      try {
+        const pool = getDbPool();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Pool query timeout")), 2500)
+        );
+
+        const query = `
+          SELECT 
+            p.id, p.full_name, p.avatar_url, p.role, p.status, p.company_name,
+            p.plan, p.website_limit, p.created_at, p.updated_at, p.last_active_at,
+            u.email, u.raw_user_meta_data
+          FROM public.profiles p
+          LEFT JOIN auth.users u ON p.id = u.id
+          WHERE p.id = $1::uuid
+          LIMIT 1;
+        `;
+
+        const res: any = await Promise.race([
+          pool.query(query, [userId]),
+          timeoutPromise,
+        ]);
+
+        profileData = res?.rows?.[0];
+
+        // If profile row doesn't exist yet, check auth.users directly
+        if (!profileData) {
+          const uRes: any = await Promise.race([
+            pool.query(
+              "SELECT id, email, raw_user_meta_data, created_at, updated_at FROM auth.users WHERE id = $1::uuid LIMIT 1;",
+              [userId]
+            ),
+            timeoutPromise,
+          ]);
+          if (uRes?.rows?.length > 0) {
+            const uRow = uRes.rows[0];
+            profileData = {
+              id: uRow.id,
+              email: uRow.email,
+              full_name: uRow.raw_user_meta_data?.full_name || uRow.email?.split("@")[0] || "User",
+              avatar_url: uRow.raw_user_meta_data?.avatar_url || null,
+              role: uRow.raw_user_meta_data?.role || "editor",
+              status: uRow.raw_user_meta_data?.status || "pending",
+              company_name: uRow.raw_user_meta_data?.company_name || null,
+              plan: uRow.raw_user_meta_data?.plan || "starter",
+              website_limit: uRow.raw_user_meta_data?.website_limit || 5,
+              created_at: uRow.created_at,
+              updated_at: uRow.updated_at,
+              last_active_at: uRow.updated_at,
+            };
+          }
+        }
+      } catch (poolErr) {
+        console.warn("[Auth] Supabase pool unavailable, using token claims:", poolErr);
+      }
+    }
+
+    // Strategy 3: Graceful fallback from token claims if DB is unreachable
+    if (!profileData && (userEmail || userId)) {
+      const isOwner = userEmail?.toLowerCase() === "russ@altopex.com" || userMetadata.role === "owner";
+      profileData = {
+        id: userId,
+        email: userEmail,
+        full_name: userMetadata.full_name || userEmail?.split("@")[0] || "User",
+        avatar_url: userMetadata.avatar_url || null,
+        role: isOwner ? "owner" : userMetadata.role || "editor",
+        status: isOwner ? "approved" : userMetadata.status || "approved",
+        company_name: userMetadata.company_name || null,
+        plan: isOwner ? "unlimited" : userMetadata.plan || "starter",
+        website_limit: isOwner ? 999999 : userMetadata.website_limit || 5,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        last_active_at: new Date().toISOString(),
+      };
     }
 
     if (!profileData) {

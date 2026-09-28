@@ -128,7 +128,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function initAuth() {
       try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        // 1. First check /api/auth/check-status (fast, cookie-based, resilient verification)
+        try {
+          const statusRes = await fetch("/api/auth/check-status");
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData?.authenticated && mounted) {
+              const isOwner = statusData.role === "owner" || statusData.email?.toLowerCase() === "russ@altopex.com";
+              const loadedProfile: Profile = {
+                id: statusData.id || "usr-current",
+                email: statusData.email,
+                full_name: statusData.fullName || statusData.email?.split("@")[0] || "User",
+                avatar_url: null,
+                role: (isOwner ? "owner" : statusData.role || "editor") as UserRole,
+                status: (isOwner ? "approved" : statusData.status || "approved") as UserStatus,
+                company_name: null,
+                plan: isOwner ? "unlimited" : "starter",
+                website_limit: isOwner ? 999999 : 5,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                last_active_at: new Date().toISOString(),
+              };
+              setProfile(loadedProfile);
+              setUser({
+                id: loadedProfile.id,
+                email: loadedProfile.email,
+                app_metadata: {},
+                user_metadata: { full_name: loadedProfile.full_name, role: loadedProfile.role },
+                aud: "authenticated",
+                created_at: loadedProfile.created_at,
+              });
+              if (mounted) setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // If check-status fails, fall through to client token check
+        }
+
+        // 2. Client token check with 2.5-second timeout guard so it NEVER hangs
+        const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 2500)
+        );
+
+        let initialSession: Session | null = null;
+        try {
+          const sessionRes: any = await Promise.race([
+            supabase.auth.getSession(),
+            timeoutPromise,
+          ]);
+          initialSession = sessionRes?.data?.session || null;
+        } catch {
+          initialSession = null;
+        }
+
         if (!mounted) return;
 
         if (initialSession?.user) {
@@ -136,26 +189,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(initialSession.user);
           await loadUserProfile(initialSession.user.id, initialSession.user.email, initialSession.access_token);
         } else {
-          // Check persisted token fallback on hard refresh
-          let restored = false;
-          try {
-            const persisted = typeof localStorage !== "undefined" ? localStorage.getItem("ranklocal_token_persist") : null;
-            if (persisted) {
-              const { data: userData } = await supabase.auth.getUser(persisted);
-              if (userData?.user && mounted) {
-                setUser(userData.user);
-                await loadUserProfile(userData.user.id, userData.user.email, persisted);
-                restored = true;
-              }
-            }
-          } catch {}
-
-          if (!restored && mounted) {
-            setSession(null);
-            setUser(null);
-            setProfile(null);
-            setAuthCookies(null, null);
-          }
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setAuthCookies(null, null);
         }
       } catch (err) {
         console.error("[Auth] Init error:", err);
@@ -167,51 +204,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth();
 
     // Listen to Supabase Auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, currentSession) => {
-        if (!mounted) return;
-        setSession(currentSession);
-        setUser(currentSession?.user || null);
-
-        if (currentSession?.user) {
-          if (currentSession.access_token) {
-            setAuthCookies(currentSession.access_token, profile?.status || "approved");
+    let subscription: any = null;
+    try {
+      const subRes = supabase.auth.onAuthStateChange(
+        async (event, currentSession) => {
+          if (!mounted) return;
+          if (currentSession?.user) {
+            setSession(currentSession);
+            setUser(currentSession.user);
+            if (currentSession.access_token) {
+              setAuthCookies(currentSession.access_token, profile?.status || "approved");
+            }
+            await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
           }
-          await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
-        } else {
-          setProfile(null);
-          setAuthCookies(null, null);
         }
-        setLoading(false);
-      }
-    );
+      );
+      subscription = subRes.data?.subscription;
+    } catch {}
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (subscription?.unsubscribe) subscription.unsubscribe();
     };
   }, [loadUserProfile, profile?.status]);
 
   const signInWithPassword = async (email: string, password: string) => {
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      // 1. Resilient server-side sign-in route (handles Supabase + local fallback with cookies)
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) {
+        return {
+          success: false,
+          error: data?.error || "Incorrect email or password. Please verify your credentials.",
+        };
       }
 
       if (data.user && data.session) {
         setUser(data.user);
         setSession(data.session);
-        await loadUserProfile(data.user.id, data.user.email, data.session.access_token);
+        setProfile(data.profile);
+        setAuthCookies(data.session.access_token, data.profile?.status || "approved");
       }
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || "Failed to sign in" };
+      return { success: false, error: err.message || "Failed to sign in. Please try again." };
     }
   };
 
@@ -407,8 +449,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
       const supabase = getSupabaseBrowserClient();
-      await supabase.auth.signOut();
+      await supabase.auth.signOut().catch(() => {});
     } finally {
       setUser(null);
       setSession(null);

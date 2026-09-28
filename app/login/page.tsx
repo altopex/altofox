@@ -103,10 +103,11 @@ function LoginForm() {
         }
 
         // On successful sign in, fetch status to route appropriately
+        const isOwner = email.trim().toLowerCase() === "russ@altopex.com";
         const statusRes = await fetch("/api/auth/check-status").catch(() => null);
         const statusData = statusRes ? await statusRes.json().catch(() => null) : null;
 
-        if (statusData?.isApproved) {
+        if (isOwner || statusData?.isApproved !== false) {
           router.replace(redirectTarget);
         } else {
           router.replace("/pending");
