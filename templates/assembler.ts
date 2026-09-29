@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { SiteContentJSON, PageContentJSON, SectionJSON } from "../lib/generator/content-schema";
-import { Theme } from "../lib/themes";
+import { Theme, buildGoogleFontsUrl } from "../lib/themes";
 import { detectTradeCategory, resolvePhoto } from "../lib/photos/photo-service";
 import { resolveStockPhoto, buildCreditsTxt, StockPhoto } from "../lib/photos/stock-service";
 import { findNicheByIndustry } from "../niches";
@@ -149,7 +149,7 @@ function buildHead(
   <!-- Google Fonts: ${theme.fonts.heading} & ${theme.fonts.body} -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=${headingFont}:wght@500;600;700;800&family=${bodyFont}:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="${buildGoogleFontsUrl(theme.fonts.heading, theme.fonts.body)}" rel="stylesheet">
 
   <!-- Design System CSS -->
   <link rel="stylesheet" href="${cssHref}">

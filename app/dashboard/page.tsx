@@ -128,6 +128,12 @@ const BlogManager = nextDynamic(
   () => import("@/components/BlogManager").then((mod) => mod.BlogManager),
   { ssr: false }
 );
+
+const ThemesGallery = nextDynamic(
+  () => import("@/components/ThemesGallery").then((mod) => mod.ThemesGallery),
+  { ssr: false }
+);
+
 import { auditPageSEO, suggestKeywordsForPage } from "@/lib/seo/on-page-scorer";
 import { SavedProject, ProjectKeywordItem } from "@/lib/storage/project-types";
 import {
@@ -3903,9 +3909,77 @@ export default function DashboardPage() {
     <AppShell
       currentTab={navTab}
       projectsCount={savedProjectsList.length}
+      hasActiveProject={Boolean(currentProject || activeSavedProject)}
+      onShowNotice={(msg) => {
+        addToast({
+          type: "info",
+          title: "Feature Notice",
+          message: msg,
+        });
+      }}
       onNavigate={(tab) => {
         if (tab === "settings") {
+          handleOpenSettings("preferences");
+        } else if (tab === "settings-ai") {
           handleOpenSettings("models");
+        } else if (tab === "new-website") {
+          setNavTab("projects");
+          setViewMode("builder");
+          setCurrentProject(null);
+          setCurrentStep(1);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "themes") {
+          setNavTab("themes");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "preview") {
+          if (currentProject) {
+            setNavTab("projects");
+            setViewMode("builder");
+          } else if (savedProjectsList.length > 0) {
+            const mostRecent = savedProjectsList[0];
+            const projData: ProjectData = {
+              projectId: mostRecent.id,
+              name: mostRecent.name,
+              notes: mostRecent.formData?.notes,
+              provider: "anthropic",
+              model: "claude-3-5-sonnet",
+              themeName: mostRecent.theme?.name || "Modern Pro",
+              websiteDomain: mostRecent.formData?.websiteDomain || `${mostRecent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`,
+              files: mostRecent.files,
+              photos: [],
+            };
+            setCurrentProject(projData);
+            setActiveSavedProject(mostRecent);
+            setNavTab("projects");
+            setViewMode("builder");
+          } else {
+            addToast({
+              type: "info",
+              title: "No Project Loaded",
+              message: "Start building a website or open an existing project to view live preview.",
+            });
+            setNavTab("projects");
+            setViewMode("builder");
+            setCurrentProject(null);
+            setCurrentStep(1);
+          }
+        } else if (tab === "linking") {
+          if (activeSavedProject) {
+            setNavTab("projects");
+            setViewMode("manager");
+          } else if (savedProjectsList.length > 0) {
+            setActiveSavedProject(savedProjectsList[0]);
+            setNavTab("projects");
+            setViewMode("manager");
+          } else {
+            addToast({
+              type: "info",
+              title: "Internal Linking Tool",
+              message: "Save or open a website to inspect and optimize internal link topology.",
+            });
+            setNavTab("projects");
+            setViewMode("dashboard");
+          }
         } else {
           setNavTab(tab);
           if (tab === "projects") {
@@ -3996,7 +4070,31 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* TAB 4: PROJECTS / BUILDER WORKSPACE */}
+      {/* TAB 4: THEMES GALLERY */}
+      {navTab === "themes" && (
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+          <ErrorBoundary fallbackTitle="Themes Gallery Encountered an Issue">
+            <ThemesGallery
+              selectedThemeId={selectedThemeId}
+              onSelectAndBuild={(themeId) => {
+                setSelectedThemeId(themeId);
+                setNavTab("projects");
+                setViewMode("builder");
+                setCurrentProject(null);
+                setCurrentStep(1);
+                addToast({
+                  type: "success",
+                  title: "Theme Selected",
+                  message: `Configuring website with "${getThemeById(themeId).name}". Enter business details below to generate.`,
+                });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            />
+          </ErrorBoundary>
+        </div>
+      )}
+
+      {/* TAB 5: PROJECTS / BUILDER WORKSPACE */}
       {navTab === "projects" && (
         <div className="flex-1 flex flex-col w-full min-h-0">
           {viewMode === "dashboard" ? (

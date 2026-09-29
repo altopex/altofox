@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Theme, ThemeColors } from "@/lib/themes";
+import { Theme, ThemeColors, buildGoogleFontsUrl } from "@/lib/themes";
+import { Phone, Shield, Star, CheckCircle, ArrowRight } from "lucide-react";
 
 interface ThemeMiniPreviewProps {
   theme: Theme;
@@ -9,241 +10,321 @@ interface ThemeMiniPreviewProps {
 }
 
 export function ThemeMiniPreview({ theme, colors }: ThemeMiniPreviewProps) {
-  const activeColors = colors || theme.colors;
+  const c = colors || theme.colors;
+  const isDark = c.background === "#0F172A" || c.background === "#111827" || c.background.toLowerCase().startsWith("#0") || c.background.toLowerCase().startsWith("#1");
+  const isSharp = theme.borderRadius === "2px" || theme.borderRadius === "4px" || theme.borderRadius === "6px";
+  const isExtraRound = theme.borderRadius === "20px" || theme.borderRadius === "24px" || theme.borderRadius === "16px";
 
-  // Background styling based on theme identity
-  const getHeroBackground = () => {
-    if (theme.id === "bold-conversion" || theme.id === "bold-trade") {
-      return "bg-[#0B132B]";
-    }
-    if (theme.id === "split-hero") {
-      return "bg-gradient-to-r from-[#EFF6FF] via-[#F8FAFC] to-[#DBEAFE]";
-    }
-    if (theme.id === "premium-local" || theme.id === "luxury-elegant") {
-      return "bg-[#FAFAF9]";
-    }
-    if (theme.id === "editorial-modern") {
-      return "bg-gradient-to-br from-[#F8FAFC] to-[#EEF2FF]";
-    }
-    if (theme.id === "clean-minimal" || theme.id === "minimal-mono") {
-      return "bg-[#FFFFFF]";
-    }
-    if (theme.id === "trust-first") {
-      return "bg-gradient-to-b from-[#F0F9FF] to-[#FFFFFF]";
-    }
-    if (theme.id === "modern-service-grid") {
-      return "bg-gradient-to-b from-[#E0F2FE] via-[#F8FAFC] to-[#FFFFFF]";
-    }
-    if (theme.id === "contemporary-soft" || theme.id === "clean-medical" || theme.id === "warm-friendly") {
-      return "bg-[#F0FDFA]";
-    }
-    if (theme.id === "high-contrast-modern") {
-      return "bg-[#FFFFFF]";
-    }
-    return "bg-gradient-to-r from-[#EFF6FF] to-[#DBEAFE]";
-  };
-
-  const isDarkHero = theme.id === "bold-conversion" || theme.id === "bold-trade";
-  const isHighContrast = theme.id === "high-contrast-modern";
-  const isMinimal = theme.id === "clean-minimal" || theme.id === "minimal-mono";
-  const isSoft = theme.id === "contemporary-soft" || theme.id === "clean-medical" || theme.id === "warm-friendly";
+  // Representative sample trade names for the theme
+  const tradeSample = theme.bestFor[0] || "Contractor";
+  const tradePrefix = theme.tradeSeoPrefix || "Local Specialist";
 
   return (
     <div
-      className={`w-full h-32 sm:h-36 overflow-hidden flex flex-col shadow-inner select-none pointer-events-none transition-all ${
-        isSoft ? "rounded-[16px]" : theme.borderRadius === "4px" || isMinimal ? "rounded-[4px]" : "rounded-[10px]"
-      } ${isHighContrast ? "border-2 border-black" : "border border-black/10"}`}
-      style={{ backgroundColor: activeColors.background }}
+      className="w-full rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col text-[11px] leading-tight select-none transition-all duration-200"
+      style={{
+        backgroundColor: c.background,
+        color: c.text,
+        fontFamily: `'${theme.fonts.body}', -apple-system, BlinkMacSystemFont, sans-serif`,
+      }}
     >
-      {/* Mini Top Emergency Bar if applicable */}
-      {theme.layoutStructure?.headerVariant === "emergency-bar" && (
-        <div className="h-3 bg-[#0B132B] px-2 flex items-center justify-between text-[6px] font-bold text-amber-300">
-          <span>⚡ 24/7 DISPATCH</span>
-          <span className="text-white">CALL NOW</span>
-        </div>
-      )}
+      {/* Dynamic Font Import */}
+      <link rel="stylesheet" href={buildGoogleFontsUrl(theme.fonts.heading, theme.fonts.body)} />
 
-      {/* Mini Browser Bar */}
+      {/* 1. Mini Top Utility Bar (for emergency trades or standard topbar) */}
       <div
-        className="h-5 px-2 flex items-center justify-between border-b shrink-0"
+        className="px-2.5 py-1 flex items-center justify-between text-[9px] font-semibold tracking-wide border-b"
         style={{
-          backgroundColor: isDarkHero ? "#070E20" : isMinimal ? "#FFFFFF" : isHighContrast ? "#F8FAFC" : "#FFFFFF",
-          borderColor: isDarkHero ? "rgba(255,255,255,0.1)" : isHighContrast ? "#000000" : "#E2E8F0",
+          backgroundColor: c.secondary,
+          color: "#FFFFFF",
+          borderColor: "rgba(255,255,255,0.08)",
         }}
       >
-        {/* Browser Dots */}
-        <div className="flex items-center space-x-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+        <span className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>24/7 Dispatch Available</span>
+        </span>
+        <span className="font-bold flex items-center gap-1 opacity-90">
+          <Phone className="w-2.5 h-2.5" />
+          <span>(555) 123-4567</span>
+        </span>
+      </div>
+
+      {/* 2. Mini Site Header */}
+      <div
+        className="px-2.5 py-1.5 flex items-center justify-between border-b"
+        style={{
+          backgroundColor: c.surface,
+          borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+        }}
+      >
+        {/* Brand */}
+        <div className="flex items-center gap-1.5">
+          <div
+            className="w-4 h-4 flex items-center justify-center font-black text-[9px] text-white"
+            style={{
+              backgroundColor: c.primary,
+              borderRadius: isSharp ? "2px" : isExtraRound ? "9999px" : "4px",
+            }}
+          >
+            {tradeSample.charAt(0)}
+          </div>
+          <span
+            className="font-bold text-[11px] tracking-tight truncate max-w-[110px]"
+            style={{
+              fontFamily: `'${theme.fonts.heading}', sans-serif`,
+              color: c.secondary,
+            }}
+          >
+            Dallas {tradeSample}
+          </span>
         </div>
 
-        {/* Tiny Brand & Navigation */}
-        <div className="flex items-center space-x-1.5">
-          <span
-            className={`w-2 h-2 inline-block shrink-0 ${isSoft ? "rounded-full" : "rounded-xs"}`}
-            style={{ backgroundColor: activeColors.primary }}
-          />
-          <div className="flex items-center space-x-1 opacity-70">
-            <span
-              className="w-4 h-1 rounded-full inline-block"
-              style={{ backgroundColor: isDarkHero ? "#94A3B8" : "#94A3B8" }}
-            />
-            <span
-              className="w-4 h-1 rounded-full inline-block"
-              style={{ backgroundColor: isDarkHero ? "#94A3B8" : "#CBD5E1" }}
-            />
-          </div>
-          {/* Mini Phone CTA Pill */}
-          <span
-            className="w-6 h-2 text-[7px] font-bold text-white flex items-center justify-center shadow-2xs"
-            style={{
-              backgroundColor: isHighContrast ? "#EA580C" : activeColors.primary,
-              borderRadius: isSoft ? "9999px" : theme.borderRadius === "4px" ? "2px" : "4px",
-            }}
-          />
+        {/* Nav links */}
+        <div className="hidden sm:flex items-center gap-2 text-[9px] font-medium" style={{ color: c.muted }}>
+          <span>Services</span>
+          <span>Areas</span>
+          <span>Reviews</span>
+        </div>
+
+        {/* Header CTA Button */}
+        <div
+          className="px-2 py-0.5 text-[9px] font-bold text-white flex items-center gap-1 shrink-0"
+          style={{
+            backgroundColor: c.primary,
+            borderRadius: theme.borderRadius || "6px",
+          }}
+        >
+          <span>Call Now</span>
         </div>
       </div>
 
-      {/* Mini Hero Area */}
-      <div className={`px-3 py-2 flex-1 flex flex-col justify-between ${getHeroBackground()}`}>
-        <div className="flex items-start justify-between gap-2">
-          {/* Hero Left: Headlines & Button */}
-          <div className="flex-1 space-y-1">
-            {/* Pill badge */}
+      {/* 3. Mini Hero Section */}
+      <div
+        className="p-3 border-b relative"
+        style={{
+          background: isDark
+            ? `linear-gradient(135deg, ${c.surface} 0%, ${c.background} 100%)`
+            : `linear-gradient(135deg, ${c.surface} 0%, rgba(var(--primary-rgb, 99, 102, 241), 0.04) 100%)`,
+          borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+        }}
+      >
+        <div className="grid grid-cols-12 gap-2 items-center">
+          {/* Left Column: Headlines & CTA */}
+          <div className="col-span-8 space-y-1.5">
+            {/* Urgency Badge */}
             <div
-              className={`h-1.5 ${isSoft ? "w-12 rounded-full" : "w-10 rounded"}`}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-bold tracking-wider uppercase"
               style={{
-                backgroundColor: activeColors.accent,
-                opacity: isDarkHero ? 0.9 : 0.85,
+                backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.04)",
+                color: c.primary,
+                borderRadius: isExtraRound ? "9999px" : "4px",
+                border: `1px solid ${c.primary}33`,
               }}
-            />
+            >
+              <span>⚡</span>
+              <span>Dallas Top-Rated {tradeSample}</span>
+            </div>
 
-            {/* Main Headline Bar */}
+            {/* Hero Main Heading in theme font */}
             <div
-              className={`h-2.5 ${isMinimal ? "w-20" : "w-24"} rounded`}
+              className="text-[13px] sm:text-[14px] font-extrabold leading-snug tracking-tight"
               style={{
-                backgroundColor: isDarkHero ? "#FFFFFF" : isHighContrast ? "#000000" : activeColors.text,
-                borderRadius: isSoft ? "4px" : theme.borderRadius === "2px" || isMinimal ? "1px" : "3px",
+                fontFamily: `'${theme.fonts.heading}', sans-serif`,
+                color: isDark ? "#FFFFFF" : c.secondary,
               }}
-            />
+            >
+              Expert {tradePrefix} in Dallas, TX
+            </div>
 
-            {/* Subtitle Bar */}
-            <div
-              className="h-1 rounded w-16"
-              style={{
-                backgroundColor: isDarkHero ? "#94A3B8" : activeColors.muted,
-                opacity: 0.7,
-              }}
-            />
+            {/* Subtitle */}
+            <div className="text-[9px] leading-tight line-clamp-1" style={{ color: c.muted }}>
+              Immediate emergency dispatch, upfront flat pricing & 100% guarantee.
+            </div>
 
-            {/* Mini CTA Button */}
-            <div className="pt-1 flex items-center space-x-1.5">
+            {/* Action Buttons Row */}
+            <div className="flex items-center gap-1.5 pt-0.5">
               <div
-                className="h-3.5 px-2 flex items-center justify-center shadow-xs"
+                className="px-2 py-1 text-[9px] font-bold text-white flex items-center gap-1 shadow-2xs"
                 style={{
-                  backgroundColor: isHighContrast ? "#000000" : activeColors.primary,
-                  border: isHighContrast ? "1px solid #EA580C" : undefined,
-                  borderRadius: isSoft
-                    ? "9999px"
-                    : theme.borderRadius === "2px" || isMinimal
-                    ? "2px"
-                    : theme.borderRadius === "6px"
-                    ? "3px"
-                    : "6px",
+                  backgroundColor: c.primary,
+                  borderRadius: theme.borderRadius || "6px",
                 }}
               >
-                <span className="w-5 h-1 bg-white rounded-full inline-block" />
+                <Phone className="w-2.5 h-2.5" />
+                <span>(214) 555-0198</span>
               </div>
-
-              {/* Secondary ghost CTA */}
               <div
-                className="h-3.5 px-1.5 border flex items-center justify-center"
+                className="px-1.5 py-1 text-[9px] font-semibold border flex items-center gap-0.5"
                 style={{
-                  borderColor: isDarkHero ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.15)",
-                  borderRadius: isSoft ? "9999px" : "3px",
+                  borderColor: isDark ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.15)",
+                  color: isDark ? "#FFFFFF" : c.secondary,
+                  borderRadius: theme.borderRadius || "6px",
                 }}
               >
-                <span
-                  className="w-3 h-0.5 rounded-full inline-block"
-                  style={{
-                    backgroundColor: isDarkHero ? "#CBD5E1" : activeColors.muted,
-                  }}
-                />
+                <span>Free Quote</span>
               </div>
             </div>
           </div>
 
-          {/* Hero Right: Mini Visual Card */}
-          <div
-            className={`w-12 h-12 border p-1 flex flex-col justify-between shadow-xs shrink-0 ${
-              isSoft ? "rounded-[12px]" : isMinimal ? "rounded-[2px]" : "rounded-[6px]"
-            }`}
-            style={{
-              backgroundColor: isDarkHero ? "#15203B" : activeColors.surface,
-              borderColor: isDarkHero ? "rgba(255,255,255,0.15)" : isHighContrast ? "#000000" : "#E2E8F0",
-            }}
-          >
+          {/* Right Column: Hero Visual Card */}
+          <div className="col-span-4 flex justify-end">
             <div
-              className="w-3 h-3 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: activeColors.accent }}
+              className="w-full h-16 rounded-lg border p-1.5 flex flex-col justify-between shadow-2xs overflow-hidden"
+              style={{
+                backgroundColor: isDark ? "rgba(255,255,255,0.04)" : c.surface,
+                borderColor: `${c.primary}40`,
+                borderRadius: theme.borderRadius || "8px",
+              }}
             >
-              <div className="w-1.5 h-1.5 bg-white rounded-full" />
-            </div>
-            <div className="space-y-0.5">
-              <div
-                className="h-1 w-full rounded"
-                style={{
-                  backgroundColor: isDarkHero ? "#FFFFFF" : activeColors.text,
-                }}
-              />
-              <div
-                className="h-0.5 w-2/3 rounded"
-                style={{
-                  backgroundColor: isDarkHero ? "#94A3B8" : activeColors.muted,
-                }}
-              />
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] font-bold" style={{ color: c.primary }}>
+                  ★ 5.0 Star
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: c.accent }} />
+              </div>
+              <div className="space-y-0.5">
+                <div className="h-1 w-full rounded-full" style={{ backgroundColor: c.primary, opacity: 0.8 }} />
+                <div className="h-1 w-3/4 rounded-full" style={{ backgroundColor: c.accent, opacity: 0.6 }} />
+              </div>
+              <div className="text-[7px] font-bold uppercase truncate" style={{ color: c.muted }}>
+                Licensed & Insured
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom Feature Cards Row */}
-        <div className="grid grid-cols-3 gap-1 pt-1.5">
-          {[1, 2, 3].map((idx) => (
+      {/* 4. Mini Trust Bar */}
+      <div
+        className="px-2.5 py-1 flex items-center justify-between text-[8px] font-semibold tracking-wide border-b"
+        style={{
+          backgroundColor: isDark ? "#0A101D" : "#0F172A",
+          color: "#FFFFFF",
+          borderColor: "rgba(255,255,255,0.06)",
+        }}
+      >
+        <span className="flex items-center gap-1">🛡️ 100% Warranty</span>
+        <span className="flex items-center gap-1">💲 Flat Upfront Rates</span>
+        <span className="flex items-center gap-1">🕒 45-Min Arrival</span>
+      </div>
+
+      {/* 5. Mini Services Grid */}
+      <div className="p-2.5 space-y-1.5 border-b" style={{ borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)" }}>
+        <div className="flex items-center justify-between">
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{
+              fontFamily: `'${theme.fonts.heading}', sans-serif`,
+              color: isDark ? "#FFFFFF" : c.secondary,
+            }}
+          >
+            Core Services
+          </span>
+          <span className="text-[8px] font-semibold" style={{ color: c.primary }}>
+            All Services →
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5">
+          {["Repair & Diagnostics", "Installation", "Emergency Service"].map((svc, i) => (
             <div
-              key={idx}
-              className={`p-1 border shadow-2xs flex items-center space-x-1 ${
-                isSoft ? "rounded-[8px]" : isMinimal ? "rounded-[2px]" : "rounded-[4px]"
-              }`}
+              key={i}
+              className="p-1.5 border flex flex-col justify-between shadow-2xs"
               style={{
-                backgroundColor: isDarkHero ? "#101B33" : activeColors.surface,
-                borderColor: isDarkHero ? "rgba(255,255,255,0.1)" : isHighContrast ? "#000000" : "#E2E8F0",
+                backgroundColor: c.surface,
+                borderColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)",
+                borderRadius: theme.borderRadius || "6px",
               }}
             >
-              <span
-                className="w-2 h-2 rounded shrink-0"
+              <div
+                className="w-3.5 h-3.5 rounded-sm flex items-center justify-center text-[8px] font-bold text-white mb-1"
                 style={{
-                  backgroundColor:
-                    idx === 1 ? activeColors.primary : idx === 2 ? activeColors.accent : activeColors.secondary,
+                  backgroundColor: i === 0 ? c.primary : i === 1 ? c.secondary : c.accent,
+                  borderRadius: isExtraRound ? "9999px" : "3px",
                 }}
-              />
-              <div className="space-y-0.5 flex-1 min-w-0">
-                <div
-                  className="h-1 w-3/4 rounded"
-                  style={{
-                    backgroundColor: isDarkHero ? "#FFFFFF" : activeColors.text,
-                  }}
-                />
-                <div
-                  className="h-0.5 w-1/2 rounded"
-                  style={{
-                    backgroundColor: isDarkHero ? "#94A3B8" : activeColors.muted,
-                  }}
-                />
+              >
+                {i + 1}
+              </div>
+              <div
+                className="font-bold text-[8.5px] leading-tight truncate"
+                style={{ color: isDark ? "#FFFFFF" : c.text }}
+              >
+                {svc}
+              </div>
+              <div className="text-[7px] truncate mt-0.5" style={{ color: c.muted }}>
+                Guaranteed Parts
               </div>
             </div>
           ))}
         </div>
+      </div>
+
+      {/* 6. Mini Service Areas Section */}
+      <div
+        className="px-2.5 py-1.5 flex items-center justify-between gap-1 border-b"
+        style={{
+          backgroundColor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)",
+          borderColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+        }}
+      >
+        <span className="text-[8px] font-bold uppercase tracking-wider shrink-0" style={{ color: c.muted }}>
+          Coverage:
+        </span>
+        <div className="flex items-center gap-1 overflow-hidden">
+          {["Dallas", "Plano", "Highland Park", "Frisco"].map((area, idx) => (
+            <span
+              key={idx}
+              className="px-1.5 py-0.5 text-[7.5px] font-semibold border truncate shrink-0"
+              style={{
+                backgroundColor: c.surface,
+                borderColor: `${c.primary}33`,
+                borderRadius: isExtraRound ? "9999px" : "4px",
+                color: isDark ? "#E2E8F0" : c.secondary,
+              }}
+            >
+              {area}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 7. Mini CTA Banner */}
+      <div
+        className="px-3 py-2 flex items-center justify-between gap-2"
+        style={{
+          background: `linear-gradient(135deg, ${c.secondary} 0%, #0F172A 100%)`,
+          color: "#FFFFFF",
+        }}
+      >
+        <div>
+          <div
+            className="text-[10px] font-bold"
+            style={{ fontFamily: `'${theme.fonts.heading}', sans-serif` }}
+          >
+            Need Help Now in Dallas?
+          </div>
+          <div className="text-[7.5px] text-slate-300">Certified master specialists ready to dispatch.</div>
+        </div>
+
+        <div
+          className="px-2 py-1 text-[8.5px] font-bold text-white shrink-0 shadow-xs flex items-center gap-0.5"
+          style={{
+            backgroundColor: c.primary,
+            borderRadius: theme.borderRadius || "4px",
+          }}
+        >
+          <span>Call 24/7</span>
+          <ArrowRight className="w-2.5 h-2.5" />
+        </div>
+      </div>
+
+      {/* 8. Mini Footer */}
+      <div
+        className="px-2.5 py-1 flex items-center justify-between text-[7.5px] text-slate-400 bg-slate-950 border-t border-slate-900"
+      >
+        <span>© 2026 Dallas {tradeSample}. All rights reserved.</span>
+        <span>Privacy · Terms</span>
       </div>
     </div>
   );

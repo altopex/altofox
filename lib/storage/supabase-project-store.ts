@@ -29,24 +29,22 @@ export async function saveProjectToSupabase(project: SavedProject): Promise<stri
   project.id = projectId; // ensure consistent UUID
 
   const bizDetails = project.businessDetails || {};
+  
+  // Category B: Lightweight project metadata only.
+  // Full website files (Category C) stay in ephemeral tempStorage or local IndexedDB.
   const settings = {
     theme: project.theme,
     serviceAreaCities: project.serviceAreaCities || [],
     keywordMap: project.keywordMap || [],
-    customBlocks: project.customBlocks || [],
     mustIncludeText: project.mustIncludeText || "",
     customContentInstructions: project.customContentInstructions || project.formData?.customContentInstructions || "",
-    pageContentMap: project.pageContentMap || {},
-    files: project.files || [],
-    changeLog: project.changeLog || [],
     redirects: project.redirects || [],
     optimizationCycles: project.optimizationCycles || [],
-    blogPosts: project.blogPosts || [],
     lastDownloadedAt: project.lastDownloadedAt,
     originalId: project.id,
   };
 
-  // Upsert project
+  // Upsert project metadata
   const { error: projErr } = await supabase.from("projects").upsert(
     {
       id: projectId,
@@ -71,56 +69,6 @@ export async function saveProjectToSupabase(project: SavedProject): Promise<stri
     throw new Error(`Failed to save project: ${projErr.message}`);
   }
 
-  // Upsert pages from project.files
-  if (project.files && Array.isArray(project.files)) {
-    const htmlFiles = project.files.filter((f) => f.path.endsWith(".html"));
-    const pagesToUpsert = htmlFiles.map((file, idx) => {
-      const slug = file.path.replace(/\.html$/, "");
-      const titleMatch = file.content.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-      const title = titleMatch ? titleMatch[1].trim() : file.path;
-      const metaMatch = file.content.match(
-        /<meta[^>]*?name=["']description["'][^>]*?content=["']([^"']*)["']/i
-      );
-      const h1Match = file.content.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-
-      let pageType = "service";
-      if (file.path === "index.html") pageType = "home";
-      else if (file.path.startsWith("blog/")) pageType = "blog";
-      else if (file.path.includes("about")) pageType = "about";
-      else if (file.path.includes("contact")) pageType = "contact";
-      else if (file.path.split("-").length >= 3) pageType = "location";
-
-      return {
-        project_id: projectId,
-        type: pageType,
-        slug: slug,
-        url_path: file.path === "index.html" ? "/" : `/${file.path}`,
-        title: title,
-        seo: {
-          metaTitle: title,
-          metaDescription: metaMatch ? metaMatch[1].trim() : "",
-          h1: h1Match ? h1Match[1].replace(/<[^>]+>/g, "").trim() : "",
-        },
-        content: {
-          html: file.content,
-        },
-        sort_order: idx,
-        updated_by: user?.id || null,
-        updated_at: new Date().toISOString(),
-      };
-    });
-
-    if (pagesToUpsert.length > 0) {
-      const { error: pageErr } = await supabase
-        .from("pages")
-        .upsert(pagesToUpsert, { onConflict: "project_id,slug" });
-
-      if (pageErr) {
-        console.warn("[SupabaseStore] Page upsert warning:", pageErr.message);
-      }
-    }
-  }
-
   // Log activity
   await logActivity({
     projectId,
@@ -128,7 +76,7 @@ export async function saveProjectToSupabase(project: SavedProject): Promise<stri
     entityType: "project",
     entityId: projectId,
     details: {
-      description: `Saved project "${project.name}" (${project.files?.length || 0} files)`,
+      description: `Saved project "${project.name}" metadata`,
       projectName: project.name,
       fileCount: project.files?.length || 0,
     },

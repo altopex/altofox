@@ -1,5 +1,5 @@
 import { WebsiteFormData, TargetPage, computeTargetPages } from "./prompt";
-import { THEMES } from "../themes";
+import { THEMES, buildGoogleFontsUrl } from "../themes";
 import { BRAND } from "@/config/brand";
 import { renderBrandLogo } from "./logo-generator";
 import { generateTradeHeroAnimationHtml } from "../photos/trade-hero-animation";
@@ -1237,11 +1237,9 @@ export function generateThemeTestSite(
   const phone = formData.phone || "(555) 123-4567";
   const cleanPhone = phone.replace(/[^\d+]/g, "");
 
-  const headingFont = encodeURIComponent(theme.fonts.heading);
-  const bodyFont = encodeURIComponent(theme.fonts.body);
   const fontLinks = `  <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=${headingFont}:wght@400;600;700;800&family=${bodyFont}:wght@300;400;500;600;700&display=swap" rel="stylesheet">`;
+  <link href="${buildGoogleFontsUrl(theme.fonts.heading, theme.fonts.body)}" rel="stylesheet">`;
 
   // Filter subpages for dropdowns
   const serviceSubpages = pages.filter(p => p.type === "individual-service");

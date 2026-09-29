@@ -916,3 +916,31 @@ export function resolveThemeColors(
     background: overrides?.background?.trim() || theme.colors.background,
   };
 }
+
+/**
+ * Safely constructs a Google Fonts stylesheet URL ensuring weight compatibility for all themes.
+ */
+export function buildGoogleFontsUrl(headingFont: string, bodyFont: string): string {
+  const singleWeightFonts = new Set(["Bebas Neue", "DM Serif Display"]);
+  const parts: string[] = [];
+
+  const hNorm = headingFont.trim();
+  const bNorm = bodyFont.trim();
+
+  if (singleWeightFonts.has(hNorm)) {
+    parts.push(`family=${encodeURIComponent(hNorm)}`);
+  } else {
+    parts.push(`family=${encodeURIComponent(hNorm)}:wght@500;600;700;800`);
+  }
+
+  if (hNorm !== bNorm) {
+    if (singleWeightFonts.has(bNorm)) {
+      parts.push(`family=${encodeURIComponent(bNorm)}`);
+    } else {
+      parts.push(`family=${encodeURIComponent(bNorm)}:wght@400;500;600;700`);
+    }
+  }
+
+  return `https://fonts.googleapis.com/css2?${parts.join("&")}&display=swap`;
+}
+

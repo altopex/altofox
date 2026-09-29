@@ -23,14 +23,32 @@ import {
   Shield,
   Menu,
   X,
-  Bell,
   Layers,
+  Palette,
+  Eye,
+  PlusCircle,
+  ShieldCheck,
+  Link2,
+  Globe,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { BRAND } from "@/config/brand";
 import { RankLocalIcon } from "@/components/brand/RankLocalLogo";
 
-export type NavTab = "dashboard" | "projects" | "activity" | "team" | "settings";
+export type NavTab =
+  | "dashboard"
+  | "new-website"
+  | "projects"
+  | "themes"
+  | "preview"
+  | "checker"
+  | "linking"
+  | "publishing"
+  | "activity"
+  | "team"
+  | "settings-ai"
+  | "settings";
 
 interface AppShellProps {
   currentTab: NavTab;
@@ -39,6 +57,8 @@ interface AppShellProps {
   activeProjectId?: string;
   onSelectProject?: (projectId: string) => void;
   projectsCount?: number;
+  hasActiveProject?: boolean;
+  onShowNotice?: (message: string) => void;
 }
 
 export function AppShell({
@@ -48,6 +68,8 @@ export function AppShell({
   activeProjectId,
   onSelectProject,
   projectsCount = 0,
+  hasActiveProject = false,
+  onShowNotice,
 }: AppShellProps) {
   const { user, profile, isOwner, signOut } = useAuth();
   const userPlan = profile?.plan || "starter";
@@ -97,14 +119,6 @@ export function AppShell({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  const navItems = [
-    { id: "dashboard" as NavTab, label: "Dashboard", icon: LayoutDashboard },
-    { id: "projects" as NavTab, label: "Projects", icon: FolderGit2 },
-    { id: "activity" as NavTab, label: "Activity Feed", icon: Activity },
-    ...(isOwner ? [{ id: "team" as NavTab, label: "Team", icon: Users }] : []),
-    { id: "settings" as NavTab, label: "Settings", icon: Settings },
-  ];
-
   const [pendingCount, setPendingCount] = useState<number>(0);
 
   useEffect(() => {
@@ -120,16 +134,112 @@ export function AppShell({
     }
   }, [isOwner, currentTab]);
 
+  interface NavItem {
+    id: NavTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: string;
+    badgeColor?: string;
+    isRouteLink?: string;
+    isPlanned?: boolean;
+    plannedNote?: string;
+  }
+
+  interface NavSection {
+    group?: string;
+    items: NavItem[];
+  }
+
+  // Clean structured navigation sections
+  const navSections: NavSection[] = [
+    {
+      group: undefined,
+      items: [
+        { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      ],
+    },
+    {
+      group: "Website Builder",
+      items: [
+        { id: "new-website", label: "New Website", icon: PlusCircle },
+        {
+          id: "projects",
+          label: "Projects & Sites",
+          icon: FolderGit2,
+          badge: projectsCount > 0 ? String(projectsCount) : undefined,
+        },
+        { id: "themes", label: "Themes & Layouts", icon: Palette },
+        {
+          id: "preview",
+          label: "Live Preview",
+          icon: Eye,
+          badge: hasActiveProject ? "Active" : undefined,
+          badgeColor: "bg-emerald-500 text-white",
+        },
+      ],
+    },
+    {
+      group: "Optimization",
+      items: [
+        {
+          id: "checker",
+          label: "Site Quality Checker",
+          icon: ShieldCheck,
+          isRouteLink: "/checker",
+        },
+        { id: "linking", label: "Internal Linking", icon: Link2 },
+        { id: "activity", label: "Activity Feed", icon: Activity },
+      ],
+    },
+    {
+      group: "Publishing",
+      items: [
+        {
+          id: "publishing",
+          label: "Cloudflare & Domains",
+          icon: Globe,
+          badge: "Phase 2",
+          badgeColor: "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+          isPlanned: true,
+          plannedNote: "Cloudflare edge hosting & custom domain mapping are scheduled for Phase 2.",
+        },
+      ],
+    },
+    {
+      group: "Settings",
+      items: [
+        { id: "settings-ai", label: "AI Providers", icon: Sparkles },
+        { id: "settings", label: "Preferences & System", icon: Settings },
+      ],
+    },
+    ...(isOwner
+      ? [
+          {
+            group: "Admin",
+            items: [
+              {
+                id: "team" as NavTab,
+                label: "Team & Roles",
+                icon: Users,
+                badge: pendingCount > 0 ? String(pendingCount) : undefined,
+                badgeColor: "bg-amber-500 text-white",
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex transition-colors font-sans">
       {/* 1. LEFT SIDEBAR (Desktop) */}
       <aside
-        className={`hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-200 z-30 ${
-          sidebarCollapsed ? "w-16" : "w-60"
+        className={`hidden md:flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-200 z-30 shrink-0 select-none ${
+          sidebarCollapsed ? "w-16" : "w-64"
         }`}
       >
         {/* Sidebar Header */}
-        <div className="h-16 flex items-center justify-between px-3.5 border-b border-slate-100 dark:border-slate-800">
+        <div className="h-16 flex items-center justify-between px-3.5 border-b border-slate-100 dark:border-slate-800 shrink-0">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <RankLocalIcon className="w-8 h-8 shrink-0" />
             {!sidebarCollapsed && (
@@ -138,7 +248,7 @@ export function AppShell({
                   {BRAND.name} Studio
                 </span>
                 <span className="block text-[10px] text-slate-400 font-medium">
-                  Private Team
+                  Internal Team Builder
                 </span>
               </div>
             )}
@@ -154,86 +264,121 @@ export function AppShell({
           </button>
         </div>
 
-        {/* Navigation Items */}
-        <nav className="flex-1 p-2.5 space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = currentTab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onNavigate(item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition ${
-                  isActive
-                    ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shadow-xs"
-                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white"
-                }`}
-                title={sidebarCollapsed ? item.label : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-indigo-600 dark:text-indigo-400" : ""}`} />
-                  {!sidebarCollapsed && <span>{item.label}</span>}
+        {/* Navigation Sections */}
+        <nav className="flex-1 p-2.5 space-y-4 overflow-y-auto scrollbar-thin">
+          {navSections.map((sec, secIdx) => (
+            <div key={secIdx} className="space-y-1">
+              {!sidebarCollapsed && sec.group && (
+                <div className="px-3 pt-2 pb-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                  {sec.group}
                 </div>
-                {!sidebarCollapsed && item.id === "team" && pendingCount > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+              )}
+              {sec.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = currentTab === item.id;
+
+                if (item.isRouteLink) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.isRouteLink}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white transition group"
+                      title={sidebarCollapsed ? item.label : undefined}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition" />
+                        {!sidebarCollapsed && <span>{item.label}</span>}
+                      </div>
+                      {!sidebarCollapsed && (
+                        <ExternalLink className="w-3 h-3 text-slate-400 opacity-60" />
+                      )}
+                    </Link>
+                  );
+                }
+
+                if (item.isPlanned) {
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        if (onShowNotice) {
+                          onShowNotice(item.plannedNote || "This capability is scheduled for Phase 2.");
+                        } else {
+                          alert(item.plannedNote || "Scheduled for Phase 2.");
+                        }
+                      }}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition text-left opacity-80"
+                      title={sidebarCollapsed ? `${item.label} (${item.badge})` : item.plannedNote}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4 shrink-0 text-slate-400" />
+                        {!sidebarCollapsed && <span>{item.label}</span>}
+                      </div>
+                      {!sidebarCollapsed && item.badge && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${item.badgeColor || "bg-slate-200 text-slate-600"}`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                }
+
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => onNavigate(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold transition ${
+                      isActive
+                        ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-white"
+                    }`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-indigo-600 dark:text-indigo-400" : ""}`} />
+                      {!sidebarCollapsed && <span>{item.label}</span>}
+                    </div>
+                    {!sidebarCollapsed && item.badge && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${item.badgeColor || "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300"}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Plan & Usage Indicator Widget */}
         {!sidebarCollapsed && (
-          <div className="p-3 mx-2.5 mb-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2">
+          <div className="p-3 mx-2.5 mb-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-800 space-y-2 shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span className="text-[11px] font-bold text-slate-800 dark:text-slate-200 capitalize">
-                  {isUnlimited ? "Unlimited Plan" : `${userPlan} Plan`}
+                  {isUnlimited ? "Unlimited Internal" : `${userPlan} Plan`}
                 </span>
               </div>
-              {!isUnlimited && (
-                <Link
-                  href="/pricing"
-                  className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                >
-                  Upgrade
-                </Link>
-              )}
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                <span>Usage</span>
+                <span>Stored Sites</span>
                 <span>
                   {isUnlimited
-                    ? `${projectsCount} websites`
-                    : `${projectsCount} of ${websiteLimit} used`}
+                    ? `${projectsCount} sites`
+                    : `${projectsCount} of ${websiteLimit}`}
                 </span>
               </div>
-              {!isUnlimited && (
-                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      projectsCount >= websiteLimit
-                        ? "bg-rose-500"
-                        : projectsCount / websiteLimit >= 0.8
-                        ? "bg-amber-500"
-                        : "bg-indigo-600"
-                    }`}
-                    style={{ width: `${Math.min(100, Math.max(0, (projectsCount / websiteLimit) * 100))}%` }}
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
 
         {/* User Mini-Profile at bottom of sidebar */}
-        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800">
+        <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 shrink-0">
           <div
             className={`flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 ${
               sidebarCollapsed ? "justify-center" : ""
@@ -264,13 +409,14 @@ export function AppShell({
       {/* 2. MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* TOP BAR */}
-        <header className="h-16 px-4 sm:px-6 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between gap-3">
+        <header className="h-16 px-4 sm:px-6 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md sticky top-0 z-20 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
             {/* Mobile menu button */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="md:hidden p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              aria-label="Toggle Navigation Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -386,6 +532,18 @@ export function AppShell({
                     type="button"
                     onClick={() => {
                       setUserDropdownOpen(false);
+                      onNavigate("settings-ai");
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Sparkles className="w-4 h-4 text-slate-400" />
+                    <span>AI Providers</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserDropdownOpen(false);
                       onNavigate("settings");
                     }}
                     className="w-full flex items-center gap-2 px-3 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -415,29 +573,87 @@ export function AppShell({
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = currentTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    onNavigate(item.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold ${
-                    isActive
-                      ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50"
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+          <div className="md:hidden border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-3 max-h-[80vh] overflow-y-auto">
+            {navSections.map((sec, secIdx) => (
+              <div key={secIdx} className="space-y-1">
+                {sec.group && (
+                  <div className="px-3 pt-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {sec.group}
+                  </div>
+                )}
+                {sec.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = currentTab === item.id;
+
+                  if (item.isRouteLink) {
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.isRouteLink}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </div>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </Link>
+                    );
+                  }
+
+                  if (item.isPlanned) {
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          if (onShowNotice) onShowNotice(item.plannedNote || "Scheduled for Phase 2.");
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4" />
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${item.badgeColor || "bg-slate-200 text-slate-600"}`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        onNavigate(item.id);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold ${
+                        isActive
+                          ? "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400"
+                          : "text-slate-600 dark:text-slate-400 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className="w-4 h-4" />
+                        <span>{item.label}</span>
+                      </div>
+                      {item.badge && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-bold ${item.badgeColor || "bg-indigo-100 text-indigo-700"}`}>
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         )}
 
