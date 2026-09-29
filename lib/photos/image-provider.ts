@@ -164,8 +164,9 @@ export class ImageDeduplicationTracker {
   }
 
   /**
-   * Generates a guaranteed unique Bing query by dynamically modifying keywords
-   * (q=keywords+change) if a collision or duplicate query is detected.
+   * Generates a guaranteed unique Bing query that stays on-topic for the trade.
+   * Every modifier keeps the trade keyword anchored so Bing returns relevant images.
+   * Never appends meaningless index suffixes like "slot1".
    */
   public generateUniqueBingQuery(
     baseQuery: string,
@@ -179,37 +180,40 @@ export class ImageDeduplicationTracker {
       return clean;
     }
 
-    // Dynamic keyword modifier pool to guarantee distinct Bing results
-    const actionModifiers = [
-      "repair+technician",
-      "installation+specialist",
-      "diagnostic+inspection",
-      "maintenance+tuneup",
-      "residential+troubleshooting",
-      "certified+tradesman",
-      "hardware+replacement",
-      "precision+workmanship",
-      "commercial+service",
-      "emergency+dispatch",
-      "professional+tools",
-      "jobsite+solution",
-      "equipment+servicing",
-      "onsite+contractor",
-      "system+testing",
-      "expert+craftsmanship",
+    // Trade-anchored modifiers — every variant keeps the trade word front-and-center
+    // so Bing always returns on-topic results regardless of which variant is chosen.
+    const tradeAnchor = normalizeBingQuery(trade || "contractor");
+
+    const tradeModifiers = [
+      `${tradeAnchor}+technician+residential`,
+      `${tradeAnchor}+specialist+repair`,
+      `${tradeAnchor}+professional+service`,
+      `${tradeAnchor}+contractor+home`,
+      `${tradeAnchor}+expert+installation`,
+      `${tradeAnchor}+licensed+worker`,
+      `${tradeAnchor}+certified+inspection`,
+      `${tradeAnchor}+maintenance+service`,
+      `${tradeAnchor}+residential+repair`,
+      `${tradeAnchor}+emergency+service`,
+      `${tradeAnchor}+on+site`,
+      `${tradeAnchor}+workmanship`,
+      `${tradeAnchor}+diagnostic+tools`,
+      `${tradeAnchor}+equipment+service`,
+      `${tradeAnchor}+system+upgrade`,
+      `${tradeAnchor}+quality+work`,
     ];
 
-    for (let i = 0; i < actionModifiers.length; i++) {
-      const mod = actionModifiers[(index + i) % actionModifiers.length];
-      const candidate = `${clean}+${mod}`;
+    for (let i = 0; i < tradeModifiers.length; i++) {
+      const candidate = tradeModifiers[(index + i) % tradeModifiers.length];
       if (!this.isQueryUsed(candidate)) {
         this.usedQueries.add(candidate);
         return candidate;
       }
     }
 
-    // Secondary fallback with distinct index seed
-    const uniqueCandidate = `${clean}+expert+trade+slot${index + 1}`;
+    // Final fallback: trade + slot-specific suffix (still trade-anchored)
+    const slotSuffix = slot === "hero" ? "jobsite" : slot === "about" ? "team" : slot === "gallery" ? "result" : "work";
+    const uniqueCandidate = `${tradeAnchor}+${slotSuffix}+${index + 1}`;
     this.usedQueries.add(uniqueCandidate);
     return uniqueCandidate;
   }
@@ -231,6 +235,9 @@ export class ImageDeduplicationTracker {
  * Dynamic Query Generator:
  * Generates unique, highly contextual, page-specific image queries based on:
  * BUSINESS TYPE + SERVICE + SECTION PURPOSE + PAGE TOPIC + LOCATION + SEARCH INTENT
+ *
+ * Every generated query is anchored to the detected trade category so Bing always
+ * returns on-topic results (e.g. a plumber site never gets electrician images).
  */
 export function generateDynamicImageQuery(
   context: ImageContext,
@@ -244,124 +251,209 @@ export function generateDynamicImageQuery(
   const slot = (context.slot || (context as any).sectionType || "hero").toLowerCase();
   const index = context.index || 0;
 
+  // Inline trade category detection — keeps trade noun anchored for every Bing query
+  const t = trade.toLowerCase();
+  let tradeNoun = "contractor";
+  if (t.includes("plumb") || t.includes("drain") || t.includes("pipe") || t.includes("sewer") || t.includes("water heater") || t.includes("faucet") || t.includes("toilet")) {
+    tradeNoun = "plumber";
+  } else if (t.includes("electr") || t.includes("wiring") || t.includes("panel") || t.includes("breaker") || t.includes("lighting") || t.includes("circuit") || t.includes("ev charger")) {
+    tradeNoun = "electrician";
+  } else if (t.includes("hvac") || t.includes("air cond") || t.includes("furnace") || t.includes("heating") || t.includes("cooling") || t.includes("duct")) {
+    tradeNoun = "hvac technician";
+  } else if (t.includes("roof") || t.includes("shingle") || t.includes("gutter") || t.includes("siding")) {
+    tradeNoun = "roofing contractor";
+  } else if (t.includes("tree") || t.includes("arbor") || t.includes("stump") || t.includes("pruning")) {
+    tradeNoun = "arborist tree service";
+  } else if (t.includes("landscap") || t.includes("lawn") || t.includes("garden") || t.includes("mow")) {
+    tradeNoun = "landscaper";
+  } else if (t.includes("clean") || t.includes("maid") || t.includes("janitor")) {
+    tradeNoun = "cleaning professional";
+  } else if (t.includes("auto") || t.includes("mechanic") || t.includes("car repair") || t.includes("vehicle")) {
+    tradeNoun = "auto mechanic";
+  } else if (t.includes("paint")) {
+    tradeNoun = "house painter";
+  } else if (t.includes("carpet") || t.includes("floor")) {
+    tradeNoun = "flooring contractor";
+  } else if (t.includes("pest") || t.includes("exterminat")) {
+    tradeNoun = "pest control technician";
+  } else if (t.includes("concrete") || t.includes("driveway") || t.includes("pav")) {
+    tradeNoun = "concrete contractor";
+  } else if (t.includes("fence")) {
+    tradeNoun = "fence contractor";
+  } else if (t.includes("window")) {
+    tradeNoun = "window installer";
+  } else if (t.includes("garage") || t.includes("door")) {
+    tradeNoun = "garage door technician";
+  } else if (trade.length > 2 && !t.includes("service") && !t.includes("local")) {
+    // Use whatever trade word they passed — still better than generic "contractor"
+    tradeNoun = trade.toLowerCase().replace(/[^a-z\s]/g, "").trim().slice(0, 30) || "contractor";
+  }
+
+
+
   let baseQuery = "";
   let baseAlt = "";
-
   const cleanService = service.toLowerCase();
 
   if (slot === "hero") {
     if (context.pageType === "service" || (context.serviceName && context.serviceName.toLowerCase() !== trade.toLowerCase())) {
       baseQuery = location
-        ? `residential ${service} specialist repairing system in ${location}`
-        : `residential ${service} technician helping homeowner with repair`;
+        ? `${tradeNoun} ${service} residential service ${location}`
+        : `${tradeNoun} ${service} specialist repairing system`;
       baseAlt = location ? `Professional ${service} in ${location}` : `Professional ${service} specialist`;
     } else if (context.pageType === "location" || (location && !context.serviceName)) {
-      baseQuery = `licensed ${trade} contractor residential service in ${location}`;
+      baseQuery = `licensed ${tradeNoun} residential service ${location}`;
       baseAlt = `Licensed ${trade} serving ${location}`;
     } else if (context.targetKeyword) {
-      baseQuery = `professional residential ${context.targetKeyword} contractor`;
+      baseQuery = `professional ${tradeNoun} ${context.targetKeyword} residential`;
       baseAlt = `${context.targetKeyword} by local specialists`;
     } else {
       baseQuery = location
-        ? `professional residential ${trade} contractor working in ${location}`
-        : `professional residential ${trade} contractor on job site`;
+        ? `professional ${tradeNoun} residential contractor ${location}`
+        : `professional ${tradeNoun} residential contractor job site`;
       baseAlt = location ? `Trusted ${trade} in ${location}` : `Top-rated ${trade} service`;
     }
   } else if (slot === "service") {
-    // Subject-specific action mapping
+    // Specific service keyword mappings — trade word always anchors the query
     if (cleanService.includes("drain")) {
-      baseQuery = "plumber operating professional drain cleaning snake equipment";
+      baseQuery = "plumber drain cleaning snake equipment residential";
       baseAlt = "Professional drain cleaning service in action";
-    } else if (cleanService.includes("pipe") || cleanService.includes("repipe")) {
-      baseQuery = "plumber repairing leaking copper pipe under kitchen sink";
-      baseAlt = "Technician repairing damaged residential pipe";
+    } else if (cleanService.includes("repipe") || (cleanService.includes("pipe") && !cleanService.includes("pipe dream"))) {
+      baseQuery = "plumber repairing copper pipe leak under sink";
+      baseAlt = "Plumber repairing damaged residential pipe";
     } else if (cleanService.includes("water heater") || cleanService.includes("tankless")) {
-      baseQuery = "technician installing residential tankless water heater system";
+      baseQuery = "plumber installing tankless water heater residential";
       baseAlt = "Water heater installation and maintenance";
     } else if (cleanService.includes("leak")) {
-      baseQuery = "specialist using acoustic ultrasonic pipe leak detection device";
-      baseAlt = "Technician performing non-invasive leak detection";
+      baseQuery = "plumber acoustic pipe leak detection residential";
+      baseAlt = "Plumber performing non-invasive leak detection";
     } else if (cleanService.includes("sewer")) {
-      baseQuery = "plumber performing sewer line camera inspection";
+      baseQuery = "plumber sewer line camera inspection residential";
       baseAlt = "Sewer line inspection and repair";
     } else if (cleanService.includes("toilet") || cleanService.includes("fixture") || cleanService.includes("faucet")) {
-      baseQuery = "plumber replacing modern bathroom faucet fixture";
+      baseQuery = "plumber replacing bathroom faucet fixture residential";
       baseAlt = "Bathroom fixture repair and installation";
     } else if (cleanService.includes("panel") || cleanService.includes("breaker")) {
-      baseQuery = "licensed electrician upgrading modern circuit breaker panel";
+      baseQuery = "electrician circuit breaker panel upgrade residential";
       baseAlt = "Electrical panel upgrade and wiring";
     } else if (cleanService.includes("ev") || cleanService.includes("charger")) {
-      baseQuery = "electrician installing home electric vehicle EV charging station";
+      baseQuery = "electrician installing EV charging station home";
       baseAlt = "Residential EV charger installation";
     } else if (cleanService.includes("lighting") || cleanService.includes("light")) {
-      baseQuery = "electrician installing modern recessed LED ceiling lighting";
-      baseAlt = "Interior lighting installation";
+      baseQuery = "electrician installing recessed LED ceiling lighting";
+      baseAlt = "Interior lighting installation by electrician";
     } else if (cleanService.includes("wiring") || cleanService.includes("wire")) {
-      baseQuery = "electrician inspecting home electrical wiring and outlets";
+      baseQuery = "electrician home electrical wiring inspection residential";
       baseAlt = "Electrical safety inspection and wiring";
     } else if (cleanService.includes("ac") || cleanService.includes("cooling") || cleanService.includes("air cond")) {
-      baseQuery = "hvac technician servicing residential outdoor air conditioning unit";
+      baseQuery = "hvac technician servicing outdoor air conditioning unit";
       baseAlt = "Air conditioning maintenance and repair";
     } else if (cleanService.includes("furnace") || cleanService.includes("heat")) {
-      baseQuery = "hvac technician inspecting residential gas furnace heating system";
+      baseQuery = "hvac technician inspecting gas furnace heating system";
       baseAlt = "Furnace heating repair and tune-up";
     } else if (cleanService.includes("duct")) {
-      baseQuery = "hvac technician cleaning air ducts and ventilation filters";
+      baseQuery = "hvac technician cleaning air ducts ventilation residential";
       baseAlt = "Ductwork cleaning and airflow inspection";
     } else if (cleanService.includes("shingle") || cleanService.includes("roof")) {
-      baseQuery = "roofing contractor installing modern architectural roof shingles";
+      baseQuery = "roofing contractor installing architectural shingles residential";
       baseAlt = "Roof shingle replacement and repair";
     } else if (cleanService.includes("gutter")) {
-      baseQuery = "contractor installing seamless gutters and downspouts on home";
+      baseQuery = "roofing contractor installing seamless gutters downspouts";
       baseAlt = "Seamless gutter installation and cleaning";
     } else if (cleanService.includes("trimming") || cleanService.includes("pruning")) {
-      baseQuery = "certified arborist climbing tree for precision branch trimming";
+      baseQuery = "arborist tree trimming precision branch pruning";
       baseAlt = "Professional tree trimming and pruning";
     } else if (cleanService.includes("removal")) {
-      baseQuery = "tree service crew safely removing hazardous large tree";
+      baseQuery = "arborist tree removal service crew residential";
       baseAlt = "Emergency tree removal service";
     } else if (cleanService.includes("stump")) {
-      baseQuery = "commercial stump grinder machine removing large tree stump";
+      baseQuery = "stump grinder machine tree stump removal";
       baseAlt = "Tree stump grinding and removal";
     } else if (cleanService.includes("emergency")) {
-      baseQuery = `emergency ${trade} technician service van arriving at home`;
+      baseQuery = `emergency ${tradeNoun} service residential rapid response`;
       baseAlt = `24/7 Emergency ${trade} service response`;
+    } else if (cleanService.includes("lawn") || cleanService.includes("mow")) {
+      baseQuery = "landscaper mowing residential lawn professional";
+      baseAlt = "Professional lawn mowing service";
+    } else if (cleanService.includes("garden") || cleanService.includes("landscape")) {
+      baseQuery = "landscaper garden design installation residential";
+      baseAlt = "Professional landscaping and garden service";
+    } else if (cleanService.includes("carpet") || cleanService.includes("floor")) {
+      baseQuery = "flooring contractor installing hardwood floor residential";
+      baseAlt = "Professional floor installation service";
+    } else if (cleanService.includes("paint")) {
+      baseQuery = "house painter painting residential exterior professional";
+      baseAlt = "Professional residential painting service";
+    } else if (cleanService.includes("pest") || cleanService.includes("bug") || cleanService.includes("termite")) {
+      baseQuery = "pest control technician residential extermination service";
+      baseAlt = "Professional pest control service";
+    } else if (cleanService.includes("concrete") || cleanService.includes("driveway") || cleanService.includes("pav")) {
+      baseQuery = "concrete contractor pouring residential driveway";
+      baseAlt = "Concrete and driveway installation";
+    } else if (cleanService.includes("fence")) {
+      baseQuery = "fence contractor installing wood fence residential";
+      baseAlt = "Professional fence installation service";
+    } else if (cleanService.includes("window")) {
+      baseQuery = "window installer replacing residential windows professional";
+      baseAlt = "Professional window installation and replacement";
+    } else if (cleanService.includes("garage") || cleanService.includes("door")) {
+      baseQuery = "garage door technician repairing residential garage door";
+      baseAlt = "Garage door repair and installation";
+    } else if (cleanService.includes("clean") || cleanService.includes("maid")) {
+      baseQuery = "cleaning professional housekeeping residential service";
+      baseAlt = "Professional residential cleaning service";
+    } else if (cleanService.includes("brake") || cleanService.includes("tire")) {
+      baseQuery = "auto mechanic brake repair service vehicle";
+      baseAlt = "Professional brake repair and service";
+    } else if (cleanService.includes("oil")) {
+      baseQuery = "auto mechanic oil change vehicle service";
+      baseAlt = "Oil change and fluid service";
     } else {
+      // CRITICAL FIX: Always anchor the generic fallback to the detected trade noun.
+      // This prevents Bing from returning electrician images on a plumber site, etc.
       baseQuery = location
-        ? `technician performing ${service} residential service in ${location}`
-        : `technician performing professional ${service} repair`;
-      baseAlt = `${service} service by certified technicians`;
+        ? `${tradeNoun} ${service} residential service`
+        : `${tradeNoun} ${service} professional work`;
+      baseAlt = `${trade} ${service} by certified technicians`;
     }
   } else if (slot === "about") {
     baseQuery = location
-      ? `friendly professional ${trade} technician contractor team in ${location}`
-      : `friendly professional ${trade} technician contractor team with service van`;
+      ? `${tradeNoun} team professionals residential service ${location}`
+      : `${tradeNoun} team professionals service van residential`;
     baseAlt = location ? `Dedicated ${trade} team serving ${location}` : `Experienced ${trade} team`;
   } else if (slot === "gallery") {
+    // Trade-anchored gallery queries — every image clearly belongs to this specific trade
     const galleryVariations = [
-      "finished precision installation project",
-      "completed diagnostic and restoration work",
-      "new high efficiency equipment installation",
-      "before and after clean workmanship result",
-      "professional maintenance and system upgrade",
+      `${tradeNoun} completed installation project residential`,
+      `${tradeNoun} finished repair workmanship`,
+      `${tradeNoun} new equipment installed home`,
+      `${tradeNoun} before after restoration residential`,
+      `${tradeNoun} professional maintenance work`,
     ];
     const modifier = galleryVariations[index % galleryVariations.length];
-    baseQuery = `completed ${service} ${modifier}`;
-    baseAlt = `Completed ${service} ${modifier}`;
+    baseQuery = modifier;
+    baseAlt = `Completed ${trade} ${["installation", "repair", "upgrade", "restoration", "maintenance"][index % 5]}`;
   } else {
-    baseQuery = location ? `${service} in ${location}` : `${service} service`;
-    baseAlt = `${service} service`;
+    baseQuery = location ? `${tradeNoun} ${service} ${location}` : `${tradeNoun} ${service}`;
+    baseAlt = `${trade} ${service} service`;
   }
 
   let cleanQuery = baseQuery.toLowerCase().replace(/\s+/g, " ").trim();
 
-  // Deduplicate query string
+  // Deduplicate: variants are trade-anchored so Bing stays on-topic even after collision
   if (usedQueries && usedQueries.has(cleanQuery)) {
-    const variations = ["contractor", "specialist", "technician", "work", "repairs", "installation", "inspection"];
-    const suffix = variations[index % variations.length];
-    const variedQuery = `${cleanQuery} ${suffix}`;
-    if (!usedQueries.has(variedQuery)) {
-      cleanQuery = variedQuery;
+    const tradeVariants = [
+      `${tradeNoun} specialist residential repair`,
+      `${tradeNoun} contractor home service professional`,
+      `${tradeNoun} expert installation work`,
+      `${tradeNoun} certified technician residential`,
+      `${tradeNoun} licensed service home`,
+      `${tradeNoun} workmanship residential`,
+      `${tradeNoun} on site professional`,
+    ];
+    const variant = tradeVariants[index % tradeVariants.length];
+    if (!usedQueries.has(variant)) {
+      cleanQuery = variant;
     }
   }
 
