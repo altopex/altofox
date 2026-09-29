@@ -83,21 +83,21 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: -0.02em;
 }
 
-h1 { font-size: clamp(2.2rem, 5vw, 3.8rem); margin-bottom: 1.25rem; }
-h2 { font-size: clamp(1.8rem, 3.5vw, 2.5rem); margin-bottom: 1rem; }
-h3 { font-size: clamp(1.25rem, 2vw, 1.5rem); margin-bottom: 0.75rem; }
-h4 { font-size: 1.15rem; margin-bottom: 0.5rem; }
+h1 { font-size: clamp(2rem, 5.5vw, 3.8rem); margin-bottom: 1.25rem; line-height: 1.1; }
+h2 { font-size: clamp(1.6rem, 3.5vw, 2.6rem); margin-bottom: 1rem; }
+h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); margin-bottom: 0.75rem; }
+h4 { font-size: 1.1rem; margin-bottom: 0.5rem; }
 p { margin-bottom: 1rem; }
 
 .container {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 0 1.5rem;
+  padding: 0 1.25rem;
 }
 
 .section {
-  padding: 5rem 0;
+  padding: 4.5rem 0;
 }
 
 .section-alt {
@@ -106,26 +106,37 @@ p { margin-bottom: 1rem; }
 
 .section-header {
   text-align: center;
-  max-width: 720px;
-  margin: 0 auto 3.5rem;
+  max-width: 680px;
+  margin: 0 auto 3rem;
 }
 
 .section-header p {
   color: var(--color-muted);
-  font-size: 1.15rem;
+  font-size: 1.1rem;
+  line-height: 1.7;
 }
 
+/* Badge — accent border left for modern feel */
 .badge {
-  display: inline-block;
-  padding: 0.35rem 0.85rem;
-  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background-color: rgba(0, 0, 0, 0.06);
+  letter-spacing: 0.07em;
+  background-color: rgba(var(--color-primary-rgb, 79, 70, 229), 0.08);
   color: var(--color-primary);
-  border-radius: var(--radius);
+  border-radius: 999px;
+  border: 1px solid rgba(var(--color-primary-rgb, 79, 70, 229), 0.2);
   margin-bottom: 1rem;
+}
+
+/* Call-to-action pulse animation */
+@keyframes rl-cta-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb, 79, 70, 229), 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(var(--color-primary-rgb, 79, 70, 229), 0); }
 }
 
 /* Buttons */
@@ -134,7 +145,7 @@ p { margin-bottom: 1rem; }
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.85rem 1.6rem;
+  padding: 0.85rem 1.75rem;
   font-family: var(--font-heading);
   font-size: 1rem;
   font-weight: 700;
@@ -142,18 +153,22 @@ p { margin-bottom: 1rem; }
   cursor: pointer;
   transition: var(--transition);
   border: 2px solid transparent;
-  min-height: 48px;
+  min-height: 52px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 .btn-primary {
   background-color: var(--color-primary);
   color: #FFFFFF;
+  animation: rl-cta-pulse 2.5s ease-in-out infinite;
 }
 
 .btn-primary:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  animation: none;
 }
 
 .btn-secondary {
@@ -162,7 +177,7 @@ p { margin-bottom: 1rem; }
 }
 
 .btn-secondary:hover {
-  filter: brightness(1.15);
+  filter: brightness(1.12);
   transform: translateY(-2px);
 }
 
@@ -178,14 +193,16 @@ p { margin-bottom: 1rem; }
 }
 
 .btn-large {
-  padding: 1rem 2rem;
+  padding: 1rem 2.25rem;
   font-size: 1.1rem;
+  min-height: 56px;
 }
 
 .btn-sm {
-  padding: 0.5rem 1rem;
+  padding: 0.55rem 1.1rem;
   font-size: 0.9rem;
-  min-height: 38px;
+  min-height: 40px;
+  animation: none;
 }
 
 /* Site Header & Navigation */
@@ -426,97 +443,139 @@ body.theme-bold-trade .trust-badges-inline {
 
 /* Trust Bar */
 .trust-bar {
-  background-color: #0F172A;
+  background: linear-gradient(90deg, #0F172A 0%, #1e293b 100%);
   color: #FFFFFF;
-  padding: 1.5rem 0;
+  padding: 1.25rem 0;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  overflow: hidden;
 }
 
 .trust-bar-container {
   display: flex;
   justify-content: space-around;
   flex-wrap: wrap;
-  gap: 1.5rem;
+  gap: 1rem 2rem;
 }
 
 .trust-point {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.95rem;
+  gap: 0.6rem;
+  font-size: 0.9rem;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.trust-point span {
+  font-size: 1.1rem;
 }
 
 /* Services Grid */
 .services-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
 }
 
 .service-card {
   background-color: var(--color-surface);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: var(--radius);
-  padding: 2rem;
+  padding: 1.75rem;
   transition: var(--transition);
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.service-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background-color: var(--color-primary);
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
 .service-card:hover {
   transform: translateY(-4px);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 12px 32px rgba(0,0,0,0.1);
   border-color: var(--color-primary);
 }
 
+.service-card:hover::before {
+  opacity: 1;
+}
+
 .service-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius);
-  background-color: rgba(0, 0, 0, 0.04);
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(var(--color-primary-rgb, 79, 70, 229), 0.12), rgba(var(--color-primary-rgb, 79, 70, 229), 0.06));
   color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 1.25rem;
+  border: 1px solid rgba(var(--color-primary-rgb, 79, 70, 229), 0.15);
 }
 
 .service-card p {
   color: var(--color-muted);
   flex: 1;
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 /* Process Steps */
 .process-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
 }
 
 .process-card {
   background-color: var(--color-surface);
   border-radius: var(--radius);
-  padding: 2.25rem 1.75rem;
+  padding: 2rem 1.75rem;
   position: relative;
   border: 1px solid rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.process-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
+  opacity: 0.6;
 }
 
 .process-number {
   font-family: var(--font-heading);
-  font-size: 3rem;
+  font-size: 3.5rem;
   font-weight: 900;
-  color: rgba(0, 0, 0, 0.07);
+  color: var(--color-primary);
+  opacity: 0.1;
   position: absolute;
-  top: 1rem;
-  right: 1.5rem;
+  top: 0.75rem;
+  right: 1.25rem;
   line-height: 1;
 }
 
 /* Service Areas Grid */
 .areas-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
   margin-top: 2rem;
 }
 
@@ -524,49 +583,96 @@ body.theme-bold-trade .trust-badges-inline {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: 0.875rem 1.25rem;
   background-color: var(--color-surface);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: var(--radius);
   font-weight: 600;
+  font-size: 0.95rem;
   color: var(--color-secondary);
+  transition: var(--transition);
 }
 
 .area-pill:hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
-  transform: translateX(3px);
+  background-color: rgba(var(--color-primary-rgb, 79, 70, 229), 0.04);
+  transform: translateX(4px);
 }
 
 /* Reviews / Testimonials */
 .reviews-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
 }
 
 .review-card {
   background-color: var(--color-surface);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: var(--radius);
-  padding: 2rem;
+  padding: 1.75rem;
+  position: relative;
+}
+
+.review-card::before {
+  content: "“";
+  position: absolute;
+  top: 0.5rem;
+  right: 1.25rem;
+  font-size: 5rem;
+  line-height: 1;
+  color: var(--color-primary);
+  opacity: 0.07;
+  font-family: Georgia, serif;
+  pointer-events: none;
 }
 
 .star-rating {
   color: #F59E0B;
-  font-size: 1.2rem;
+  font-size: 1rem;
+  letter-spacing: 2px;
   margin-bottom: 0.75rem;
+}
+
+.review-card > p {
+  color: var(--color-text);
+  font-style: italic;
+  line-height: 1.7;
+  font-size: 0.95rem;
 }
 
 .review-author {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
   margin-top: 1.25rem;
-  font-size: 0.9rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(0,0,0,0.06);
 }
 
-.review-name { font-weight: 700; color: var(--color-secondary); }
-.review-loc { color: var(--color-muted); }
+.review-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.review-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.review-name { font-weight: 700; font-size: 0.9rem; color: var(--color-secondary); }
+.review-loc { color: var(--color-muted); font-size: 0.8rem; }
 
 /* FAQ Accordion */
 .faq-accordion {
@@ -621,8 +727,22 @@ body.theme-bold-trade .trust-badges-inline {
 
 /* Call to Action Banner */
 .cta-banner {
-  background-color: var(--color-secondary);
+  background: linear-gradient(135deg, var(--color-secondary) 0%, #0f172a 100%);
   color: #FFFFFF;
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-banner::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.03);
+  pointer-events: none;
 }
 
 .cta-container {
@@ -631,21 +751,24 @@ body.theme-bold-trade .trust-badges-inline {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 2rem;
+  position: relative;
 }
 
 .cta-container h2 {
   color: #FFFFFF;
   margin-bottom: 0.5rem;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
 }
 
 .cta-container p {
-  color: #CBD5E1;
-  font-size: 1.15rem;
+  color: #94a3b8;
+  font-size: 1.05rem;
 }
 
 .cta-actions {
   display: flex;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 /* Subpage Hero */
@@ -790,6 +913,11 @@ body.theme-bold-trade .trust-badges-inline {
   display: none;
 }
 
+@keyframes rl-pulse-bar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 @media (max-width: 768px) {
   .sticky-call-bar {
     display: block;
@@ -798,28 +926,56 @@ body.theme-bold-trade .trust-badges-inline {
     left: 0;
     right: 0;
     z-index: 999;
-    background-color: var(--color-surface);
-    border-top: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.12);
-    padding: 0.75rem 1rem;
+    background-color: #fff;
+    border-top: 2px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.14);
+    padding: 0.6rem 1rem 0.8rem;
+  }
+
+  .sticky-call-bar-inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
   }
 
   .btn-call-mobile {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
+    gap: 0.5rem;
     width: 100%;
-    padding: 0.9rem;
+    padding: 0.85rem 0.5rem;
     background-color: var(--color-primary);
     color: #FFFFFF;
+    font-weight: 800;
+    border-radius: var(--radius);
+    font-size: 1rem;
+    font-family: var(--font-heading);
+    border: none;
+    cursor: pointer;
+    animation: rl-pulse-bar 2s ease-in-out infinite;
+  }
+
+  .btn-quote-mobile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.85rem 0.5rem;
+    background-color: transparent;
+    border: 2px solid var(--color-secondary);
+    color: var(--color-secondary);
     font-weight: 700;
     border-radius: var(--radius);
-    font-size: 1.05rem;
+    font-size: 0.95rem;
+    font-family: var(--font-heading);
+    cursor: pointer;
+    text-decoration: none;
   }
 
   body {
-    padding-bottom: 70px;
+    padding-bottom: 90px;
   }
 
   /* Mobile Nav */
@@ -837,7 +993,7 @@ body.theme-bold-trade .trust-badges-inline {
     box-shadow: var(--shadow-lg);
     display: none;
     flex-direction: column;
-    padding: 1.5rem;
+    padding: 1.25rem;
     max-height: calc(100vh - 80px);
     overflow-y: auto;
   }
@@ -849,8 +1005,16 @@ body.theme-bold-trade .trust-badges-inline {
   .nav-list {
     flex-direction: column;
     align-items: flex-start;
-    gap: 1rem;
+    gap: 0.5rem;
     width: 100%;
+  }
+
+  .nav-link {
+    font-size: 1.05rem;
+    padding: 0.6rem 0;
+    display: block;
+    width: 100%;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
   }
 
   .nav-dropdown .dropdown-menu {
@@ -861,18 +1025,119 @@ body.theme-bold-trade .trust-badges-inline {
     box-shadow: none;
     border: none;
     background-color: rgba(0, 0, 0, 0.03);
-    margin-top: 0.5rem;
+    border-radius: 8px;
+    margin-top: 0.4rem;
+    padding: 0.4rem 0;
   }
 
   .header-cta {
     display: none;
   }
 
-  .hero-grid,
-  .content-grid-2,
+  /* Hero mobile */
+  .hero {
+    padding: 3rem 0 3.5rem;
+  }
+
+  .hero-grid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .hero-subheadline {
+    font-size: 1.05rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .hero-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .trust-badges-inline {
+    gap: 0.75rem;
+    font-size: 0.82rem;
+    flex-wrap: wrap;
+  }
+
+  /* Section padding */
+  .section {
+    padding: 3rem 0;
+  }
+
+  /* Cards */
+  .services-grid,
+  .process-grid,
+  .reviews-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .areas-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  .content-grid-2 {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  /* Footer */
   .footer-top {
     grid-template-columns: 1fr;
-    gap: 2.5rem;
+    gap: 2rem;
+    padding-bottom: 2rem;
+  }
+
+  .footer-phone-link {
+    font-size: 1.5rem;
+  }
+
+  /* CTA */
+  .cta-container {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .cta-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cta-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Page hero */
+  .page-hero {
+    padding: 2.5rem 0 3rem;
+  }
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .hero-grid {
+    gap: 2rem;
+  }
+
+  .services-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .footer-top {
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+
+  .content-grid-2 {
+    grid-template-columns: 1fr 1fr;
   }
 }
 `;
@@ -1079,13 +1344,19 @@ export function generateThemeTestSite(
     </div>
   </footer>`;
 
-  // Build Mobile Sticky Call Bar
+  // Build Mobile Sticky Call Bar — dual action
   const stickyCallBar = `  <!-- Sticky Mobile Call Bar -->
   <div class="sticky-call-bar" id="sticky-call-bar">
-    <a href="tel:${cleanPhone}" class="btn-call-mobile">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-      <span>Call Now: ${phone}</span>
-    </a>
+    <div class="sticky-call-bar-inner">
+      <a href="tel:${cleanPhone}" class="btn-call-mobile">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+        <span>Call Now</span>
+      </a>
+      <a href="contact.html" class="btn-quote-mobile">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        <span>Free Quote</span>
+      </a>
+    </div>
   </div>`;
 
   const files: { path: string; content: string }[] = [];
@@ -1176,20 +1447,21 @@ ${headerHtml}
     <section class="hero">
       <div class="container hero-grid">
         <div class="hero-content">
-          <span class="badge">24/7 Priority Service in ${city}</span>
+          <span class="badge">⚡ Available Now — ${city} & Surrounding Areas</span>
           <h1>${formData.targetKeywords ? formData.targetKeywords.split(",")[0] : `Trusted ${formData.businessType} in ${city}, ${state}`}</h1>
           <p class="hero-subheadline">${formData.businessDescription || `Immediate dispatch, transparent flat-rate pricing, and guaranteed solutions for residential and commercial customers across ${city}.`}</p>
           <div class="hero-actions">
             <a href="tel:${cleanPhone}" class="btn btn-primary btn-large">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-              <span>Call ${phone}</span>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+              <span>📞 Call ${phone}</span>
             </a>
-            <a href="contact.html" class="btn btn-secondary btn-large">Get a Free Quote</a>
+            <a href="contact.html" class="btn btn-secondary btn-large">Get a Free Quote →</a>
           </div>
           <div class="trust-badges-inline">
-            <div class="trust-badge-item"><span>⭐</span> 5.0 Star Rated</div>
-            <div class="trust-badge-item"><span>✓</span> Licensed & Insured</div>
-            <div class="trust-badge-item"><span>⚡</span> 45-Min Arrival Guarantee</div>
+            <div class="trust-badge-item"><span>⭐</span> 5.0 Google Rating</div>
+            <div class="trust-badge-item"><span>✅</span> Licensed & Insured</div>
+            <div class="trust-badge-item"><span>⚡</span> 45-Min Response</div>
+            <div class="trust-badge-item"><span>🔒</span> No Surprises Guarantee</div>
           </div>
         </div>
         ${generateTradeHeroAnimationHtml({
@@ -1248,6 +1520,20 @@ ${headerHtml}
           <span class="badge">The Local Standard</span>
           <h2>Why ${city} Homeowners Choose ${bizName}</h2>
           <p>${bizName} has earned the loyalty of thousands of residents by doing things right the first time. We believe in total transparency, spotless cleanup, and unconditional guarantees.</p>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin:1.5rem 0;text-align:center;">
+            <div style="background:var(--color-surface);padding:1rem;border-radius:var(--radius);border:1px solid rgba(0,0,0,0.07);">
+              <div style="font-size:1.8rem;font-weight:900;color:var(--color-primary);font-family:var(--font-heading);">500+</div>
+              <div style="font-size:0.8rem;color:var(--color-muted);font-weight:600;">Happy Customers</div>
+            </div>
+            <div style="background:var(--color-surface);padding:1rem;border-radius:var(--radius);border:1px solid rgba(0,0,0,0.07);">
+              <div style="font-size:1.8rem;font-weight:900;color:var(--color-primary);font-family:var(--font-heading);">5.0★</div>
+              <div style="font-size:0.8rem;color:var(--color-muted);font-weight:600;">Google Rating</div>
+            </div>
+            <div style="background:var(--color-surface);padding:1rem;border-radius:var(--radius);border:1px solid rgba(0,0,0,0.07);">
+              <div style="font-size:1.8rem;font-weight:900;color:var(--color-primary);font-family:var(--font-heading);">45m</div>
+              <div style="font-size:0.8rem;color:var(--color-muted);font-weight:600;">Avg. Arrival</div>
+            </div>
+          </div>
           <ul class="check-list">
             <li><strong>Upfront Flat-Rate Estimates:</strong> You approve the price before any work begins.</li>
             <li><strong>Licensed & Drug-Tested:</strong> Every technician is background-checked and master-certified.</li>
@@ -1255,10 +1541,13 @@ ${headerHtml}
             <li><strong>24/7 Immediate Help:</strong> Live humans answer your call around the clock.</li>
           </ul>
         </div>
-        <div class="card card-highlight">
-          <h3>Emergency Assistance Needed?</h3>
-          <p>Speak directly with our senior on-duty dispatcher right now.</p>
-          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large" style="width: 100%;">Call ${phone}</a>
+        <div class="card card-highlight" style="text-align:center;">
+          <div style="font-size:2.5rem;margin-bottom:0.5rem;">🚨</div>
+          <h3 style="margin-bottom:0.5rem;">Emergency? Call Now</h3>
+          <p style="margin-bottom:1.5rem;">Speak directly with our senior on-duty dispatcher. Average hold time: <strong>under 30 seconds.</strong></p>
+          <a href="tel:${cleanPhone}" class="btn btn-primary btn-large" style="width:100%;margin-bottom:0.75rem;">📞 ${phone}</a>
+          <a href="contact.html" class="btn btn-outline" style="width:100%;">Schedule Online →</a>
+          <p style="margin-top:1rem;font-size:0.8rem;color:var(--color-muted);">Available 24/7 · No extra charge nights/weekends</p>
         </div>
       </div>
     </section>
@@ -1329,24 +1618,33 @@ ${headerHtml}
             <div class="star-rating">★★★★★</div>
             <p>"Arrived within 35 minutes on a Sunday evening. Fixed our emergency cleanly and the price was exactly what they quoted upfront. Highly recommend!"</p>
             <div class="review-author">
-              <span class="review-name">Marcus Henderson</span>
-              <span class="review-loc">${city}, ${state}</span>
+              <div class="review-avatar">MH</div>
+              <div class="review-meta">
+                <span class="review-name">Marcus Henderson</span>
+                <span class="review-loc">⭐ Verified Google Review · ${city}, ${state}</span>
+              </div>
             </div>
           </div>
           <div class="review-card">
             <div class="star-rating">★★★★★</div>
-            <p>"Professional, respectful, and very knowledgeable. Explained everything clearly and solved an ongoing issue that two other companies couldn't."</p>
+            <p>"Professional, respectful, and very knowledgeable. Explained everything clearly and solved an ongoing issue that two other companies couldn't fix."</p>
             <div class="review-author">
-              <span class="review-name">Sarah Jenkins</span>
-              <span class="review-loc">${areasList[1]?.trim() || city}, ${state}</span>
+              <div class="review-avatar">SJ</div>
+              <div class="review-meta">
+                <span class="review-name">Sarah Jenkins</span>
+                <span class="review-loc">⭐ Verified Google Review · ${areasList[1]?.trim() || city}, ${state}</span>
+              </div>
             </div>
           </div>
           <div class="review-card">
             <div class="star-rating">★★★★★</div>
-            <p>"Super impressed with the speed and honesty. They will definitely be our go-to team from now on!"</p>
+            <p>"Super impressed with the speed and honesty. Transparent pricing, fast work, and zero mess left behind. They're our permanent go-to team now!"</p>
             <div class="review-author">
-              <span class="review-name">David Zhao</span>
-              <span class="review-loc">${areasList[2]?.trim() || city}, ${state}</span>
+              <div class="review-avatar">DZ</div>
+              <div class="review-meta">
+                <span class="review-name">David Zhao</span>
+                <span class="review-loc">⭐ Verified Google Review · ${areasList[2]?.trim() || city}, ${state}</span>
+              </div>
             </div>
           </div>
         </div>
