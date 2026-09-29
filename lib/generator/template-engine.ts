@@ -2,6 +2,8 @@ import { WebsiteFormData, TargetPage, computeTargetPages } from "./prompt";
 import { THEMES } from "../themes";
 import { BRAND } from "@/config/brand";
 import { renderBrandLogo } from "./logo-generator";
+import { generateTradeHeroAnimationHtml } from "../photos/trade-hero-animation";
+
 
 /**
  * Builds the complete styles.css stylesheet strictly customized to the chosen theme
@@ -394,6 +396,33 @@ body.theme-bold-trade .trust-badges-inline {
   font-size: 0.95rem;
   margin-bottom: 1.25rem;
 }
+
+/* Trade Hero Animated Illustration */
+.hero-trade-animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255,255,255,0.06);
+  min-height: 320px;
+}
+
+.hero-trade-animation svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: var(--radius);
+}
+
+@media (max-width: 768px) {
+  .hero-trade-animation {
+    min-height: 220px;
+    border-radius: 12px;
+  }
+}
+
+
 
 /* Trust Bar */
 .trust-bar {
@@ -1163,27 +1192,14 @@ ${headerHtml}
             <div class="trust-badge-item"><span>⚡</span> 45-Min Arrival Guarantee</div>
           </div>
         </div>
-        <div class="hero-card">
-          <h3>Request Immediate Dispatch</h3>
-          <p>Tell us what's happening and our nearby unit will contact you within 5 minutes.</p>
-          <form onsubmit="event.preventDefault(); alert('Quote request received! Our dispatch technician will call you shortly.'); this.reset();">
-            <div class="form-group">
-              <label for="h-name">Full Name</label>
-              <input type="text" id="h-name" required placeholder="Jane Doe">
-            </div>
-            <div class="form-group">
-              <label for="h-phone">Phone Number</label>
-              <input type="tel" id="h-phone" required placeholder="${phone}">
-            </div>
-            <div class="form-group">
-              <label for="h-service">Service Needed</label>
-              <select id="h-service">
-                ${servicesList.map(s => `<option value="${s.trim()}">${s.trim()}</option>`).join("\n                ")}
-              </select>
-            </div>
-            <button type="submit" class="btn btn-primary" style="width: 100%;">Dispatch a Technician</button>
-          </form>
-        </div>
+        ${generateTradeHeroAnimationHtml({
+          trade: formData.businessType || "contractor",
+          businessName: bizName,
+          city,
+          width: 560,
+          height: 420,
+        })}
+
       </div>
     </section>
 
