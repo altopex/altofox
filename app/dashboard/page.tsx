@@ -163,6 +163,11 @@ const TeamManagement = nextDynamic(
   { ssr: false }
 );
 
+const ChatGenerator = nextDynamic(
+  () => import("@/components/chat-generator/ChatGenerator").then((mod) => mod.ChatGenerator),
+  { ssr: false }
+);
+
 const ActivityFeed = nextDynamic(
   () => import("@/components/activity/ActivityFeed").then((mod) => mod.ActivityFeed),
   { ssr: false }
@@ -3924,6 +3929,9 @@ export default function DashboardPage() {
           handleOpenSettings("models");
         } else if (tab === "publishing") {
           handleOpenSettings("cloudflare");
+        } else if (tab === "chat-generator") {
+          setNavTab("chat-generator");
+          window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (tab === "new-website") {
           setNavTab("projects");
           setViewMode("builder");
@@ -4069,6 +4077,15 @@ export default function DashboardPage() {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
             <ActivityFeed maxItems={100} />
           </div>
+        </div>
+      )}
+
+      {/* TAB: CHAT GENERATOR (SEPARATE PROMPT-TO-SITE TOOL) */}
+      {navTab === "chat-generator" && (
+        <div className="flex-1 flex flex-col w-full min-h-0">
+          <ErrorBoundary fallbackTitle="Chat Generator Encountered an Issue">
+            <ChatGenerator onOpenSettings={() => handleOpenSettings("models")} />
+          </ErrorBoundary>
         </div>
       )}
 

@@ -31,6 +31,7 @@ import {
   Link2,
   Globe,
   ExternalLink,
+  MessageSquareCode,
 } from "lucide-react";
 import Link from "next/link";
 import { BRAND } from "@/config/brand";
@@ -38,6 +39,7 @@ import { RankLocalIcon } from "@/components/brand/RankLocalLogo";
 
 export type NavTab =
   | "dashboard"
+  | "chat-generator"
   | "new-website"
   | "projects"
   | "themes"
@@ -175,6 +177,18 @@ export function AppShell({
           icon: Eye,
           badge: hasActiveProject ? "Active" : undefined,
           badgeColor: "bg-emerald-500 text-white",
+        },
+      ],
+    },
+    {
+      group: "Chat Generator",
+      items: [
+        {
+          id: "chat-generator",
+          label: "Chat Generator",
+          icon: MessageSquareCode,
+          badge: "Instant",
+          badgeColor: "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300",
         },
       ],
     },
