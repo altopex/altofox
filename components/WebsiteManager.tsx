@@ -179,7 +179,7 @@ export function WebsiteManager({
     if (project) {
       setSettingsInstructions(project.customContentInstructions || project.formData?.customContentInstructions || "");
     }
-  }, [project.id, project.customContentInstructions, project.formData]);
+  }, [project]);
 
   const handleSaveCustomInstructions = async () => {
     const updatedProject: SavedProject = {

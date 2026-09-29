@@ -1181,85 +1181,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Process & Store Generated Website
-  const handleProcessGeneratedSite = useCallback(
-    async (data: any, usedFormData: any) => {
-      if (generationTimerRef.current) {
-        clearInterval(generationTimerRef.current);
-        generationTimerRef.current = null;
-      }
-
-      if (data.success && Array.isArray(data.files)) {
-        const projData = {
-          projectId: data.projectId,
-          name: data.name,
-          notes: data.notes,
-          provider: data.provider,
-          model: data.model,
-          themeName: activeTheme.name,
-          websiteDomain: websiteDomain.trim(),
-          files: data.files,
-          photos: data.photos,
-          qualityReport: data.qualityReport,
-          customContentInstructions: customContentInstructions.trim(),
-        };
-        setCurrentProject(projData);
-        setIsCurrentProjectSaved(Boolean(data.isSaved));
-        setPendingGeneratedSite({ data, usedFormData, projData });
-
-        // If backend already persisted (explicit saveToDb), sync to dashboard
-        if (data.isSaved) {
-          try {
-            await handlePersistProjectToDashboard(data, usedFormData);
-          } catch (e) {
-            console.warn("Could not sync saved project:", e);
-          }
-        } else {
-          // Default: Open the decision modal (Save for future optimization vs Download only)
-          setIsDecisionModalOpen(true);
-        }
-
-        addToast({
-          type: "success",
-          title: data.qualityReport?.overallScore
-            ? `Website Ready (Quality Score: ${data.qualityReport.overallScore}/100)`
-            : data.qualityReviewApplied
-            ? "Website Created & Quality Reviewed!"
-            : "Website Created!",
-          message: `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready for inspection.`,
-        });
-        return true;
-      } else {
-        addToast({
-          type: "error",
-          title: "Generation Incomplete",
-          message: data.error || "The AI model encountered an issue. Please verify your API key or model name.",
-        });
-        return false;
-      }
-    },
-    [
-      activeTheme,
-      websiteDomain,
-      customContentInstructions,
-      businessType,
-      city,
-      stateRegion,
-      services,
-      businessName,
-      currentNichePack,
-      phone,
-      email,
-      streetAddress,
-      zipPostalCode,
-      businessHours,
-      socialLinks,
-      serviceAreaCities,
-      loadAllSavedProjects,
-      addToast,
-    ]
-  );
-
   // Persists a generated website to database & IndexedDB ONLY when user chooses to save
   const handlePersistProjectToDashboard = useCallback(
     async (data: any, usedFormData: any) => {
@@ -1402,6 +1323,73 @@ export default function DashboardPage() {
       addToast,
     ]
   );
+
+  // Process & Store Generated Website
+  const handleProcessGeneratedSite = useCallback(
+    async (data: any, usedFormData: any) => {
+      if (generationTimerRef.current) {
+        clearInterval(generationTimerRef.current);
+        generationTimerRef.current = null;
+      }
+
+      if (data.success && Array.isArray(data.files)) {
+        const projData = {
+          projectId: data.projectId,
+          name: data.name,
+          notes: data.notes,
+          provider: data.provider,
+          model: data.model,
+          themeName: activeTheme.name,
+          websiteDomain: websiteDomain.trim(),
+          files: data.files,
+          photos: data.photos,
+          qualityReport: data.qualityReport,
+          customContentInstructions: customContentInstructions.trim(),
+        };
+        setCurrentProject(projData);
+        setIsCurrentProjectSaved(Boolean(data.isSaved));
+        setPendingGeneratedSite({ data, usedFormData, projData });
+
+        // If backend already persisted (explicit saveToDb), sync to dashboard
+        if (data.isSaved) {
+          try {
+            await handlePersistProjectToDashboard(data, usedFormData);
+          } catch (e) {
+            console.warn("Could not sync saved project:", e);
+          }
+        } else {
+          // Default: Open the decision modal (Save for future optimization vs Download only)
+          setIsDecisionModalOpen(true);
+        }
+
+        addToast({
+          type: "success",
+          title: data.qualityReport?.overallScore
+            ? `Website Ready (Quality Score: ${data.qualityReport.overallScore}/100)`
+            : data.qualityReviewApplied
+            ? "Website Created & Quality Reviewed!"
+            : "Website Created!",
+          message: `Generated ${data.files.filter((f: { path: string }) => f.path.endsWith(".html")).length} static HTML pages ready for inspection.`,
+        });
+        return true;
+      } else {
+        addToast({
+          type: "error",
+          title: "Generation Incomplete",
+          message: data.error || "The AI model encountered an issue. Please verify your API key or model name.",
+        });
+        return false;
+      }
+    },
+    [
+      activeTheme,
+      websiteDomain,
+      customContentInstructions,
+      handlePersistProjectToDashboard,
+      addToast,
+    ]
+  );
+
 
   // Handle post-generation decision choice
   const handleConfirmSaveDecision = useCallback(
