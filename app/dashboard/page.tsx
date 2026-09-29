@@ -3927,7 +3927,7 @@ export default function DashboardPage() {
           handleOpenSettings("preferences");
         } else if (tab === "settings-ai") {
           handleOpenSettings("models");
-        } else if (tab === "publishing") {
+        } else if (tab === "publishing" || tab === "domains") {
           handleOpenSettings("cloudflare");
         } else if (tab === "chat-generator") {
           setNavTab("chat-generator");

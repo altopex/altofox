@@ -47,6 +47,7 @@ export type NavTab =
   | "checker"
   | "linking"
   | "publishing"
+  | "domains"
   | "activity"
   | "team"
   | "settings-ai"
@@ -210,10 +211,15 @@ export function AppShell({
       items: [
         {
           id: "publishing",
-          label: "Cloudflare & Domains",
+          label: "Cloudflare Publishing",
           icon: Globe,
           badge: "Edge",
           badgeColor: "bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300",
+        },
+        {
+          id: "domains",
+          label: "Custom Domains",
+          icon: Link2,
         },
       ],
     },
