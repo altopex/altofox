@@ -245,7 +245,64 @@ async function callProviderProfile(
     return { text, usage: data.usageMetadata };
   }
 
-  // 2. OpenAI, OpenRouter, DeepSeek, & Custom OpenAI-Compatible
+  // 2. Anthropic Claude Provider
+  if (profile.apiType === "anthropic" || (profile.baseUrl && profile.baseUrl.includes("anthropic.com"))) {
+    const rawModel = targetModel || "claude-3-5-sonnet-20241022";
+    const base = normalizeBaseUrl(profile.baseUrl || "https://api.anthropic.com/v1");
+    const url = base.endsWith("/messages") ? base : `${base}/messages`;
+
+    const anthropicMaxTokens = Math.min(request.maxTokens ?? 4000, 8192);
+
+    const body: Record<string, unknown> = {
+      model: rawModel,
+      messages: [{ role: "user", content: finalPrompt }],
+      max_tokens: anthropicMaxTokens,
+      temperature: request.temperature ?? 0.7,
+    };
+
+    if (finalSystemPrompt) {
+      body.system = finalSystemPrompt;
+    }
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let errorMsg = `Anthropic API error (${res.status}): ${res.statusText}`;
+      try {
+        const parsed = JSON.parse(errText);
+        if (parsed.error?.message) errorMsg = parsed.error.message;
+        else if (parsed.message) errorMsg = parsed.message;
+      } catch {}
+
+      if (res.status === 401) {
+        throw new Error(`Invalid API key (401 Unauthorized) for Anthropic. Please check your key.`);
+      } else if (res.status === 400 && errorMsg.toLowerCase().includes("credit")) {
+        throw new Error(`Insufficient credits for Anthropic. Please check your balance.`);
+      } else if (res.status === 429) {
+        throw new Error(`Rate limit exceeded for Anthropic (429). Please wait before testing again.`);
+      }
+      throw new Error(errorMsg);
+    }
+
+    const data = await res.json();
+    const { content } = extractChoiceContent(data);
+    if (!content || typeof content !== "string") {
+      throw new Error("Anthropic returned an empty response.");
+    }
+    return { text: content, usage: data.usage };
+  }
+
+  // 3. OpenAI, OpenRouter, DeepSeek, & Custom OpenAI-Compatible
   let endpoint = resolveChatEndpoint(profile.baseUrl || "https://api.openai.com/v1");
   const extraHeaders: Record<string, string> = {};
 
@@ -265,11 +322,16 @@ async function callProviderProfile(
   }
   messages.push({ role: "user", content: finalPrompt });
 
+  const requestedMaxTokens = request.maxTokens ?? 4000;
+  const maxTokensClamped = profile.capabilities?.maxTokens
+    ? Math.min(requestedMaxTokens, profile.capabilities.maxTokens)
+    : Math.min(requestedMaxTokens, 8192);
+
   const payload: Record<string, any> = {
     model: targetModel,
     messages,
     temperature: request.temperature ?? 0.7,
-    max_tokens: request.maxTokens ?? 14000,
+    max_tokens: maxTokensClamped,
   };
 
   // Structured output parameter adaptation
@@ -352,14 +414,19 @@ export async function executeAIRequest(request: NormalizedAIRequest): Promise<No
     targetProfile = {
       id: `direct-${directProvider}`,
       name: direct.providerName || directProvider.toUpperCase(),
-      apiType: directProvider === "gemini" ? "gemini" : directProvider === "openrouter" ? "openrouter" : "openai-compatible",
+      apiType: directProvider === "gemini" ? "gemini" : directProvider === "anthropic" ? "anthropic" : directProvider === "openrouter" ? "openrouter" : "openai-compatible",
       baseUrl: direct.baseUrl,
       apiKey: direct.apiKey!,
       maskedKey: "••••••••",
-      model: direct.model || (directProvider === "gemini" ? "gemini-1.5-pro" : "gpt-4o"),
+      model: direct.model || (directProvider === "gemini" ? "gemini-1.5-pro" : directProvider === "anthropic" ? "claude-3-5-sonnet-20241022" : "gpt-4o"),
       enabled: true,
       status: "connected",
-      capabilities: { chatCompletion: true, structuredJson: true, systemInstructions: true },
+      capabilities: {
+        chatCompletion: true,
+        structuredJson: directProvider !== "anthropic",
+        systemInstructions: true,
+        maxTokens: directProvider === "anthropic" ? 8192 : 16000,
+      },
     };
   } else if (request.providerId) {
     targetProfile = profiles.find((p) => p.id === request.providerId);

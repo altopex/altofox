@@ -22,8 +22,7 @@ CONTENT RULES
 - Sound human, confident, and helpful. Short paragraphs, clear benefits, active voice. No clichés like "look no further", "in today's fast-paced world", "one-stop shop", "we pride ourselves".
 - Never invent facts: no fake awards, license numbers, review counts, prices, or years in business. Only use claims from the provided details. Where helpful, use safe general claims (e.g. "locally owned", "upfront pricing", "free estimates" only if stated).
 - REVIEWS & TESTIMONIALS: DO NOT write reviews or testimonials. The application handles reviews separately using verified customer data or Google Review links.
-- Each service page: 500+ words covering what the service is, signs you need it, what's included, the process, why choose this business, and 3–4 service-specific FAQs.
-- Each service area page: 400+ words.
+- Concise, high-converting copy: Write clear, punchy copy tailored to this trade (2–3 concise paragraphs per page, focused value propositions, realistic local FAQs). Avoid repetitive filler sentences.
 - Home page: strong hero headline with main service + city, clear value, and calls to action throughout.
 
 LOCAL SEO RULES
@@ -285,9 +284,9 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   for (const page of pages) {
     const slug = page.path.replace(/\.html$/, "");
     let requirement = "";
-    if (page.type === "home") requirement = "500+ words, strong hero headline with main service + city, value points, CTAs throughout";
-    else if (page.type === "services" || page.type === "individual-service") requirement = "500+ words: what it is, signs you need it, what's included, the process, why choose this business, and 3-4 service FAQs";
-    else if (page.type === "service-areas" || page.type === "individual-area") requirement = "400+ words: genuinely different angle, examples, structure, local context, never just swap city name";
+    if (page.type === "home") requirement = "Strong hero headline with main service + city, concise value points, punchy service highlights, CTAs throughout";
+    else if (page.type === "services" || page.type === "individual-service") requirement = "Concise and high-converting: what it is, common warning signs, what's included, clear process, and 3-4 trade FAQs";
+    else if (page.type === "service-areas" || page.type === "individual-area") requirement = "Tailored local angle, key neighborhoods served, fast dispatch reassurance, never just duplicate other area copy";
     else requirement = "100% unique, human, helpful conversion copy";
 
     lines.push(`- slug: "${slug}" (${page.title}) [${page.type}] -> Requirement: ${requirement}`);
@@ -342,7 +341,7 @@ export function buildAIContentPrompt(formData: WebsiteFormData, targetPages?: Ta
   // === 9. EXACT JSON OUTPUT INSTRUCTION ===
   lines.push("");
   lines.push("=== 9. EXACT JSON OUTPUT INSTRUCTION ===");
-  lines.push("Respond with ONLY valid JSON in the exact format specified in the system prompt. No markdown, no code fences, no commentary. Ensure every page has 100% unique content, service pages 500+ words, service area pages 400+ words, realistic image queries, and DO NOT generate fake reviews or quotes.");
+  lines.push("Respond with ONLY valid JSON in the exact format specified in the system prompt. No markdown, no code fences, no commentary. Ensure every page has 100% unique, concise, high-converting copy, realistic image queries, and DO NOT generate fake reviews or quotes.");
 
   return lines.join("\n");
 }

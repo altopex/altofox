@@ -86,6 +86,8 @@ import {
   Search,
   Eye,
   AlertTriangle,
+  AlertCircle,
+  RefreshCw,
   Zap,
 } from "lucide-react";
 import type { SelectedServiceCity } from "@/components/ServiceAreaPicker";
@@ -437,6 +439,10 @@ export default function DashboardPage() {
 
   // Generation & Results State
   const [generating, setGenerating] = useState(false);
+  const [generationStage, setGenerationStage] = useState<
+    "IDLE" | "VALIDATING" | "CONNECTING" | "GENERATING" | "PROCESSING" | "BUILDING" | "PREVIEW_READY" | "FAILED"
+  >("IDLE");
+  const [generationError, setGenerationError] = useState<{ message: string; canFallback: boolean } | null>(null);
   const [generationProgressText, setGenerationProgressText] = useState("Planning your pages…");
   const [generationPercent, setGenerationPercent] = useState(10);
   const [isGenerationTakingLong, setIsGenerationTakingLong] = useState(false);
@@ -1470,6 +1476,8 @@ export default function DashboardPage() {
       generationTimerRef.current = null;
     }
     setGenerating(false);
+    setGenerationStage("IDLE");
+    setGenerationError(null);
     setIsGenerationTakingLong(false);
     addToast({
       type: "info",
@@ -1490,9 +1498,11 @@ export default function DashboardPage() {
     }
 
     setGenerating(true);
+    setGenerationStage("BUILDING");
+    setGenerationError(null);
     setIsGenerationTakingLong(false);
     setGenerationPercent(85);
-    setGenerationProgressText("Assembling instant high-converting trade website…");
+    setGenerationProgressText("Assembling instant high-converting trade website from curated templates…");
 
     const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
     const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
@@ -1522,8 +1532,17 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Instant assembly failed");
+      }
+      setGenerationStage("PREVIEW_READY");
       await handleProcessGeneratedSite(data, targetFormData);
     } catch (err: any) {
+      setGenerationStage("FAILED");
+      setGenerationError({
+        message: err?.message || "Failed to assemble instant templates.",
+        canFallback: false,
+      });
       addToast({
         type: "error",
         title: "Instant Assembly Error",
@@ -1582,7 +1601,7 @@ export default function DashboardPage() {
     const prefReview =
       (typeof window !== "undefined"
         ? localStorage.getItem("altofox_pref_quality_review")
-        : null) !== "false";
+        : null) === "true"; // Opt-in only to keep baseline generation fast
 
     const savedLanguage =
       (typeof window !== "undefined" ? localStorage.getItem("altofox_pref_language") : null) || "English";
@@ -1660,10 +1679,12 @@ export default function DashboardPage() {
     } catch {}
 
     setGenerating(true);
+    setGenerationStage("VALIDATING");
+    setGenerationError(null);
     setIsGenerationTakingLong(false);
     setGenerationElapsedSeconds(0);
     setGenerationPercent(15);
-    setGenerationProgressText("Contacting AI model & initializing site structure…");
+    setGenerationProgressText("Validating business details and SEO settings…");
 
     if (generationTimerRef.current) clearInterval(generationTimerRef.current);
     const startTime = Date.now();
@@ -1672,33 +1693,8 @@ export default function DashboardPage() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       setGenerationElapsedSeconds(elapsed);
 
-      if (elapsed >= 35) {
+      if (elapsed >= 50) {
         setIsGenerationTakingLong(true);
-      }
-
-      if (elapsed < 6) {
-        setGenerationProgressText("Contacting AI model & initializing site structure…");
-        setGenerationPercent(Math.min(25, 15 + elapsed * 2));
-      } else if (elapsed < 16) {
-        setGenerationProgressText("Writing high-converting local trade copy & calls-to-action…");
-        setGenerationPercent(Math.min(50, 25 + Math.floor((elapsed - 6) * 2.5)));
-      } else if (elapsed < 28) {
-        setGenerationProgressText(
-          prefReview
-            ? "Auditing copy uniqueness & LocalBusiness schema (Pass 1)…"
-            : "Structuring service landing pages, FAQs & LocalBusiness schema…"
-        );
-        setGenerationPercent(Math.min(72, 50 + Math.floor((elapsed - 16) * 1.8)));
-      } else if (elapsed < 42) {
-        setGenerationProgressText(
-          prefReview
-            ? "Quality Review (Pass 2): Auditing SEO, facts & eliminating clichés…"
-            : "Matching localized photos, vectors, and brand tokens…"
-        );
-        setGenerationPercent(Math.min(88, 72 + Math.floor((elapsed - 28) * 1.1)));
-      } else {
-        setGenerationProgressText("Assembling zero-build static pages & final packaging…");
-        setGenerationPercent(Math.min(96, 88 + Math.floor((elapsed - 42) * 0.4)));
       }
     }, 1000);
 
@@ -1712,6 +1708,17 @@ export default function DashboardPage() {
     }, 85000);
 
     try {
+      setGenerationStage("CONNECTING");
+      setGenerationPercent(25);
+      setGenerationProgressText(`Connecting to ${activeProvider.toUpperCase()} (${activeModel})…`);
+
+      // Allow UI to paint stage transition
+      await new Promise((r) => setTimeout(r, 200));
+
+      setGenerationStage("GENERATING");
+      setGenerationPercent(45);
+      setGenerationProgressText(`Generating high-converting local trade copy with ${activeProvider.toUpperCase()}…`);
+
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1750,11 +1757,47 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      await handleProcessGeneratedSite(data, formData);
+
+      if (!res.ok || !data.success) {
+        setGenerationStage("FAILED");
+        setGenerationError({
+          message: data.error || `Server returned HTTP ${res.status}: ${res.statusText}`,
+          canFallback: Boolean(data.canFallbackToTemplates),
+        });
+        setGenerating(false);
+        addToast({
+          type: "error",
+          title: "AI Generation Error",
+          message: data.error || "Generation could not be completed.",
+        });
+        return;
+      }
+
+      setGenerationStage("PROCESSING");
+      setGenerationPercent(75);
+      setGenerationProgressText("Processing structured copy & LocalBusiness schema…");
+
+      await new Promise((r) => setTimeout(r, 150));
+
+      setGenerationStage("BUILDING");
+      setGenerationPercent(90);
+      setGenerationProgressText("Assembling zero-build static pages & preview…");
+
+      const success = await handleProcessGeneratedSite(data, formData);
+      if (success) {
+        setGenerationStage("PREVIEW_READY");
+      } else {
+        setGenerationStage("FAILED");
+      }
     } catch (err: any) {
       if (err?.name === "AbortError" || abortController.signal.aborted) {
         return;
       }
+      setGenerationStage("FAILED");
+      setGenerationError({
+        message: err instanceof Error ? err.message : "Network error generating website.",
+        canFallback: true,
+      });
       addToast({
         type: "error",
         title: "Connection Error",
@@ -2192,99 +2235,146 @@ export default function DashboardPage() {
             </div>
           ) : (
             <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-              {generating ? (
-                /* VIEW 2: GENERATING SCREEN */
+              {generating || generationStage === "FAILED" ? (
+                /* VIEW 2: GENERATION & RECOVERY PIPELINE */
                 <div className="max-w-xl mx-auto w-full my-auto py-16 px-4">
-            <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6">
-              <div className="w-16 h-16 rounded-full bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto shadow-sm">
-                <Loader2 className="w-8 h-8 animate-spin" />
-              </div>
+                  {generationStage === "FAILED" && generationError ? (
+                    /* HONEST FAILURE & RECOVERY SCREEN */
+                    <div className="bg-white border border-rose-200 rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6 animate-in fade-in duration-300">
+                      <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
+                        <AlertCircle className="w-8 h-8" />
+                      </div>
 
-              <div>
-                <h2 className="text-xl font-bold text-[#0F172A] mb-1.5">
-                  Building Your Static Website
-                </h2>
-                <p className="text-sm font-medium text-[#4F46E5] min-h-[24px] transition-all">
-                  {generationProgressText}
-                </p>
-                <p className="text-xs text-[#64748B] mt-1">
-                  Writing zero-build static HTML, CSS, JavaScript, and Schema.org markup.
-                  {generationElapsedSeconds > 0 && (
-                    <span className="font-semibold text-slate-500 ml-1.5">
-                      ({generationElapsedSeconds}s elapsed)
-                    </span>
-                  )}
-                </p>
-              </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-slate-900 mb-1.5">
+                          AI Generation Could Not Be Completed
+                        </h2>
+                        <div className="p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl text-left my-3">
+                          <p className="text-xs font-semibold text-rose-800 mb-0.5">Error details:</p>
+                          <p className="text-xs text-rose-700 font-mono break-words leading-relaxed">
+                            {generationError.message}
+                          </p>
+                        </div>
+                        <p className="text-xs text-slate-500 max-w-md mx-auto">
+                          All your entered business details and SEO settings were preserved. You can retry with your configured AI provider or immediately assemble the site using our curated trade templates.
+                        </p>
+                      </div>
 
-              {/* Animated Progress Bar */}
-              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                <div
-                  className="bg-[#4F46E5] h-full rounded-full transition-all duration-700 ease-out"
-                  style={{ width: `${generationPercent}%` }}
-                />
-              </div>
-
-              {/* Stuck Job Watchdog Recovery Panel */}
-              {isGenerationTakingLong && (
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-left space-y-3 animate-in fade-in duration-300">
-                  <div className="flex items-start space-x-2.5">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-900">
-                        Generation taking longer than expected ({generationElapsedSeconds}s elapsed)
-                      </h4>
-                      <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                        Your connected AI provider is taking longer to return the content payload. You can continue waiting or immediately complete your website using our curated trade template engine.
-                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleGenerateWebsite}
+                          className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Retry AI Generation</span>
+                        </button>
+                        {generationError.canFallback && (
+                          <button
+                            type="button"
+                            onClick={handleInstantSafeGeneration}
+                            className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-200" />
+                            <span>Assemble with Curated Templates</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGenerationStage("IDLE");
+                            setGenerationError(null);
+                          }}
+                          className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-medium transition"
+                        >
+                          Return to Form
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    /* ACTIVE GENERATION PIPELINE SCREEN */
+                    <div className="bg-white border border-[#E2E8F0] rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6">
+                      <div className="w-16 h-16 rounded-full bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center mx-auto shadow-sm">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                      </div>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleInstantSafeGeneration}
-                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition"
-                    >
-                      <Zap className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Use Safe Instant Templates (0s)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        addToast({
-                          type: "info",
-                          title: "Waiting for AI Provider",
-                          message: "Allowing your AI model additional time to finish the response.",
-                        });
-                      }}
-                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-medium transition"
-                    >
-                      Continue Waiting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleCancelGeneration}
-                      className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-red-600 transition"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+                      <div>
+                        <h2 className="text-xl font-bold text-[#0F172A] mb-1.5">
+                          Building Your Static Website
+                        </h2>
+                        <p className="text-sm font-medium text-[#4F46E5] min-h-[24px] transition-all">
+                          {generationProgressText}
+                        </p>
+                        <p className="text-xs text-[#64748B] mt-1">
+                          Writing zero-build static HTML, CSS, JavaScript, and Schema.org markup.
+                          {generationElapsedSeconds > 0 && (
+                            <span className="font-semibold text-slate-500 ml-1.5">
+                              ({generationElapsedSeconds}s elapsed)
+                            </span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Stage Machine Pipeline Indicators */}
+                      <div className="grid grid-cols-5 gap-1.5 py-2 px-1 text-[11px] font-medium border-y border-slate-100">
+                        {[
+                          { id: "VALIDATING", label: "Validating" },
+                          { id: "CONNECTING", label: "Connecting" },
+                          { id: "GENERATING", label: "Generating" },
+                          { id: "PROCESSING", label: "Processing" },
+                          { id: "BUILDING", label: "Building" },
+                        ].map((stg, idx) => {
+                          const stagesOrder = ["VALIDATING", "CONNECTING", "GENERATING", "PROCESSING", "BUILDING", "PREVIEW_READY"];
+                          const currentIdx = stagesOrder.indexOf(generationStage);
+                          const isPast = currentIdx > idx;
+                          const isCurrent = currentIdx === idx;
+                          return (
+                            <div
+                              key={stg.id}
+                              className={`flex flex-col items-center space-y-1 ${
+                                isCurrent
+                                  ? "text-indigo-600 font-bold"
+                                  : isPast
+                                  ? "text-emerald-600"
+                                  : "text-slate-400"
+                              }`}
+                            >
+                              <div
+                                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                  isCurrent
+                                    ? "bg-indigo-600 ring-4 ring-indigo-100 animate-pulse"
+                                    : isPast
+                                    ? "bg-emerald-500"
+                                    : "bg-slate-200"
+                                }`}
+                              />
+                              <span className="truncate">{stg.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Animated Progress Bar */}
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className="bg-[#4F46E5] h-full rounded-full transition-all duration-500 ease-out"
+                          style={{ width: `${generationPercent}%` }}
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={handleCancelGeneration}
+                          className="text-xs font-semibold text-[#64748B] hover:text-[#EF4444] px-3 py-1.5 rounded-lg transition"
+                        >
+                          Cancel Generation
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleCancelGeneration}
-                  className="text-xs font-semibold text-[#64748B] hover:text-[#EF4444] px-3 py-1.5 rounded-lg transition"
-                >
-                  Cancel Generation
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
+              ) : (
           /* VIEW 3: STEP-BY-STEP WIZARD */
           <div className="max-w-[720px] mx-auto w-full space-y-6">
             {/* Quick Actions Bar (Start over & Fill example) */}

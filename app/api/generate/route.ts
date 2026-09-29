@@ -275,25 +275,29 @@ export async function POST(req: NextRequest) {
           model: model || creds.defaultModel,
         };
       }
-    } catch (err) {
-      // If no API key configured, use default trade content JSON and assemble seamlessly
-      console.warn("No API key configured. Generating with section template engine:", err);
-      const defaultContent = buildDefaultTradeContentJSON(websiteData, targetPages);
-      const assembled = await assembleWebsite(defaultContent, activeTheme, assembleOptions);
+    } catch (err: any) {
+      console.warn("Could not resolve credentials for provider:", err);
+      return NextResponse.json(
+        {
+          success: false,
+          error: `No API key configured for provider "${providerType}". Please add your API key in Settings or click "Assemble with Curated Templates".`,
+          canFallbackToTemplates: true,
+          provider: providerType,
+        },
+        { status: 400 }
+      );
+    }
 
-      const projectName = websiteData.businessName || "Static Website";
-      return NextResponse.json({
-        success: true,
-        projectId: "assembled-" + Date.now(),
-        name: projectName,
-        notes: `Assembled from section templates + real trade photos. Add an API key in Settings to customize AI copy.`,
-        provider: "template-engine",
-        model: "curated-trade-engine",
-        createdAt: new Date().toISOString(),
-        files: assembled.files,
-        photos: assembled.photos || [],
-        downloadUrl: `/api/projects/assembled-${Date.now()}/download`,
-      });
+    if (!creds?.apiKey) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `No API key configured for provider "${providerType}". Please configure your API key in Settings or click "Assemble with Curated Templates".`,
+          canFallbackToTemplates: true,
+          provider: providerType,
+        },
+        { status: 400 }
+      );
     }
 
     // 2. Select target model
@@ -304,7 +308,7 @@ export async function POST(req: NextRequest) {
       assembleOptions.providerCredentials.model = targetModel;
     }
 
-    // 3. Ask AI for content JSON with 3-Attempt Smart Retry System
+    // 3. Ask AI for content JSON with Controlled Retry System
     const contentPrompt = buildAIContentPrompt(websiteData, targetPages);
     let contentJSON: SiteContentJSON;
     let generationMethod = "ai";
@@ -318,11 +322,11 @@ export async function POST(req: NextRequest) {
         model: targetModel,
         prompt: contentPrompt,
         systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
-        maxTokens: 14000,
+        maxTokens: 4000,
         baseUrl: creds.baseUrl,
         organizationId: creds.organizationId,
         providerName: creds.providerName,
-        timeoutMs: 40000,
+        timeoutMs: 30000,
       });
 
       const parsed = extractAndParseJSON(rawText);
@@ -331,7 +335,7 @@ export async function POST(req: NextRequest) {
       console.warn("[Generate] Attempt 1 failed:", attempt1Err?.message || attempt1Err);
       lastError = attempt1Err?.message || String(attempt1Err);
 
-      // Attempt 2: Concise repair prompt with context (25s budget)
+      // Attempt 2: Concise repair prompt with context (20s budget)
       try {
         console.log(`[Generate] Attempt 2: Sending concise JSON repair prompt to ${providerType}...`);
         const repairPrompt = `The previous response was not valid JSON or was truncated.
@@ -354,11 +358,11 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
           model: targetModel,
           prompt: repairPrompt,
           systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
-          maxTokens: 14000,
+          maxTokens: 4000,
           baseUrl: creds.baseUrl,
           organizationId: creds.organizationId,
           providerName: creds.providerName,
-          timeoutMs: 25000,
+          timeoutMs: 20000,
         });
 
         const retryParsed = extractAndParseJSON(repairRaw);
@@ -368,15 +372,22 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
         console.warn("[Generate] Attempt 2 failed:", attempt2Err?.message || attempt2Err);
         lastError = attempt2Err?.message || String(attempt2Err);
 
-        // Attempt 3: Structured trade template engine with targeted data merging (guaranteed instant 0ms fallback)
-        console.log("[Generate] Attempt 3: Using structured trade template engine with targeted data merging.");
-        contentJSON = buildDefaultTradeContentJSON(websiteData, targetPages);
-        generationMethod = "trade-template-engine";
+        // DO NOT silently disguise AI failure as success! Return honest 502 with error details
+        return NextResponse.json(
+          {
+            success: false,
+            error: `AI generation failed: ${lastError}`,
+            canFallbackToTemplates: true,
+            provider: providerType,
+            model: targetModel,
+          },
+          { status: 502 }
+        );
       }
     }
 
-    // 3b. Optional Second AI Pass: "Quality Review" (25s budget)
-    const enableQualityReview = body.qualityReview !== false && formData?.qualityReview !== false;
+    // 3b. Optional Second AI Pass: "Quality Review" (opt-in only to keep baseline generation fast: 4-7s)
+    const enableQualityReview = body.qualityReview === true || formData?.qualityReview === true;
     let qualityReviewApplied = false;
 
     if (enableQualityReview && creds?.apiKey && generationMethod.startsWith("ai")) {
@@ -389,11 +400,11 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
           model: targetModel,
           prompt: reviewPrompt,
           systemPrompt: QUALITY_REVIEW_SYSTEM_PROMPT,
-          maxTokens: 14000,
+          maxTokens: 4000,
           baseUrl: creds.baseUrl,
           organizationId: creds.organizationId,
           providerName: creds.providerName,
-          timeoutMs: 25000,
+          timeoutMs: 20000,
         });
 
         const parsedReview = extractAndParseJSON(reviewRaw);
