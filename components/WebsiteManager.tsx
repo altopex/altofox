@@ -62,6 +62,8 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { PublishModal } from "./publishing/PublishModal";
+import { HostingPublishingPanel } from "./publishing/HostingPublishingPanel";
+import { LivePreview, ProjectData } from "./LivePreview";
 import { InternalLinkingDashboard } from "./InternalLinkingDashboard";
 import { useProjectPresence } from "@/lib/supabase/presence";
 import { ConflictModal } from "./editor/ConflictModal";
@@ -152,8 +154,10 @@ export function WebsiteManager({
   }, [initialProject, normalizeProject]);
 
   const [activeTab, setActiveTab] = useState<
-    "pages" | "business-details" | "keywords" | "images" | "settings" | "history" | "search-console" | "cycles" | "rank-rent" | "internal-linking"
-  >("pages");
+    "overview" | "preview" | "publish" | "optimization" | "settings"
+  >("overview");
+  const [optimizationSubTab, setOptimizationSubTab] = useState<"audit" | "linking" | "cycles">("audit");
+  const [settingsSubTab, setSettingsSubTab] = useState<"general" | "theme" | "versions" | "rank-rent" | "export">("general");
 
   // Modals
   const [isKeywordModalOpen, setIsKeywordModalOpen] = useState(false);
@@ -751,36 +755,18 @@ export function WebsiteManager({
         <div className="flex items-center space-x-2">
           <button
             type="button"
-            onClick={() => setIsCycleModalOpen(true)}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+            onClick={() => setActiveTab("preview")}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition shadow-xs cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Optimize this month</span>
+            <Eye className="w-3.5 h-3.5" />
+            <span>Live Preview</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setIsKeywordModalOpen(true)}
-            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition"
-          >
-            <Search className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Keyword Map</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsFindReplaceModalOpen(true)}
-            className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition"
-          >
-            <Layers className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Find &amp; Replace</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsPublishModalOpen(true)}
-            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold transition shadow-xs"
-            title="Publish website directly to Cloudflare Pages edge hosting"
+            onClick={() => setActiveTab("publish")}
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 text-orange-700 text-xs font-bold transition shadow-xs cursor-pointer"
+            title="Publish website to Cloudflare, Vercel, Netlify, or GitHub"
           >
             <UploadCloud className="w-3.5 h-3.5" />
             <span>Publish</span>
@@ -790,7 +776,7 @@ export function WebsiteManager({
             <button
               type="button"
               onClick={() => handleDownloadZip("full")}
-              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" />
               <span>Download ZIP</span>
@@ -799,14 +785,14 @@ export function WebsiteManager({
               <button
                 type="button"
                 onClick={() => handleDownloadZip("full")}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 block"
+                className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 block cursor-pointer"
               >
                 Full Website ZIP
               </button>
               <button
                 type="button"
                 onClick={() => handleDownloadZip("changed-only")}
-                className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50 block"
+                className="w-full text-left px-3 py-1.5 rounded-lg text-xs font-semibold text-indigo-600 hover:bg-indigo-50 block cursor-pointer"
               >
                 Changed Files Only ZIP
               </button>
@@ -818,165 +804,95 @@ export function WebsiteManager({
       {/* Main Container: Sidebar + Editor + Live Preview */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Vertical Nav Tabs */}
-        <aside className="w-48 bg-slate-900 text-slate-300 flex flex-col shrink-0 text-xs font-semibold">
-          <div className="p-3 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-            Website Manager
+        <aside className="w-52 bg-slate-900 text-slate-300 flex flex-col shrink-0 text-xs font-semibold">
+          <div className="p-3.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center justify-between">
+            <span>Workspace</span>
+            <span className="text-[10px] text-emerald-400 font-mono">Synced</span>
           </div>
-          <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
+          <nav className="flex-1 p-2 space-y-1.5 overflow-y-auto">
             <button
               type="button"
-              onClick={() => setActiveTab("pages")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "pages"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
+              onClick={() => setActiveTab("overview")}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                activeTab === "overview"
+                  ? "bg-indigo-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
-              <FileText className="w-4 h-4" />
-              <span>Pages &amp; Sections</span>
+              <Layers className="w-4 h-4" />
+              <span>Overview &amp; Pages</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab("business-details")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "business-details"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
-              }`}
-            >
-              <Tag className="w-4 h-4" />
-              <span>Business Details</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("rank-rent")}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition ${
-                activeTab === "rank-rent"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
+              onClick={() => setActiveTab("preview")}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                activeTab === "preview"
+                  ? "bg-indigo-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <Key className="w-4 h-4 text-amber-400" />
-                <span>Rank &amp; Rent</span>
+                <Eye className="w-4 h-4 text-emerald-400" />
+                <span>Live Preview</span>
               </div>
-              {project.rankRentConfig?.status === "rented" ? (
-                <span className="text-[9px] font-bold bg-emerald-500/30 text-emerald-300 px-1.5 py-0.5 rounded-full">
-                  Rented
-                </span>
-              ) : project.rankRentConfig?.status === "available" ? (
-                <span className="text-[9px] font-bold bg-blue-500/30 text-blue-300 px-1.5 py-0.5 rounded-full">
-                  Lease
-                </span>
-              ) : null}
+              <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full">
+                Interactive
+              </span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab("keywords")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "keywords"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
-              }`}
-            >
-              <Search className="w-4 h-4" />
-              <span>Keywords</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("search-console")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "search-console"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              <span>Search Console</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("cycles")}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition ${
-                activeTab === "cycles"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
+              onClick={() => setActiveTab("publish")}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                activeTab === "publish"
+                  ? "bg-indigo-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
               <div className="flex items-center space-x-2.5">
-                <RefreshCw className="w-4 h-4" />
-                <span>Cycles</span>
+                <UploadCloud className="w-4 h-4 text-orange-400" />
+                <span>Publish</span>
               </div>
-              {(project.optimizationCycles?.length || 0) > 0 && (
-                <span className="text-[10px] font-bold bg-indigo-500/40 text-indigo-200 px-1.5 py-0.5 rounded-full">
-                  {project.optimizationCycles?.length}
-                </span>
-              )}
+              <span className="text-[10px] font-bold bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded-full">
+                Hosting
+              </span>
             </button>
 
             <button
               type="button"
-              onClick={() => setActiveTab("images")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "images"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
+              onClick={() => setActiveTab("optimization")}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition cursor-pointer ${
+                activeTab === "optimization"
+                  ? "bg-indigo-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
-              <ImageIcon className="w-4 h-4" />
-              <span>Images</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("internal-linking")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "internal-linking"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
-              }`}
-            >
-              <Network className="w-4 h-4" />
-              <span>Internal Linking</span>
+              <div className="flex items-center space-x-2.5">
+                <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                <span>Optimization &amp; SEO</span>
+              </div>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveTab("settings")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
+              className={`w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl transition cursor-pointer ${
                 activeTab === "settings"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
+                  ? "bg-indigo-600 text-white font-bold shadow-xs"
+                  : "hover:bg-slate-800 text-slate-400 hover:text-white"
               }`}
             >
               <Settings className="w-4 h-4" />
               <span>Settings &amp; Theme</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab("history")}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-lg transition ${
-                activeTab === "history"
-                  ? "bg-indigo-600 text-white font-bold"
-                  : "hover:bg-slate-800 text-slate-400"
-              }`}
-            >
-              <History className="w-4 h-4" />
-              <span>Change History</span>
             </button>
           </nav>
         </aside>
 
         {/* Center Main Work Area */}
         <main className="flex-1 flex overflow-hidden">
-          {/* TAB 1: PAGES TAB */}
-          {activeTab === "pages" && (
+          {/* TAB 1: OVERVIEW TAB */}
+          {activeTab === "overview" && (
             <div className="flex-1 flex overflow-hidden">
               {/* Pages Column */}
               <div className="w-64 bg-white border-r border-slate-200 flex flex-col shrink-0">
@@ -1326,470 +1242,487 @@ export function WebsiteManager({
             </div>
           )}
 
-          {/* TAB 2: SEARCH CONSOLE TAB */}
-          {activeTab === "search-console" && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
-              <div className="p-4 bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="flex items-center space-x-3">
-                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <Sparkles className="w-5 h-5" />
+          {/* TAB 2: LIVE PREVIEW TAB */}
+          {activeTab === "preview" && (
+            <div className="flex-1 flex flex-col overflow-hidden bg-slate-100">
+              <LivePreview
+                project={{
+                  projectId: project.id,
+                  name: project.name,
+                  notes: project.formData?.notes,
+                  provider: "anthropic",
+                  model: "claude-3-5-sonnet",
+                  themeName: project.theme?.name || "Modern Pro",
+                  websiteDomain:
+                    project.businessDetails?.websiteDomain ||
+                    project.formData?.websiteDomain ||
+                    `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`,
+                  files: project.files,
+                  photos: (project as any).photos || [],
+                  customContentInstructions: project.customContentInstructions,
+                }}
+                onNewWebsite={onBackToDashboard}
+                onOpenManager={() => setActiveTab("overview")}
+                isSaved={true}
+                onUpdateProject={(updatedData) => {
+                  const updated: SavedProject = {
+                    ...project,
+                    files: updatedData.files.map((f) => ({
+                      path: f.path,
+                      content: f.content,
+                      mimeType: f.mimeType ?? undefined,
+                    })),
+                    lastEditedAt: Date.now(),
+                  };
+                  setProject(updated);
+                  onProjectUpdated(updated);
+                  saveProjectToDB(updated);
+                }}
+              />
+            </div>
+          )}
+
+          {/* TAB 3: PUBLISH TAB */}
+          {activeTab === "publish" && (
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-xs space-y-6">
+                  <div className="border-b border-slate-100 pb-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2.5">
+                          <UploadCloud className="w-6 h-6 text-indigo-600" />
+                          <span>Publish &amp; Hosting Center</span>
+                        </h2>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Deploy directly to Cloudflare Pages, Vercel, Netlify, or GitHub Pages. Zero complex setup.
+                        </p>
+                      </div>
+                      {project.publishedUrl && (
+                        <a
+                          href={project.publishedUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold hover:bg-emerald-100 transition"
+                        >
+                          <span>Live Site</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-xs font-bold text-slate-900">
-                      Guided Monthly Optimization Cycle
-                    </h3>
-                    <p className="text-[11px] text-slate-600">
-                      7-step guided workflow: upload Search Console data, compare deltas vs last cycle, pick priority opportunities, optimize HTML, and export changed files.
-                    </p>
-                  </div>
+
+                  <HostingPublishingPanel
+                    projectName={project.name}
+                    projectId={project.id}
+                    files={project.files}
+                    photos={(project as any).photos || []}
+                    websiteDomain={project.businessDetails?.websiteDomain || project.formData?.websiteDomain}
+                    onPublished={(res) => {
+                      const updated = {
+                        ...project,
+                        publishedUrl: res.liveUrl,
+                        hostingProvider: res.provider,
+                        lastEditedAt: Date.now(),
+                      };
+                      setProject(updated);
+                      onProjectUpdated(updated);
+                      saveProjectToDB(updated);
+                    }}
+                  />
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: OPTIMIZATION TAB */}
+          {activeTab === "optimization" && (
+            <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+              {/* Sub-navigation bar */}
+              <div className="h-12 bg-white border-b border-slate-200 px-6 flex items-center justify-between shrink-0">
+                <div className="flex items-center space-x-1">
+                  <button
+                    type="button"
+                    onClick={() => setOptimizationSubTab("audit")}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      optimizationSubTab === "audit"
+                        ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Quality &amp; Auto-Fix
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptimizationSubTab("linking")}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      optimizationSubTab === "linking"
+                        ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Internal Linking Topology
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptimizationSubTab("cycles")}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      optimizationSubTab === "cycles"
+                        ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                        : "text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    Search Console &amp; Cycles
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setIsCycleModalOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs shrink-0"
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Optimize this month</span>
+                  <span>Run Optimization Cycle</span>
                 </button>
               </div>
 
-              <ErrorBoundary fallbackTitle="Search Console Hub Encountered an Issue">
-                <SearchConsoleHub
-                  files={project.files || []}
-                  keywordMap={project.keywordMap || []}
-                  serviceAreas={(project.serviceAreaCities || []).map((c: any) => typeof c === "string" ? c : c?.city || "").filter(Boolean)}
-                  businessType={project.formData?.businessType || "Contractor"}
-                  city={project.formData?.city || "Local"}
-                  changeLog={project.changeLog}
-                  customContentInstructions={project.customContentInstructions || project.formData?.customContentInstructions}
-                  onRequestCreateDedicatedPage={(initData) => {
-                    setNewPageInitialData(initData);
-                    setIsAddNewPageModalOpen(true);
-                  }}
-                  onSelectExistingPage={(pagePath) => {
-                    handleSelectPage(pagePath);
-                    setActiveTab("pages");
-                  }}
-                  onApplyOptimization={(path, newHtml, logSummary) => {
-                    const updatedFiles = project.files.map((f) =>
-                      f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
-                    );
-                    const updatedWithVersion = createProjectVersionSnapshot(project, {
-                      source: "search_console",
-                      summary: logSummary,
-                      affectedPages: [path],
-                      updatedFiles,
-                    });
-                    saveProjectToDB(updatedWithVersion);
-                    setProject(updatedWithVersion);
-                    onProjectUpdated(updatedWithVersion);
-                  }}
-                />
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* TAB 3: KEYWORDS TAB */}
-          {activeTab === "keywords" && (
-            <div className="flex-1 p-6">
-              <ErrorBoundary fallbackTitle="Keyword Map Encountered an Issue">
-                <KeywordMapModal
-                  isOpen={true}
-                  onClose={() => setActiveTab("pages")}
-                  files={project.files}
-                  businessType={project.formData?.businessType || "Contractor"}
-                  city={project.formData?.city || "Local"}
-                  state={project.formData?.stateRegion || "TX"}
-                  services={project.formData?.services || []}
-                  keywordMap={project.keywordMap}
-                  onUpdateKeywordMap={(updated) => {
-                    const up = { ...project, keywordMap: updated };
-                    saveProjectToDB(up);
-                    setProject(up);
-                    onProjectUpdated(up);
-                  }}
-                  onApplyOptimizedHtml={(path, newHtml) => {
-                    const updatedFiles = project.files.map((f) =>
-                      f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
-                    );
-                    const up = { ...project, files: updatedFiles, lastEditedAt: Date.now() };
-                    saveProjectToDB(up);
-                    setProject(up);
-                    onProjectUpdated(up);
-                  }}
-                />
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* TAB 4: CHANGE HISTORY */}
-          {activeTab === "history" && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <h2 className="text-base font-bold text-slate-900">Project Change History</h2>
-              <div className="space-y-2">
-                {project.changeLog && project.changeLog.length > 0 ? (
-                  project.changeLog.map((log) => (
-                    <div
-                      key={log.id}
-                      className="p-3 bg-white border border-slate-200 rounded-xl text-xs space-y-1 shadow-2xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800">{log.summary}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">{log.dateStr}</span>
+              <div className="flex-1 overflow-y-auto p-6">
+                {optimizationSubTab === "audit" && (
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                      <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                            <span>On-Page Quality &amp; Conversion Health</span>
+                          </h3>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Inspecting active page: <span className="font-mono font-bold text-slate-700">{selectedPagePath}</span>
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={selectedPagePath}
+                            onChange={(e) => handleSelectPage(e.target.value)}
+                            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1 bg-white font-medium cursor-pointer"
+                          >
+                            {(project.files || [])
+                              .filter((f) => f && f.path && f.path.endsWith(".html"))
+                              .map((f) => (
+                                <option key={f.path} value={f.path}>
+                                  {f.path}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
                       </div>
-                      {log.affectedPages && log.affectedPages.length > 0 && (
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          Pages: {log.affectedPages.join(", ")}
+
+                      {(() => {
+                        const auditContext = {
+                          pagePath: selectedPagePath,
+                          primaryKeyword: (project.formData?.keywords || [])[0] || (project.keywordMap || [])[0]?.primaryKeyword,
+                          businessName: project.businessDetails?.businessName || project.formData?.businessName || project.name,
+                          phone: project.businessDetails?.phone || project.formData?.phone,
+                          city: project.businessDetails?.city || project.formData?.city,
+                          trade: project.formData?.businessType || (project.businessDetails as any)?.businessType,
+                        };
+                        const recs = analyzeHtmlRecommendations(activeHtmlContent, auditContext);
+
+                        return (
+                          <RecommendationFixPanel
+                            recommendations={recs}
+                            onApplyFix={async (rec: BuilderRecommendation) => {
+                              const fixRes = applyRecommendationFix(activeHtmlContent, rec);
+                              const fixedHtml = fixRes.updatedHtml;
+                              const updatedFiles = project.files.map((f) =>
+                                f.path === selectedPagePath ? { ...f, content: fixedHtml, lastModified: Date.now() } : f
+                              );
+                              const updatedProject: SavedProject = {
+                                ...project,
+                                files: updatedFiles,
+                                lastEditedAt: Date.now(),
+                              };
+                              setProject(updatedProject);
+                              onProjectUpdated(updatedProject);
+                              await saveProjectToDB(updatedProject);
+                              setActiveHtmlContent(fixedHtml);
+                            }}
+                            onApplyAll={async () => {
+                              const allRes = applyAllRecommendations(activeHtmlContent, recs);
+                              const allFixedHtml = allRes.updatedHtml;
+                              const updatedFiles = project.files.map((f) =>
+                                f.path === selectedPagePath ? { ...f, content: allFixedHtml, lastModified: Date.now() } : f
+                              );
+                              const updatedProject: SavedProject = {
+                                ...project,
+                                files: updatedFiles,
+                                lastEditedAt: Date.now(),
+                              };
+                              setProject(updatedProject);
+                              onProjectUpdated(updatedProject);
+                              await saveProjectToDB(updatedProject);
+                              setActiveHtmlContent(allFixedHtml);
+                            }}
+                          />
+                        );
+                      })()}
+                    </div>
+                  </div>
+                )}
+
+                {optimizationSubTab === "linking" && (
+                  <InternalLinkingDashboard
+                    project={project}
+                    onProjectUpdated={(updated) => {
+                      setProject(updated);
+                      onProjectUpdated(updated);
+                    }}
+                    onSelectPage={(pagePath) => {
+                      setSelectedPagePath(pagePath);
+                      setActiveTab("overview");
+                    }}
+                  />
+                )}
+
+                {optimizationSubTab === "cycles" && (
+                  <div className="max-w-5xl mx-auto space-y-6">
+                    <SearchConsoleHub
+                      files={project.files || []}
+                      keywordMap={project.keywordMap || []}
+                      serviceAreas={(project.serviceAreaCities || []).map((c: any) => typeof c === "string" ? c : c?.city || "").filter(Boolean)}
+                      businessType={project.formData?.businessType || "Contractor"}
+                      city={project.formData?.city || "Local"}
+                      changeLog={project.changeLog}
+                      customContentInstructions={project.customContentInstructions || project.formData?.customContentInstructions}
+                      onRequestCreateDedicatedPage={(initData) => {
+                        setNewPageInitialData(initData);
+                        setIsAddNewPageModalOpen(true);
+                      }}
+                      onSelectExistingPage={(pagePath) => {
+                        handleSelectPage(pagePath);
+                        setActiveTab("overview");
+                      }}
+                      onApplyOptimization={(path, newHtml, logSummary) => {
+                        const updatedFiles = project.files.map((f) =>
+                          f.path === path ? { ...f, content: newHtml, lastModified: Date.now() } : f
+                        );
+                        const updatedWithVersion = createProjectVersionSnapshot(project, {
+                          source: "search_console",
+                          summary: logSummary,
+                          affectedPages: [path],
+                          updatedFiles,
+                        });
+                        saveProjectToDB(updatedWithVersion);
+                        setProject(updatedWithVersion);
+                        onProjectUpdated(updatedWithVersion);
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: SETTINGS TAB */}
+          {activeTab === "settings" && (
+            <div className="flex-1 flex flex-col overflow-hidden bg-slate-50">
+              <div className="h-12 bg-white border-b border-slate-200 px-6 flex items-center space-x-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab("general")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    settingsSubTab === "general"
+                      ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  General &amp; Prompt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab("theme")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    settingsSubTab === "theme"
+                      ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Theme &amp; Colors
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab("versions")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    settingsSubTab === "versions"
+                      ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Version History
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab("rank-rent")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    settingsSubTab === "rank-rent"
+                      ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Rank &amp; Rent
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSubTab("export")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    settingsSubTab === "export"
+                      ? "bg-indigo-50 text-indigo-700 shadow-2xs"
+                      : "text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  Backup &amp; Export
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {settingsSubTab === "general" && (
+                  <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                      <h3 className="text-base font-bold text-slate-900">Custom Content Instructions</h3>
+                      <p className="text-xs text-slate-500">
+                        Prompt guidance injected into every page generation and monthly cycle for this specific client or brand.
+                      </p>
+                      <textarea
+                        value={settingsInstructions}
+                        onChange={(e) => setSettingsInstructions(e.target.value)}
+                        rows={5}
+                        placeholder="e.g. Always emphasize our 24/7 dispatch and 100% satisfaction guarantee. Mention we are family-owned since 2004."
+                        className="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:bg-white focus:outline-indigo-500"
+                      />
+                      <div className="flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={handleClearCustomInstructions}
+                          className="text-xs text-slate-400 hover:text-red-500 cursor-pointer"
+                        >
+                          Reset to Defaults
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSaveCustomInstructions}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                        >
+                          Save Instructions
+                        </button>
+                      </div>
+                      {settingsSavedToast && (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-medium">
+                          {settingsSavedToast}
                         </div>
                       )}
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-slate-500 italic">No historical changes logged yet.</p>
+                  </div>
                 )}
-              </div>
-            </div>
-          )}
 
-          {/* TAB 5: OPTIMIZATION CYCLES */}
-          {activeTab === "cycles" && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                    <RefreshCw className="w-4 h-4 text-indigo-600" />
-                    <span>Monthly Optimization Cycles</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Search Console cycle history, rankings progress, and month-over-month performance benchmarks.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsCycleModalOpen(true)}
-                  className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Optimize this month</span>
-                </button>
-              </div>
-
-              {!project.optimizationCycles || project.optimizationCycles.length === 0 ? (
-                <div className="text-center py-16 bg-white border border-slate-200 rounded-2xl p-8 space-y-4 shadow-xs max-w-lg mx-auto">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
-                    <TrendingUp className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base font-bold text-slate-900">
-                      No Optimization Cycles Yet
-                    </h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      Upload your first monthly Google Search Console performance export to establish your baseline rankings, uncover striking-distance keywords, and optimize pages.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsCycleModalOpen(true)}
-                    className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Run Your First Cycle</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {[...(project.optimizationCycles || [])]
-                    .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0))
-                    .map((cycle, idx, allCycles) => {
-                      const prevCycle = allCycles[idx + 1] || null;
-                      const metrics = cycle?.siteMetrics || { clicks: 0, impressions: 0, position: 0, ctr: 0 };
-                      const prevMetrics = prevCycle?.siteMetrics || null;
-
-                      const clicksDiff = prevMetrics
-                        ? (metrics.clicks || 0) - (prevMetrics.clicks || 0)
-                        : null;
-                      const impDiff = prevMetrics
-                        ? (metrics.impressions || 0) - (prevMetrics.impressions || 0)
-                        : null;
-                      const posDiff = prevMetrics
-                        ? Number(((prevMetrics.position || 0) - (metrics.position || 0)).toFixed(1))
-                        : null;
-                      const ctrDiff = prevMetrics
-                        ? Number((((metrics.ctr || 0) - (prevMetrics.ctr || 0)) * 100).toFixed(2))
-                        : null;
-
-                      return (
-                        <div
-                          key={cycle.id || `cycle-${idx}`}
-                          className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4"
-                        >
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                            <div className="flex items-center space-x-2.5">
-                              <span className="text-xs font-bold bg-indigo-600 text-white px-2.5 py-0.5 rounded-full">
-                                Cycle #{cycle.cycleNumber || idx + 1}
-                              </span>
-                              <span className="text-xs font-bold text-slate-900">
-                                {cycle.dateStr || "Recent"}
-                              </span>
-                              <span className="text-[11px] text-slate-500 font-mono">
-                                ({cycle.dateRange || "Current"})
-                              </span>
-                            </div>
-
-                            <span className="text-xs text-slate-500">
-                              {(cycle.pagesChanged || []).length} pages optimized
-                            </span>
-                          </div>
-
-                          {/* Metrics Grid */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
-                              <span className="text-[10px] uppercase font-bold text-slate-400">
-                                Clicks
-                              </span>
-                              <div className="text-base font-extrabold text-slate-900">
-                                {(metrics.clicks || 0).toLocaleString()}
-                              </div>
-                              {clicksDiff !== null && (
-                                <div
-                                  className={`text-[10px] font-bold flex items-center ${
-                                    clicksDiff >= 0 ? "text-emerald-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {clicksDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                  <span>{clicksDiff >= 0 ? "+" : ""}{clicksDiff} vs prev</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
-                              <span className="text-[10px] uppercase font-bold text-slate-400">
-                                Impressions
-                              </span>
-                              <div className="text-base font-extrabold text-slate-900">
-                                {(metrics.impressions || 0).toLocaleString()}
-                              </div>
-                              {impDiff !== null && (
-                                <div
-                                  className={`text-[10px] font-bold flex items-center ${
-                                    impDiff >= 0 ? "text-emerald-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {impDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                  <span>{impDiff >= 0 ? "+" : ""}{impDiff.toLocaleString()} vs prev</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
-                              <span className="text-[10px] uppercase font-bold text-slate-400">
-                                Avg Position
-                              </span>
-                              <div className="text-base font-extrabold text-slate-900">
-                                {(metrics.position || 0).toFixed(1)}
-                              </div>
-                              {posDiff !== null && (
-                                <div
-                                  className={`text-[10px] font-bold flex items-center ${
-                                    posDiff >= 0 ? "text-emerald-600" : "text-amber-600"
-                                  }`}
-                                >
-                                  {posDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                  <span>{posDiff >= 0 ? "+" : ""}{posDiff} rank</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-0.5">
-                              <span className="text-[10px] uppercase font-bold text-slate-400">
-                                Organic CTR
-                              </span>
-                              <div className="text-base font-extrabold text-slate-900">
-                                {((metrics.ctr || 0) * 100).toFixed(1)}%
-                              </div>
-                              {ctrDiff !== null && (
-                                <div
-                                  className={`text-[10px] font-bold flex items-center ${
-                                    ctrDiff >= 0 ? "text-emerald-600" : "text-red-600"
-                                  }`}
-                                >
-                                  {ctrDiff >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                  <span>{ctrDiff >= 0 ? "+" : ""}{ctrDiff}% vs prev</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Applied Optimizations Details */}
-                          {cycle.appliedOptimizations && cycle.appliedOptimizations.length > 0 && (
-                            <div className="space-y-2 pt-2 border-t border-slate-100">
-                              <h4 className="text-xs font-bold text-slate-800">
-                                Applied Page Optimizations:
-                              </h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                                {cycle.appliedOptimizations.map((opt, i) => (
-                                  <div
-                                    key={i}
-                                    className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg space-y-1"
-                                  >
-                                    <div className="flex items-center justify-between font-mono font-bold text-[11px] text-slate-900">
-                                      <span>/{opt.pagePath}</span>
-                                      {opt.seoScoreAfter && (
-                                        <span className="text-emerald-600 font-bold">
-                                          SEO: {opt.seoScoreBefore || 70} → {opt.seoScoreAfter}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[11px] text-slate-600 leading-snug">
-                                      {opt.summary}
-                                    </p>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {cycle.notes && (
-                            <div className="p-3 bg-indigo-50/40 border border-indigo-100 rounded-xl text-xs text-indigo-900">
-                              <span className="font-bold">Cycle Notes:</span> {cycle.notes}
-                            </div>
-                          )}
+                {settingsSubTab === "theme" && (
+                  <div className="max-w-4xl mx-auto space-y-6">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xl font-bold text-slate-900">{project.theme?.name || "Modern Pro"}</h3>
+                          <p className="text-xs text-slate-500 mt-0.5">{project.theme?.description}</p>
                         </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 7: SETTINGS & THEME TAB */}
-          {activeTab === "settings" && (
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
-                <div>
-                  <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                    <Palette className="w-5 h-5 text-indigo-600" />
-                    <span>Website &amp; Theme Settings</span>
-                  </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Manage your site&apos;s visual design theme, typography, color tokens, and conversion layout.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsThemeModalOpen(true)}
-                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
-                >
-                  <Palette className="w-4 h-4" />
-                  <span>Change Theme</span>
-                </button>
-              </div>
-
-              {/* Current Active Theme Card */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2.5">
-                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Current Theme</span>
-                      <span className="text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                        <Check className="w-3 h-3 stroke-[3]" />
-                        <span>Active Theme</span>
-                      </span>
-                    </div>
-                    <h3 className="text-xl font-extrabold text-slate-900">{project.theme?.name || "Modern Local Pro"}</h3>
-                    <p className="text-xs text-slate-600 max-w-xl">{project.theme?.description}</p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsThemeModalOpen(true)}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 text-xs font-bold transition shrink-0"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Switch Design Theme</span>
-                  </button>
-                </div>
-
-                {/* Theme Visual Preview Box */}
-                <div className="max-w-md border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
-                  <ThemeMiniPreview theme={project.theme || THEMES[0]} colors={project.theme?.colors} />
-                </div>
-
-                {/* Theme Metadata: Fonts, Colors, Characteristics */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100 text-xs">
-                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Typography Pair</span>
-                    <div className="font-bold text-slate-800">{project.theme?.fonts?.heading || "Plus Jakarta Sans"}</div>
-                    <div className="text-slate-500 font-mono text-[11px]">+ {project.theme?.fonts?.body || "Inter"}</div>
-                  </div>
-
-                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Color Palette</span>
-                    <div className="flex items-center space-x-2 pt-1">
-                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.primary }} title="Primary" />
-                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.secondary }} title="Secondary" />
-                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.accent }} title="Accent" />
-                      <span className="w-5 h-5 rounded-full border border-black/10 shadow-2xs" style={{ backgroundColor: project.theme?.colors?.background }} title="Background" />
+                        <button
+                          type="button"
+                          onClick={() => setIsThemeModalOpen(true)}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer"
+                        >
+                          Switch Theme
+                        </button>
+                      </div>
+                      <div className="max-w-md border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                        <ThemeMiniPreview theme={project.theme || THEMES[0]} colors={project.theme?.colors} />
+                      </div>
                     </div>
                   </div>
+                )}
 
-                  <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1">
-                    <span className="text-[10px] font-bold uppercase text-slate-400">Layout &amp; Radius</span>
-                    <div className="font-bold text-slate-800">{project.theme?.heroStyle || "Split Hero"}</div>
-                    <div className="text-slate-500 text-[11px]">Radius: {project.theme?.borderRadius || "12px"}</div>
+                {settingsSubTab === "versions" && (
+                  <div className="max-w-4xl mx-auto space-y-4">
+                    <h3 className="text-base font-bold text-slate-900">Project Snapshots &amp; Changelog</h3>
+                    <div className="space-y-2">
+                      {project.changeLog && project.changeLog.length > 0 ? (
+                        project.changeLog.map((log) => (
+                          <div key={log.id} className="p-3 bg-white border border-slate-200 rounded-xl text-xs space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-slate-800">{log.summary}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{log.dateStr}</span>
+                            </div>
+                            {log.affectedPages && log.affectedPages.length > 0 && (
+                              <div className="text-[10px] text-slate-500 font-mono">
+                                Pages: {log.affectedPages.join(", ")}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-500 italic">No historical changes logged yet.</p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {project.theme?.designCharacteristics && (
-                  <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] font-bold text-slate-700 block mb-1.5">Design &amp; Layout Characteristics:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {project.theme.designCharacteristics.map((char, i) => (
-                        <span key={i} className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-xs font-medium">
-                          ✓ {char}
-                        </span>
-                      ))}
+                {settingsSubTab === "rank-rent" && (
+                  <div className="max-w-5xl mx-auto">
+                    <RankRentManager
+                      project={project}
+                      onProjectUpdated={(updated) => {
+                        setProject(updated);
+                        onProjectUpdated(updated);
+                      }}
+                      onShowToast={(msg) => console.log("[Rank & Rent]", msg)}
+                    />
+                  </div>
+                )}
+
+                {settingsSubTab === "export" && (
+                  <div className="max-w-3xl mx-auto space-y-6">
+                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-4">
+                      <h3 className="text-base font-bold text-slate-900">Export &amp; Backups</h3>
+                      <p className="text-xs text-slate-500">
+                        Export the complete .siteproject project package or download full production ZIP archive.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadZip("full")}
+                          className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs cursor-pointer"
+                        >
+                          Download Website ZIP
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const blob = await exportProjectBackup(project);
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${project.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.siteproject`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-xs cursor-pointer"
+                        >
+                          Export .siteproject
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
             </div>
-          )}
-
-          {/* TAB 8: RANK & RENT COMMAND CENTER */}
-          {activeTab === "rank-rent" && (
-            <div className="flex-1 overflow-y-auto bg-slate-50">
-              <ErrorBoundary fallbackTitle="Rank & Rent Manager Encountered an Issue">
-                <RankRentManager
-                  project={project}
-                  onProjectUpdated={(updated) => {
-                    setProject(updated);
-                    onProjectUpdated(updated);
-                  }}
-                  onShowToast={(msg) => {
-                    // Instant alert / confirmation
-                    console.log("[Rank & Rent]", msg);
-                  }}
-                />
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* TAB 9: INTERNAL LINKING & CONNECTIVITY ENGINE */}
-          {activeTab === "internal-linking" && (
-            <InternalLinkingDashboard
-              project={project}
-              onProjectUpdated={(updated) => {
-                setProject(updated);
-                onProjectUpdated(updated);
-              }}
-              onSelectPage={(pagePath) => {
-                setSelectedPagePath(pagePath);
-                setActiveTab("pages");
-              }}
-            />
           )}
         </main>
       </div>
@@ -2026,11 +1959,11 @@ export function WebsiteManager({
           setProject(updatedProject);
           onProjectUpdated(updatedProject);
           handleSelectPage(newPagePath);
-          setActiveTab("pages");
+          setActiveTab("overview");
         }}
         onSelectExistingPage={(pagePath) => {
           handleSelectPage(pagePath);
-          setActiveTab("pages");
+          setActiveTab("overview");
         }}
       />
 

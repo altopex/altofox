@@ -136,7 +136,19 @@ const ThemesGallery = nextDynamic(
   { ssr: false }
 );
 
+const InternalLinkingDashboard = nextDynamic(
+  () => import("@/components/InternalLinkingDashboard").then((mod) => mod.InternalLinkingDashboard),
+  { ssr: false }
+);
+
+const RecommendationFixPanel = nextDynamic(
+  () => import("@/components/editor/RecommendationFixPanel").then((mod) => mod.RecommendationFixPanel),
+  { ssr: false }
+);
+
 import { auditPageSEO, suggestKeywordsForPage } from "@/lib/seo/on-page-scorer";
+import { analyzeHtmlRecommendations, BuilderRecommendation } from "@/lib/recommendations/recommendation-engine";
+import { applyRecommendationFix, applyAllRecommendations } from "@/lib/recommendations/fix-applier";
 import { SavedProject, ProjectKeywordItem } from "@/lib/storage/project-types";
 import {
   saveProjectToDB,
@@ -363,11 +375,16 @@ export default function DashboardPage() {
 
   // Settings Panel State
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"models" | "images" | "preferences" | "cloudflare">("models");
+  const [settingsTab, setSettingsTab] = useState<"models" | "images" | "preferences" | "cloudflare" | "hosting">("models");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
+  // Sub-tabs for AI / Generator and Optimization hubs
+  const [generatorSubTab, setGeneratorSubTab] = useState<"builder" | "chat" | "themes">("builder");
+  const [optimizationSubTab, setOptimizationSubTab] = useState<"checker" | "linking" | "activity">("checker");
+  const [selectedOptProjectId, setSelectedOptProjectId] = useState<string>("");
+
   const handleOpenSettings = (
-    tab: "models" | "images" | "preferences" | "cloudflare" = "models",
+    tab: "models" | "images" | "preferences" | "cloudflare" | "hosting" = "models",
     message: string | null = null
   ) => {
     setSettingsTab(tab);
@@ -4002,78 +4019,70 @@ export default function DashboardPage() {
       }}
       onNavigate={(tab) => {
         if (tab === "settings") {
-          handleOpenSettings("preferences");
+          handleOpenSettings("hosting");
         } else if (tab === "settings-ai") {
           handleOpenSettings("models");
         } else if (tab === "publishing" || tab === "domains") {
-          handleOpenSettings("cloudflare");
+          if (activeSavedProject) {
+            setNavTab("websites");
+            setViewMode("manager");
+          } else {
+            handleOpenSettings("hosting");
+          }
         } else if (tab === "chat-generator") {
-          setNavTab("chat-generator");
+          setNavTab("generator");
+          setGeneratorSubTab("chat");
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (tab === "new-website") {
-          setNavTab("projects");
+          setNavTab("generator");
+          setGeneratorSubTab("builder");
           setViewMode("builder");
           setCurrentProject(null);
           setCurrentStep(1);
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (tab === "themes") {
-          setNavTab("themes");
+          setNavTab("generator");
+          setGeneratorSubTab("themes");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "generator") {
+          setNavTab("generator");
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (tab === "preview") {
-          if (currentProject) {
-            setNavTab("projects");
-            setViewMode("builder");
+          if (activeSavedProject) {
+            setNavTab("websites");
+            setViewMode("manager");
           } else if (savedProjectsList.length > 0) {
-            const mostRecent = savedProjectsList[0];
-            const projData: ProjectData = {
-              projectId: mostRecent.id,
-              name: mostRecent.name,
-              notes: mostRecent.formData?.notes,
-              provider: "anthropic",
-              model: "claude-3-5-sonnet",
-              themeName: mostRecent.theme?.name || "Modern Pro",
-              websiteDomain: mostRecent.formData?.websiteDomain || `${mostRecent.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`,
-              files: mostRecent.files,
-              photos: [],
-            };
-            setCurrentProject(projData);
-            setActiveSavedProject(mostRecent);
-            setNavTab("projects");
-            setViewMode("builder");
+            setActiveSavedProject(savedProjectsList[0]);
+            setNavTab("websites");
+            setViewMode("manager");
           } else {
-            addToast({
-              type: "info",
-              title: "No Project Loaded",
-              message: "Start building a website or open an existing project to view live preview.",
-            });
-            setNavTab("projects");
+            setNavTab("generator");
+            setGeneratorSubTab("builder");
             setViewMode("builder");
             setCurrentProject(null);
             setCurrentStep(1);
           }
-        } else if (tab === "linking") {
-          if (activeSavedProject) {
-            setNavTab("projects");
-            setViewMode("manager");
-          } else if (savedProjectsList.length > 0) {
-            setActiveSavedProject(savedProjectsList[0]);
-            setNavTab("projects");
-            setViewMode("manager");
-          } else {
-            addToast({
-              type: "info",
-              title: "Internal Linking Tool",
-              message: "Save or open a website to inspect and optimize internal link topology.",
-            });
-            setNavTab("projects");
-            setViewMode("dashboard");
-          }
-        } else {
-          setNavTab(tab);
-          if (tab === "projects") {
+        } else if (tab === "optimization") {
+          setNavTab("optimization");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "linking" || tab === "checker") {
+          setNavTab("optimization");
+          setOptimizationSubTab(tab === "linking" ? "linking" : "checker");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "activity") {
+          setNavTab("optimization");
+          setOptimizationSubTab("activity");
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (tab === "projects" || tab === "websites") {
+          setNavTab("websites");
+          if (!activeSavedProject) {
             setViewMode("dashboard");
             loadAllSavedProjects();
           }
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          setNavTab(tab);
+          window.scrollTo({ top: 0, behavior: "smooth" });
         }
       }}
       activeProjectId={activeSavedProject?.id}
@@ -4082,7 +4091,7 @@ export default function DashboardPage() {
         if (found) {
           setActiveSavedProject(found);
           setViewMode("manager");
-          setNavTab("projects");
+          setNavTab("websites");
         }
       }}
     >
@@ -4116,8 +4125,10 @@ export default function DashboardPage() {
       {navTab === "dashboard" && (
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           <TeamDashboard
+            projects={savedProjectsList}
             onNewProject={() => {
-              setNavTab("projects");
+              setNavTab("generator");
+              setGeneratorSubTab("builder");
               setViewMode("builder");
               setCurrentProject(null);
               setCurrentStep(1);
@@ -4130,69 +4141,27 @@ export default function DashboardPage() {
               if (found) {
                 setActiveSavedProject(found);
                 setViewMode("manager");
-                setNavTab("projects");
+                setNavTab("websites");
               }
             }}
             onOpenImportLocal={() => setIsImportLocalModalOpen(true)}
             onNavigateToProjects={() => {
-              setNavTab("projects");
+              setNavTab("websites");
               setViewMode("dashboard");
             }}
           />
         </div>
       )}
 
-      {/* TAB 2: TEAM MANAGEMENT */}
+      {/* TAB 2: TEAM MANAGEMENT (ADMIN) */}
       {navTab === "team" && (
         <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
           <TeamManagement />
         </div>
       )}
 
-      {/* TAB 3: ACTIVITY FEED */}
-      {navTab === "activity" && (
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
-            <ActivityFeed maxItems={100} />
-          </div>
-        </div>
-      )}
-
-      {/* TAB: CHAT GENERATOR (SEPARATE PROMPT-TO-SITE TOOL) */}
-      {navTab === "chat-generator" && (
-        <div className="flex-1 flex flex-col w-full min-h-0">
-          <ErrorBoundary fallbackTitle="Chat Generator Encountered an Issue">
-            <ChatGenerator onOpenSettings={() => handleOpenSettings("models")} />
-          </ErrorBoundary>
-        </div>
-      )}
-
-      {/* TAB 4: THEMES GALLERY */}
-      {navTab === "themes" && (
-        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
-          <ErrorBoundary fallbackTitle="Themes Gallery Encountered an Issue">
-            <ThemesGallery
-              selectedThemeId={selectedThemeId}
-              onSelectAndBuild={(themeId) => {
-                setSelectedThemeId(themeId);
-                setNavTab("projects");
-                setViewMode("builder");
-                setCurrentProject(null);
-                setCurrentStep(1);
-                addToast({
-                  type: "success",
-                  title: "Theme Selected",
-                  message: `Configuring website with "${getThemeById(themeId).name}". Enter business details below to generate.`,
-                });
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-            />
-          </ErrorBoundary>
-        </div>
-      )}
-
-      {/* TAB 5: PROJECTS / BUILDER WORKSPACE */}
-      {navTab === "projects" && (
+      {/* TAB 3: WEBSITES WORKSPACE & DASHBOARD */}
+      {(navTab === "websites" || navTab === "projects") && (
         <div className="flex-1 flex flex-col w-full min-h-0">
           {viewMode === "dashboard" ? (
             <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
@@ -4220,6 +4189,8 @@ export default function DashboardPage() {
                     setViewMode("builder");
                   }}
                   onNewWebsite={() => {
+                    setNavTab("generator");
+                    setGeneratorSubTab("builder");
                     setViewMode("builder");
                     setCurrentProject(null);
                     setCurrentStep(1);
@@ -4290,6 +4261,329 @@ export default function DashboardPage() {
           ) : (
             renderBuilderWorkspace()
           )}
+        </div>
+      )}
+
+      {/* TAB 4: AI / GENERATOR WORKSPACE */}
+      {(navTab === "generator" || navTab === "chat-generator" || navTab === "themes") && (
+        <div className="flex-1 flex flex-col w-full min-h-0">
+          {/* Sub-tab Pill Navigation Header */}
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2.5 flex items-center justify-between">
+            <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratorSubTab("builder");
+                  if (navTab !== "generator") setNavTab("generator");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  generatorSubTab === "builder" && navTab === "generator"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Website Builder</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratorSubTab("chat");
+                  if (navTab !== "generator") setNavTab("generator");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  generatorSubTab === "chat" || navTab === "chat-generator"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Chat Generator</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGeneratorSubTab("themes");
+                  if (navTab !== "generator") setNavTab("generator");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  generatorSubTab === "themes" || navTab === "themes"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <Palette className="w-3.5 h-3.5" />
+                <span>Theme Library</span>
+              </button>
+            </div>
+            <span className="hidden sm:inline text-xs text-slate-400">
+              {generatorSubTab === "builder" ? "Multi-step local SEO wizard" : generatorSubTab === "chat" ? "Prompt-to-site generator" : "15 custom crafted themes"}
+            </span>
+          </div>
+
+          {generatorSubTab === "chat" || navTab === "chat-generator" ? (
+            <ErrorBoundary fallbackTitle="Chat Generator Encountered an Issue">
+              <ChatGenerator onOpenSettings={() => handleOpenSettings("models")} />
+            </ErrorBoundary>
+          ) : generatorSubTab === "themes" || navTab === "themes" ? (
+            <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+              <ErrorBoundary fallbackTitle="Themes Gallery Encountered an Issue">
+                <ThemesGallery
+                  selectedThemeId={selectedThemeId}
+                  onSelectAndBuild={(themeId) => {
+                    setSelectedThemeId(themeId);
+                    setGeneratorSubTab("builder");
+                    setNavTab("generator");
+                    setViewMode("builder");
+                    setCurrentProject(null);
+                    setCurrentStep(1);
+                    addToast({
+                      type: "success",
+                      title: "Theme Selected",
+                      message: `Configuring website with "${getThemeById(themeId).name}". Enter business details below to generate.`,
+                    });
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                />
+              </ErrorBoundary>
+            </div>
+          ) : (
+            renderBuilderWorkspace()
+          )}
+        </div>
+      )}
+
+      {/* TAB 5: OPTIMIZATION WORKSPACE */}
+      {(navTab === "optimization" || navTab === "activity") && (
+        <div className="flex-1 flex flex-col w-full min-h-0">
+          {/* Sub-tab Pill Navigation Header with Project Selector */}
+          <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center space-x-1 sm:space-x-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => {
+                  setOptimizationSubTab("checker");
+                  if (navTab !== "optimization") setNavTab("optimization");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  optimizationSubTab === "checker" && navTab === "optimization"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Quality &amp; SEO Recommendations</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOptimizationSubTab("linking");
+                  if (navTab !== "optimization") setNavTab("optimization");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  optimizationSubTab === "linking" && navTab === "optimization"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-blue-500" />
+                <span>Internal Linking Topology</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOptimizationSubTab("activity");
+                  if (navTab !== "optimization") setNavTab("optimization");
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                  optimizationSubTab === "activity" || navTab === "activity"
+                    ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900"
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 text-amber-500" />
+                <span>Team Activity Feed</span>
+              </button>
+            </div>
+
+            {/* Target Project Selector (for Linking & Recommendations) */}
+            {savedProjectsList.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 font-medium">Target Website:</span>
+                <select
+                  value={selectedOptProjectId || activeSavedProject?.id || savedProjectsList[0]?.id || ""}
+                  onChange={(e) => setSelectedOptProjectId(e.target.value)}
+                  className="input-base text-xs py-1.5 px-2.5 max-w-[220px]"
+                >
+                  {savedProjectsList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = savedProjectsList.find(
+                      (p) => p.id === (selectedOptProjectId || activeSavedProject?.id || savedProjectsList[0]?.id)
+                    );
+                    if (target) {
+                      setActiveSavedProject(target);
+                      setViewMode("manager");
+                      setNavTab("websites");
+                    }
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                  title="Open full Website Workspace"
+                >
+                  Open Workspace &rarr;
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+            {optimizationSubTab === "activity" || navTab === "activity" ? (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-xs">
+                <ActivityFeed maxItems={100} />
+              </div>
+            ) : savedProjectsList.length === 0 ? (
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-4 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center mx-auto">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    No websites generated yet
+                  </h3>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    Generate or save a website first to inspect internal link topology and apply 1-click SEO optimizations.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNavTab("generator");
+                    setGeneratorSubTab("builder");
+                    setViewMode("builder");
+                    setCurrentProject(null);
+                    setCurrentStep(1);
+                  }}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Create Your First Website</span>
+                </button>
+              </div>
+            ) : (() => {
+              const optProject =
+                savedProjectsList.find(
+                  (p) => p.id === (selectedOptProjectId || activeSavedProject?.id || savedProjectsList[0]?.id)
+                ) || savedProjectsList[0];
+
+              if (optimizationSubTab === "linking") {
+                return (
+                  <ErrorBoundary fallbackTitle="Internal Linking Dashboard Encountered an Issue">
+                    <InternalLinkingDashboard
+                      project={optProject}
+                      onProjectUpdated={async (updated) => {
+                        setActiveSavedProject(updated);
+                        await saveProjectToDB(updated);
+                        await loadAllSavedProjects();
+                      }}
+                      onSelectPage={() => {
+                        setActiveSavedProject(optProject);
+                        setViewMode("manager");
+                        setNavTab("websites");
+                      }}
+                    />
+                  </ErrorBoundary>
+                );
+              }
+
+              // Default: checker / recommendations
+              const htmlFiles = optProject.files?.filter((f) => f.path.endsWith(".html")) || [];
+              const homeFile = htmlFiles.find((f) => f.path === "index.html") || htmlFiles[0];
+
+              return (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gradient-to-r from-indigo-50 to-blue-50 dark:from-indigo-950/40 dark:to-blue-950/40 border border-indigo-100 dark:border-indigo-900/40 p-5 rounded-2xl">
+                    <div>
+                      <h3 className="text-sm font-bold text-indigo-950 dark:text-indigo-200">
+                        {optProject.name} — Optimization Hub
+                      </h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                        {htmlFiles.length} pages generated • Instant on-page fixes and connectivity audits
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveSavedProject(optProject);
+                        setViewMode("manager");
+                        setNavTab("websites");
+                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 shadow-xs shrink-0"
+                    >
+                      <span>Open in Website Workspace</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {homeFile && (() => {
+                    const homeRecs = analyzeHtmlRecommendations(homeFile.content, {
+                      pagePath: homeFile.path,
+                      trade: optProject.nicheId || optProject.formData?.niche,
+                      city: optProject.formData?.mainCity || optProject.serviceAreaCities?.[0]?.city,
+                      businessName: optProject.name,
+                    });
+
+                    return (
+                      <ErrorBoundary fallbackTitle="Recommendation Panel Encountered an Issue">
+                        <RecommendationFixPanel
+                          recommendations={homeRecs}
+                          onApplyFix={async (rec) => {
+                            const result = applyRecommendationFix(homeFile.content, rec);
+                            if (result.success && result.updatedHtml) {
+                              const updatedFiles = optProject.files.map((f) =>
+                                f.path === homeFile.path ? { ...f, content: result.updatedHtml, lastModified: Date.now() } : f
+                              );
+                              const updatedProj = { ...optProject, files: updatedFiles, lastEditedAt: Date.now() };
+                              setActiveSavedProject(updatedProj);
+                              await saveProjectToDB(updatedProj);
+                              await loadAllSavedProjects();
+                              addToast({
+                                type: "success",
+                                title: "Fix Applied",
+                                message: `Applied automated fix for: ${rec.title}`,
+                              });
+                            }
+                          }}
+                          onApplyAll={async () => {
+                            const result = applyAllRecommendations(homeFile.content, homeRecs);
+                            if (result.appliedCount > 0 && result.updatedHtml) {
+                              const updatedFiles = optProject.files.map((f) =>
+                                f.path === homeFile.path ? { ...f, content: result.updatedHtml, lastModified: Date.now() } : f
+                              );
+                              const updatedProj = { ...optProject, files: updatedFiles, lastEditedAt: Date.now() };
+                              setActiveSavedProject(updatedProj);
+                              await saveProjectToDB(updatedProj);
+                              await loadAllSavedProjects();
+                              addToast({
+                                type: "success",
+                                title: "All Fixes Applied",
+                                message: `Successfully applied ${result.appliedCount} automated SEO recommendations.`,
+                              });
+                            }
+                          }}
+                        />
+                      </ErrorBoundary>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       )}
 

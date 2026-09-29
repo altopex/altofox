@@ -35,7 +35,7 @@ import { ProviderType } from "@/lib/ai/types";
 export interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "models" | "images" | "preferences" | "cloudflare";
+  initialTab?: "models" | "images" | "preferences" | "cloudflare" | "hosting";
   initialMessage?: string | null;
   onSettingsUpdated: () => void;
   onClearAllData?: () => void;
@@ -166,7 +166,9 @@ export function SettingsPanel({
   onSettingsUpdated,
   onClearAllData,
 }: SettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<"models" | "images" | "preferences" | "cloudflare">(initialTab);
+  const [activeTab, setActiveTab] = useState<"models" | "images" | "preferences" | "cloudflare" | "hosting">(
+    initialTab === "hosting" ? "hosting" : initialTab
+  );
 
   // Default AI Provider & Model
   const [defaultProvider, setDefaultProvider] = useState<ProviderType>("gemini");
@@ -234,6 +236,10 @@ export function SettingsPanel({
   const [prefSavedMessage, setPrefSavedMessage] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
+  // Multi-Hosting Provider States
+  const [selectedHostingProvider, setSelectedHostingProvider] = useState<"cloudflare" | "vercel" | "netlify" | "github">("cloudflare");
+  const [hostingStatuses, setHostingStatuses] = useState<Record<string, { connected: boolean; maskedToken?: string; accountName?: string }>>({});
+
   // Cloudflare Connection States
   const [cfTokenInput, setCfTokenInput] = useState("");
   const [cfAccountInput, setCfAccountInput] = useState("");
@@ -248,7 +254,53 @@ export function SettingsPanel({
   const [cfIsSaving, setCfIsSaving] = useState(false);
   const [cfSaveMessage, setCfSaveMessage] = useState<string | null>(null);
 
-  // Cloudflare Status check
+  // Vercel Form State
+  const [vercelTokenInput, setVercelTokenInput] = useState("");
+  const [vercelTeamIdInput, setVercelTeamIdInput] = useState("");
+  const [showVercelToken, setShowVercelToken] = useState(false);
+  const [vercelIsTesting, setVercelIsTesting] = useState(false);
+  const [vercelTestResult, setVercelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [vercelIsSaving, setVercelIsSaving] = useState(false);
+  const [vercelSaveMessage, setVercelSaveMessage] = useState<string | null>(null);
+
+  // Netlify Form State
+  const [netlifyTokenInput, setNetlifyTokenInput] = useState("");
+  const [showNetlifyToken, setShowNetlifyToken] = useState(false);
+  const [netlifyIsTesting, setNetlifyIsTesting] = useState(false);
+  const [netlifyTestResult, setNetlifyTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [netlifyIsSaving, setNetlifyIsSaving] = useState(false);
+  const [netlifySaveMessage, setNetlifySaveMessage] = useState<string | null>(null);
+
+  // GitHub Form State
+  const [githubTokenInput, setGithubTokenInput] = useState("");
+  const [githubOwnerInput, setGithubOwnerInput] = useState("");
+  const [showGithubToken, setShowGithubToken] = useState(false);
+  const [githubIsTesting, setGithubIsTesting] = useState(false);
+  const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [githubIsSaving, setGithubIsSaving] = useState(false);
+  const [githubSaveMessage, setGithubSaveMessage] = useState<string | null>(null);
+
+  // Status check for all hosting providers
+  const loadHostingStatuses = useCallback(async () => {
+    try {
+      const res = await fetch("/api/hosting/status");
+      const data = await res.json();
+      if (data.success && data.providers) {
+        setHostingStatuses(data.providers);
+        if (data.providers.cloudflare?.connected) {
+          setCfConnected(true);
+          setCfMaskedToken(data.providers.cloudflare.maskedToken || "");
+          setCfAccountName(data.providers.cloudflare.accountName || "Connected Cloudflare Account");
+        } else {
+          setCfConnected(false);
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  }, []);
+
+  // Cloudflare Status check fallback
   const loadCloudflareStatus = useCallback(async () => {
     try {
       const res = await fetch("/api/cloudflare/status");
@@ -409,9 +461,10 @@ export function SettingsPanel({
       })
       .catch(() => {});
 
-    // Load Cloudflare status from server
+    // Load Cloudflare & hosting status from server
     loadCloudflareStatus();
-  }, [loadCloudflareStatus]);
+    loadHostingStatuses();
+  }, [loadCloudflareStatus, loadHostingStatuses]);
 
   const handleTestCloudflare = async () => {
     setCfIsTesting(true);
@@ -483,6 +536,119 @@ export function SettingsPanel({
       setCfSaveMessage(err.message || "Network error saving credentials.");
     } finally {
       setCfIsSaving(false);
+    }
+  };
+
+  const handleTestHostingProvider = async (provider: "vercel" | "netlify" | "github") => {
+    const creds: any = { provider };
+    if (provider === "vercel") {
+      creds.apiToken = vercelTokenInput.trim();
+      if (vercelTeamIdInput.trim()) creds.teamId = vercelTeamIdInput.trim();
+      setVercelIsTesting(true);
+      setVercelTestResult(null);
+    } else if (provider === "netlify") {
+      creds.apiToken = netlifyTokenInput.trim();
+      setNetlifyIsTesting(true);
+      setNetlifyTestResult(null);
+    } else if (provider === "github") {
+      creds.apiToken = githubTokenInput.trim();
+      if (githubOwnerInput.trim()) creds.owner = githubOwnerInput.trim();
+      setGithubIsTesting(true);
+      setGithubTestResult(null);
+    }
+
+    try {
+      const res = await fetch("/api/hosting/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+      const data = await res.json();
+      const result = {
+        success: Boolean(data.success),
+        message: data.success ? (data.message || `Connected to ${provider}!`) : (data.error || "Connection failed."),
+      };
+      if (provider === "vercel") setVercelTestResult(result);
+      if (provider === "netlify") setNetlifyTestResult(result);
+      if (provider === "github") setGithubTestResult(result);
+    } catch (err: any) {
+      const result = { success: false, message: err.message || "Network error." };
+      if (provider === "vercel") setVercelTestResult(result);
+      if (provider === "netlify") setNetlifyTestResult(result);
+      if (provider === "github") setGithubTestResult(result);
+    } finally {
+      if (provider === "vercel") setVercelIsTesting(false);
+      if (provider === "netlify") setNetlifyIsTesting(false);
+      if (provider === "github") setGithubIsTesting(false);
+    }
+  };
+
+  const handleSaveHostingProvider = async (provider: "vercel" | "netlify" | "github", e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const creds: any = { provider };
+    if (provider === "vercel") {
+      if (!vercelTokenInput.trim()) {
+        setVercelSaveMessage("Please enter your Vercel API token.");
+        return;
+      }
+      creds.apiToken = vercelTokenInput.trim();
+      if (vercelTeamIdInput.trim()) creds.teamId = vercelTeamIdInput.trim();
+      setVercelIsSaving(true);
+      setVercelSaveMessage(null);
+    } else if (provider === "netlify") {
+      if (!netlifyTokenInput.trim()) {
+        setNetlifySaveMessage("Please enter your Netlify personal access token.");
+        return;
+      }
+      creds.apiToken = netlifyTokenInput.trim();
+      setNetlifyIsSaving(true);
+      setNetlifySaveMessage(null);
+    } else if (provider === "github") {
+      if (!githubTokenInput.trim()) {
+        setGithubSaveMessage("Please enter your GitHub personal access token.");
+        return;
+      }
+      creds.apiToken = githubTokenInput.trim();
+      if (githubOwnerInput.trim()) creds.owner = githubOwnerInput.trim();
+      setGithubIsSaving(true);
+      setGithubSaveMessage(null);
+    }
+
+    try {
+      const res = await fetch("/api/hosting/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creds),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (provider === "vercel") {
+          setVercelSaveMessage(`Vercel connected successfully! (${data.accountName || "Active"})`);
+          setVercelTokenInput("");
+        } else if (provider === "netlify") {
+          setNetlifySaveMessage(`Netlify connected successfully! (${data.accountName || "Active"})`);
+          setNetlifyTokenInput("");
+        } else if (provider === "github") {
+          setGithubSaveMessage(`GitHub connected successfully! (${data.accountName || "Active"})`);
+          setGithubTokenInput("");
+        }
+        await loadHostingStatuses();
+        onSettingsUpdated();
+      } else {
+        const errMsg = data.error || `Failed to save ${provider} credentials.`;
+        if (provider === "vercel") setVercelSaveMessage(errMsg);
+        if (provider === "netlify") setNetlifySaveMessage(errMsg);
+        if (provider === "github") setGithubSaveMessage(errMsg);
+      }
+    } catch (err: any) {
+      const errMsg = err.message || "Network error saving credentials.";
+      if (provider === "vercel") setVercelSaveMessage(errMsg);
+      if (provider === "netlify") setNetlifySaveMessage(errMsg);
+      if (provider === "github") setGithubSaveMessage(errMsg);
+    } finally {
+      if (provider === "vercel") setVercelIsSaving(false);
+      if (provider === "netlify") setNetlifyIsSaving(false);
+      if (provider === "github") setGithubIsSaving(false);
     }
   };
 
@@ -1275,16 +1441,16 @@ export function SettingsPanel({
 
               <button
                 type="button"
-                onClick={() => setActiveTab("cloudflare")}
+                onClick={() => setActiveTab("hosting")}
                 className={`flex-1 py-2.5 px-2.5 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-1.5 border-b-2 transition ${
-                  activeTab === "cloudflare"
+                  activeTab === "hosting" || activeTab === "cloudflare"
                     ? "border-[#4F46E5] text-[#4F46E5] bg-[#EEF2FF]/40"
                     : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-slate-50"
                 }`}
               >
-                <Cloud className="w-4 h-4 text-orange-500" />
-                <span>Cloudflare</span>
-                {cfConnected && (
+                <Cloud className="w-4 h-4 text-indigo-600" />
+                <span>Hosting</span>
+                {(cfConnected || Object.values(hostingStatuses).some((s) => s.connected)) && (
                   <span className="w-2 h-2 rounded-full bg-[#10B981]" />
                 )}
               </button>
@@ -2671,202 +2837,590 @@ export function SettingsPanel({
               </div>
             )}
 
-            {/* ================= TAB 4: CLOUDFLARE EDGE HOSTING ================= */}
-            {activeTab === "cloudflare" && (
+            {/* ================= TAB 4: HOSTING & CLOUD DEPLOYMENTS ================= */}
+            {(activeTab === "cloudflare" || activeTab === "hosting") && (
               <div className="space-y-5 animate-in fade-in duration-150">
-                {/* Cloudflare Connection Overview Banner */}
-                <div
-                  className={`p-4 rounded-[12px] border ${
-                    cfConnected
-                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
-                      : "bg-orange-50/60 border-orange-200 text-slate-800"
-                  }`}
-                >
-                  <div className="flex items-start space-x-3">
+                {/* Hosting Provider Selector Pills */}
+                <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl">
+                  {[
+                    { id: "cloudflare", label: "Cloudflare Pages", icon: Cloud, color: "text-orange-500", connected: cfConnected || hostingStatuses.cloudflare?.connected },
+                    { id: "vercel", label: "Vercel", icon: Server, color: "text-slate-900", connected: hostingStatuses.vercel?.connected },
+                    { id: "netlify", label: "Netlify", icon: Zap, color: "text-teal-600", connected: hostingStatuses.netlify?.connected },
+                    { id: "github", label: "GitHub Pages", icon: Globe, color: "text-purple-600", connected: hostingStatuses.github?.connected },
+                  ].map((p) => {
+                    const IconComp = p.icon;
+                    const isSelected = selectedHostingProvider === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setSelectedHostingProvider(p.id as any)}
+                        className={`flex-1 min-w-[120px] py-2 px-2.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition ${
+                          isSelected
+                            ? "bg-white text-slate-900 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                        }`}
+                      >
+                        <IconComp className={`w-3.5 h-3.5 ${p.color}`} />
+                        <span>{p.label}</span>
+                        {p.connected && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* PROVIDER 1: CLOUDFLARE PAGES */}
+                {selectedHostingProvider === "cloudflare" && (
+                  <div className="space-y-4">
                     <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                        cfConnected
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-orange-100 text-orange-600"
+                      className={`p-4 rounded-xl border ${
+                        cfConnected || hostingStatuses.cloudflare?.connected
+                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                          : "bg-orange-50/60 border-orange-200 text-slate-800"
                       }`}
                     >
-                      <Cloud className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold uppercase tracking-wider">
-                          {cfConnected ? "Cloudflare Pages Connected" : "Connect Cloudflare Pages"}
-                        </h4>
-                        <span
-                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                            cfConnected
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-slate-200 text-slate-700"
+                      <div className="flex items-start space-x-3">
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            cfConnected || hostingStatuses.cloudflare?.connected
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-orange-100 text-orange-600"
                           }`}
                         >
-                          {cfConnected ? "Active" : "Not Connected"}
-                        </span>
+                          <Cloud className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold uppercase tracking-wider">
+                              {cfConnected || hostingStatuses.cloudflare?.connected ? "Cloudflare Pages Connected" : "Connect Cloudflare Pages"}
+                            </h4>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                cfConnected || hostingStatuses.cloudflare?.connected
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {cfConnected || hostingStatuses.cloudflare?.connected ? "Active" : "Not Connected"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Publish static websites directly to Cloudflare Pages edge hosting with instant SSL, 330+ global CDN nodes, and custom domain mapping.
+                          </p>
+                          {(cfConnected || hostingStatuses.cloudflare?.connected) && (
+                            <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
+                              Token: {cfMaskedToken || hostingStatuses.cloudflare?.maskedToken || "••••••••"} {cfAccountName ? `• ${cfAccountName}` : ""}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
-                        {cfConnected
-                          ? `Publish static websites directly to Cloudflare edge hosting with instant SSL, 330+ global CDN nodes, and custom domain mapping.`
-                          : `Publish static websites directly to Cloudflare Pages edge hosting. No manual ZIP downloads or uploads required.`}
-                      </p>
-                      {cfConnected && cfMaskedToken && (
-                        <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
-                          Token: {cfMaskedToken} {cfAccountName ? `• ${cfAccountName}` : ""}
+                    </div>
+
+                    <form onSubmit={handleSaveCloudflare} className="bg-white border border-[#E2E8F0] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Cloudflare API Credentials
+                        </h3>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">
+                          Credentials are encrypted using AES-256-GCM server-side and never exposed to the browser.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-[#0F172A]">
+                            Cloudflare API Token <span className="text-rose-500">*</span>
+                          </label>
+                          <a
+                            href="https://dash.cloudflare.com/profile/api-tokens"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
+                          >
+                            <span>Create Token</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showCfToken ? "text" : "password"}
+                            value={cfTokenInput}
+                            onChange={(e) => setCfTokenInput(e.target.value)}
+                            placeholder={cfMaskedToken || "Paste your Cloudflare API token here"}
+                            className="input-base pr-10 text-xs font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCfToken(!showCfToken)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                            title={showCfToken ? "Hide token" : "Show token"}
+                          >
+                            {showCfToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-[#64748B]">
+                          Requires permissions: <code className="bg-slate-100 px-1 rounded">Account &gt; Cloudflare Pages &gt; Edit</code>
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0F172A]">
+                          Cloudflare Account ID <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={cfAccountInput}
+                          onChange={(e) => setCfAccountInput(e.target.value)}
+                          placeholder="32-character hex Account ID"
+                          className="input-base text-xs font-mono"
+                        />
+                        <p className="text-[10px] text-[#64748B]">
+                          Located in your Cloudflare dashboard sidebar under &quot;Account ID&quot;.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0F172A]">
+                          Account Name / Identifier <span className="text-[10px] font-normal text-slate-400">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={cfAccountNameInput}
+                          onChange={(e) => setCfAccountNameInput(e.target.value)}
+                          placeholder="e.g. My Agency Cloudflare"
+                          className="input-base text-xs"
+                        />
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
+                        <button
+                          type="button"
+                          onClick={handleTestCloudflare}
+                          disabled={cfIsTesting}
+                          className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
+                        >
+                          {cfIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />}
+                          <span>{cfIsTesting ? "Testing…" : "Test Connection"}</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={cfIsSaving}
+                          className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-lg bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                        >
+                          {cfIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{cfIsSaving ? "Saving…" : "Save Cloudflare Credentials"}</span>
+                        </button>
+                      </div>
+
+                      {cfTestResult && (
+                        <div
+                          className={`p-3 rounded-lg border text-xs ${
+                            cfTestResult.success
+                              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                              : "bg-rose-50 border-rose-200 text-rose-800"
+                          }`}
+                        >
+                          {cfTestResult.message}
                         </div>
                       )}
-                    </div>
+
+                      {cfSaveMessage && (
+                        <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
+                          {cfSaveMessage}
+                        </div>
+                      )}
+                    </form>
                   </div>
-                </div>
+                )}
 
-                {/* Cloudflare Credentials Form */}
-                <form onSubmit={handleSaveCloudflare} className="bg-white border border-[#E2E8F0] rounded-[12px] p-4 sm:p-5 space-y-4 shadow-xs">
-                  <div>
-                    <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
-                      Cloudflare API Credentials
-                    </h3>
-                    <p className="text-[11px] text-[#64748B] mt-0.5">
-                      Credentials are encrypted using AES-256-GCM server-side and never exposed to the browser.
-                    </p>
-                  </div>
-
-                  {/* API Token Input */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-[#0F172A]">
-                        Cloudflare API Token <span className="text-rose-500">*</span>
-                      </label>
-                      <a
-                        href="https://dash.cloudflare.com/profile/api-tokens"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
-                      >
-                        <span>Create Token</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type={showCfToken ? "text" : "password"}
-                        value={cfTokenInput}
-                        onChange={(e) => setCfTokenInput(e.target.value)}
-                        placeholder={cfMaskedToken || "Paste your Cloudflare API token here"}
-                        className="input-base pr-10 text-xs font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCfToken(!showCfToken)}
-                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
-                        title={showCfToken ? "Hide token" : "Show token"}
-                      >
-                        {showCfToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <p className="text-[10px] text-[#64748B]">
-                      Requires permissions: <code className="bg-slate-100 px-1 rounded">Account &gt; Cloudflare Pages &gt; Edit</code>
-                    </p>
-                  </div>
-
-                  {/* Account ID Input */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#0F172A]">
-                      Cloudflare Account ID <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={cfAccountInput}
-                      onChange={(e) => setCfAccountInput(e.target.value)}
-                      placeholder="32-character hex Account ID (found on Pages dashboard)"
-                      className="input-base text-xs font-mono"
-                    />
-                    <p className="text-[10px] text-[#64748B]">
-                      Located in your Cloudflare dashboard sidebar under &quot;Account ID&quot;.
-                    </p>
-                  </div>
-
-                  {/* Optional Account Identifier / Name */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-[#0F172A]">
-                      Account Name / Identifier <span className="text-[10px] font-normal text-slate-400">(Optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={cfAccountNameInput}
-                      onChange={(e) => setCfAccountNameInput(e.target.value)}
-                      placeholder="e.g. My Agency Cloudflare"
-                      className="input-base text-xs"
-                    />
-                  </div>
-
-                  {/* Action Buttons: Test Connection & Save */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
-                    <button
-                      type="button"
-                      onClick={handleTestCloudflare}
-                      disabled={cfIsTesting}
-                      className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-[10px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
-                    >
-                      {cfIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />}
-                      <span>{cfIsTesting ? "Testing…" : "Test Connection"}</span>
-                    </button>
-
-                    <button
-                      type="submit"
-                      disabled={cfIsSaving}
-                      className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
-                    >
-                      {cfIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      <span>{cfIsSaving ? "Saving…" : "Save Cloudflare Credentials"}</span>
-                    </button>
-                  </div>
-
-                  {/* Feedback Messages */}
-                  {cfTestResult && (
+                {/* PROVIDER 2: VERCEL */}
+                {selectedHostingProvider === "vercel" && (
+                  <div className="space-y-4">
                     <div
-                      className={`p-3 rounded-[10px] border text-xs ${
-                        cfTestResult.success
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                          : "bg-rose-50 border-rose-200 text-rose-800"
+                      className={`p-4 rounded-xl border ${
+                        hostingStatuses.vercel?.connected
+                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                          : "bg-slate-50 border-slate-200 text-slate-800"
                       }`}
                     >
-                      {cfTestResult.message}
+                      <div className="flex items-start space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-black text-white flex items-center justify-center shrink-0 font-bold">
+                          ▲
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold uppercase tracking-wider">
+                              {hostingStatuses.vercel?.connected ? "Vercel Connected" : "Connect Vercel"}
+                            </h4>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                hostingStatuses.vercel?.connected
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {hostingStatuses.vercel?.connected ? "Active" : "Not Connected"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Publish static websites to Vercel global edge network with instant atomic deployments and automatic preview URLs.
+                          </p>
+                          {hostingStatuses.vercel?.connected && (
+                            <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
+                              Token: {hostingStatuses.vercel?.maskedToken || "••••••••"} {hostingStatuses.vercel?.accountName ? `• ${hostingStatuses.vercel.accountName}` : ""}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
 
-                  {cfSaveMessage && (
-                    <div className="p-3 rounded-[10px] border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
-                      {cfSaveMessage}
+                    <form onSubmit={(e) => handleSaveHostingProvider("vercel", e)} className="bg-white border border-[#E2E8F0] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Vercel API Credentials
+                        </h3>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">
+                          Personal access tokens are encrypted with AES-256 and never shared with clients.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-[#0F172A]">
+                            Vercel Personal Access Token <span className="text-rose-500">*</span>
+                          </label>
+                          <a
+                            href="https://vercel.com/account/tokens"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
+                          >
+                            <span>Create Token</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showVercelToken ? "text" : "password"}
+                            value={vercelTokenInput}
+                            onChange={(e) => setVercelTokenInput(e.target.value)}
+                            placeholder={hostingStatuses.vercel?.maskedToken || "Paste Vercel Access Token"}
+                            className="input-base pr-10 text-xs font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowVercelToken(!showVercelToken)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            {showVercelToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0F172A]">
+                          Team ID <span className="text-[10px] font-normal text-slate-400">(Optional for personal accounts)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vercelTeamIdInput}
+                          onChange={(e) => setVercelTeamIdInput(e.target.value)}
+                          placeholder="team_..."
+                          className="input-base text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
+                        <button
+                          type="button"
+                          onClick={() => handleTestHostingProvider("vercel")}
+                          disabled={vercelIsTesting}
+                          className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
+                        >
+                          {vercelIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />}
+                          <span>{vercelIsTesting ? "Testing…" : "Test Connection"}</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={vercelIsSaving}
+                          className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-lg bg-black hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                        >
+                          {vercelIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{vercelIsSaving ? "Saving…" : "Save Vercel Credentials"}</span>
+                        </button>
+                      </div>
+
+                      {vercelTestResult && (
+                        <div className={`p-3 rounded-lg border text-xs ${vercelTestResult.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"}`}>
+                          {vercelTestResult.message}
+                        </div>
+                      )}
+
+                      {vercelSaveMessage && (
+                        <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
+                          {vercelSaveMessage}
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                )}
+
+                {/* PROVIDER 3: NETLIFY */}
+                {selectedHostingProvider === "netlify" && (
+                  <div className="space-y-4">
+                    <div
+                      className={`p-4 rounded-xl border ${
+                        hostingStatuses.netlify?.connected
+                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                          : "bg-teal-50/50 border-teal-200 text-slate-800"
+                      }`}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0">
+                          <Zap className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold uppercase tracking-wider">
+                              {hostingStatuses.netlify?.connected ? "Netlify Connected" : "Connect Netlify"}
+                            </h4>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                hostingStatuses.netlify?.connected
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {hostingStatuses.netlify?.connected ? "Active" : "Not Connected"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Publish static websites to Netlify Edge CDN with atomic deployments and instant rollback capabilities.
+                          </p>
+                          {hostingStatuses.netlify?.connected && (
+                            <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
+                              Token: {hostingStatuses.netlify?.maskedToken || "••••••••"} {hostingStatuses.netlify?.accountName ? `• ${hostingStatuses.netlify.accountName}` : ""}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </form>
 
-                {/* Setup Instructions Card */}
-                <div className="bg-slate-50 border border-slate-200 rounded-[12px] p-4 space-y-2.5 text-xs text-slate-600">
-                  <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                    <span>How to set up your Cloudflare API Token</span>
-                  </h4>
-                  <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
-                    <li>
-                      Log in to your <strong>Cloudflare Dashboard</strong> and navigate to <strong>My Profile &gt; API Tokens</strong>.
-                    </li>
-                    <li>
-                      Click <strong>Create Token</strong> &rarr; choose <strong>Custom token</strong>.
-                    </li>
-                    <li>
-                      Grant permissions: <strong>Account &gt; Cloudflare Pages &gt; Edit</strong> and <strong>Account &gt; Account Settings &gt; Read</strong>.
-                    </li>
-                    <li>
-                      Set Account Resources to <strong>Include &gt; All accounts</strong> (or your primary account).
-                    </li>
-                    <li>
-                      Copy the generated token and paste it above along with your 32-character Account ID.
-                    </li>
-                  </ol>
-                </div>
+                    <form onSubmit={(e) => handleSaveHostingProvider("netlify", e)} className="bg-white border border-[#E2E8F0] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Netlify Access Token
+                        </h3>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">
+                          Create a personal access token in Netlify &gt; User Settings &gt; Applications.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-[#0F172A]">
+                            Personal Access Token <span className="text-rose-500">*</span>
+                          </label>
+                          <a
+                            href="https://app.netlify.com/user/applications#personal-access-tokens"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
+                          >
+                            <span>Create Token</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showNetlifyToken ? "text" : "password"}
+                            value={netlifyTokenInput}
+                            onChange={(e) => setNetlifyTokenInput(e.target.value)}
+                            placeholder={hostingStatuses.netlify?.maskedToken || "Paste Netlify Personal Access Token"}
+                            className="input-base pr-10 text-xs font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNetlifyToken(!showNetlifyToken)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            {showNetlifyToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
+                        <button
+                          type="button"
+                          onClick={() => handleTestHostingProvider("netlify")}
+                          disabled={netlifyIsTesting}
+                          className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
+                        >
+                          {netlifyIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-teal-600" />}
+                          <span>{netlifyIsTesting ? "Testing…" : "Test Connection"}</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={netlifyIsSaving}
+                          className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                        >
+                          {netlifyIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{netlifyIsSaving ? "Saving…" : "Save Netlify Credentials"}</span>
+                        </button>
+                      </div>
+
+                      {netlifyTestResult && (
+                        <div className={`p-3 rounded-lg border text-xs ${netlifyTestResult.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"}`}>
+                          {netlifyTestResult.message}
+                        </div>
+                      )}
+
+                      {netlifySaveMessage && (
+                        <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
+                          {netlifySaveMessage}
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                )}
+
+                {/* PROVIDER 4: GITHUB PAGES */}
+                {selectedHostingProvider === "github" && (
+                  <div className="space-y-4">
+                    <div
+                      className={`p-4 rounded-xl border ${
+                        hostingStatuses.github?.connected
+                          ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                          : "bg-purple-50/50 border-purple-200 text-slate-800"
+                      }`}
+                    >
+                      <div className="flex items-start space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                          <Globe className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-bold uppercase tracking-wider">
+                              {hostingStatuses.github?.connected ? "GitHub Pages Connected" : "Connect GitHub Pages"}
+                            </h4>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                hostingStatuses.github?.connected
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-slate-200 text-slate-700"
+                              }`}
+                            >
+                              {hostingStatuses.github?.connected ? "Active" : "Not Connected"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                            Publish static websites to a dedicated GitHub repository with automatic GitHub Pages deployment and git version history.
+                          </p>
+                          {hostingStatuses.github?.connected && (
+                            <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
+                              Token: {hostingStatuses.github?.maskedToken || "••••••••"} {hostingStatuses.github?.accountName ? `• @${hostingStatuses.github.accountName}` : ""}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <form onSubmit={(e) => handleSaveHostingProvider("github", e)} className="bg-white border border-[#E2E8F0] rounded-xl p-4 sm:p-5 space-y-4 shadow-xs">
+                      <div>
+                        <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          GitHub API Token &amp; Organization
+                        </h3>
+                        <p className="text-[11px] text-[#64748B] mt-0.5">
+                          Requires a Personal Access Token with <code className="bg-slate-100 px-1 rounded">repo</code> scope.
+                        </p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-[#0F172A]">
+                            GitHub Personal Access Token <span className="text-rose-500">*</span>
+                          </label>
+                          <a
+                            href="https://github.com/settings/tokens/new?scopes=repo"
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
+                          >
+                            <span>Generate Token (repo scope)</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        </div>
+                        <div className="relative">
+                          <input
+                            type={showGithubToken ? "text" : "password"}
+                            value={githubTokenInput}
+                            onChange={(e) => setGithubTokenInput(e.target.value)}
+                            placeholder={hostingStatuses.github?.maskedToken || "ghp_..."}
+                            className="input-base pr-10 text-xs font-mono"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowGithubToken(!showGithubToken)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            {showGithubToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold text-[#0F172A]">
+                          GitHub Username or Organization <span className="text-[10px] font-normal text-slate-400">(Optional - auto-detected from token)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={githubOwnerInput}
+                          onChange={(e) => setGithubOwnerInput(e.target.value)}
+                          placeholder="e.g. your-github-org"
+                          className="input-base text-xs font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
+                        <button
+                          type="button"
+                          onClick={() => handleTestHostingProvider("github")}
+                          disabled={githubIsTesting}
+                          className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
+                        >
+                          {githubIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />}
+                          <span>{githubIsTesting ? "Testing…" : "Test Connection"}</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={githubIsSaving}
+                          className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                        >
+                          {githubIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>{githubIsSaving ? "Saving…" : "Save GitHub Credentials"}</span>
+                        </button>
+                      </div>
+
+                      {githubTestResult && (
+                        <div className={`p-3 rounded-lg border text-xs ${githubTestResult.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"}`}>
+                          {githubTestResult.message}
+                        </div>
+                      )}
+
+                      {githubSaveMessage && (
+                        <div className="p-3 rounded-lg border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
+                          {githubSaveMessage}
+                        </div>
+                      )}
+                    </form>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -39,9 +39,15 @@ import { RankLocalIcon } from "@/components/brand/RankLocalLogo";
 
 export type NavTab =
   | "dashboard"
+  | "websites"
+  | "generator"
+  | "optimization"
+  | "settings"
+  | "team"
+  // Legacy & specific sub-view aliases
+  | "projects"
   | "chat-generator"
   | "new-website"
-  | "projects"
   | "themes"
   | "preview"
   | "checker"
@@ -49,9 +55,7 @@ export type NavTab =
   | "publishing"
   | "domains"
   | "activity"
-  | "team"
-  | "settings-ai"
-  | "settings";
+  | "settings-ai";
 
 interface AppShellProps {
   currentTab: NavTab;
@@ -153,81 +157,44 @@ export function AppShell({
     items: NavItem[];
   }
 
-  // Clean structured navigation sections
+  const isTabActive = (itemId: NavTab) => {
+    if (currentTab === itemId) return true;
+    if (itemId === "websites" && (currentTab === "projects" || currentTab === "preview" || currentTab === "publishing" || currentTab === "domains")) return true;
+    if (itemId === "generator" && (currentTab === "new-website" || currentTab === "chat-generator" || currentTab === "themes")) return true;
+    if (itemId === "optimization" && (currentTab === "checker" || currentTab === "linking" || currentTab === "activity")) return true;
+    if (itemId === "settings" && currentTab === "settings-ai") return true;
+    return false;
+  };
+
+  // Clean structured navigation sections: 5 core items + Admin (Owner only)
   const navSections: NavSection[] = [
     {
       group: undefined,
       items: [
         { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      ],
-    },
-    {
-      group: "Website Builder",
-      items: [
-        { id: "new-website", label: "New Website", icon: PlusCircle },
         {
-          id: "projects",
-          label: "Projects & Sites",
+          id: "websites",
+          label: "Websites",
           icon: FolderGit2,
           badge: projectsCount > 0 ? String(projectsCount) : undefined,
         },
-        { id: "themes", label: "Themes & Layouts", icon: Palette },
         {
-          id: "preview",
-          label: "Live Preview",
-          icon: Eye,
-          badge: hasActiveProject ? "Active" : undefined,
-          badgeColor: "bg-emerald-500 text-white",
-        },
-      ],
-    },
-    {
-      group: "Chat Generator",
-      items: [
-        {
-          id: "chat-generator",
-          label: "Chat Generator",
-          icon: MessageSquareCode,
-          badge: "Instant",
+          id: "generator",
+          label: "AI / Generator",
+          icon: Sparkles,
+          badge: "AI",
           badgeColor: "bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300",
         },
-      ],
-    },
-    {
-      group: "Optimization",
-      items: [
         {
-          id: "checker",
-          label: "Site Quality Checker",
+          id: "optimization",
+          label: "Optimization",
           icon: ShieldCheck,
-          isRouteLink: "/checker",
-        },
-        { id: "linking", label: "Internal Linking", icon: Link2 },
-        { id: "activity", label: "Activity Feed", icon: Activity },
-      ],
-    },
-    {
-      group: "Publishing",
-      items: [
-        {
-          id: "publishing",
-          label: "Cloudflare Publishing",
-          icon: Globe,
-          badge: "Edge",
-          badgeColor: "bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300",
         },
         {
-          id: "domains",
-          label: "Custom Domains",
-          icon: Link2,
+          id: "settings",
+          label: "Settings",
+          icon: Settings,
         },
-      ],
-    },
-    {
-      group: "Settings",
-      items: [
-        { id: "settings-ai", label: "AI Providers", icon: Sparkles },
-        { id: "settings", label: "Preferences & System", icon: Settings },
       ],
     },
     ...(isOwner
@@ -293,7 +260,7 @@ export function AppShell({
               )}
               {sec.items.map((item) => {
                 const Icon = item.icon;
-                const isActive = currentTab === item.id;
+                const isActive = isTabActive(item.id);
 
                 if (item.isRouteLink) {
                   return (
@@ -601,7 +568,7 @@ export function AppShell({
                 )}
                 {sec.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentTab === item.id;
+                  const isActive = isTabActive(item.id);
 
                   if (item.isRouteLink) {
                     return (

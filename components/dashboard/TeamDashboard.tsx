@@ -19,11 +19,14 @@ import {
   Database,
 } from "lucide-react";
 
+import { SavedProject } from "@/lib/storage/project-types";
+
 interface TeamDashboardProps {
   onNewProject: () => void;
   onOpenProject: (projectId: string) => void;
   onOpenImportLocal: () => void;
   onNavigateToProjects: () => void;
+  projects?: SavedProject[];
 }
 
 export function TeamDashboard({
@@ -31,6 +34,7 @@ export function TeamDashboard({
   onOpenProject,
   onOpenImportLocal,
   onNavigateToProjects,
+  projects: propProjects,
 }: TeamDashboardProps) {
   const { user, profile } = useAuth();
 
@@ -46,6 +50,71 @@ export function TeamDashboard({
   const [loading, setLoading] = useState(true);
 
   const loadDashboardData = useCallback(async () => {
+    // If local projects were provided, derive stats immediately for 0ms latency
+    if (propProjects && propProjects.length > 0) {
+      const sorted = [...propProjects].sort(
+        (a, b) => (b.lastEditedAt || 0) - (a.lastEditedAt || 0)
+      );
+
+      const totalPages = propProjects.reduce((acc, p) => {
+        const htmlCount = p.files?.filter((f) => f.path.endsWith(".html") || !f.path.includes(".")).length || 0;
+        return acc + (htmlCount > 0 ? htmlCount : (p.files?.length || 1));
+      }, 0);
+
+      const sixtyDaysAgo = Date.now() - 60 * 24 * 60 * 60 * 1000;
+      const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime();
+
+      let optMonthCount = 0;
+      let staleCount = 0;
+      const staleList: any[] = [];
+
+      for (const p of propProjects) {
+        if (p.optimizationCycles) {
+          optMonthCount += p.optimizationCycles.filter(
+            (c) => (c.timestamp || new Date(c.date).getTime()) >= startOfMonth
+          ).length;
+        }
+
+        const isStale = (p.lastEditedAt || p.createdAt || 0) < sixtyDaysAgo;
+        if (isStale) {
+          staleCount++;
+          if (staleList.length < 5) {
+            staleList.push({
+              id: `${p.id}-home`,
+              project_id: p.id,
+              title: `${p.name} - Home`,
+              slug: "/",
+              url_path: "/index.html",
+              last_meaningful_update: new Date(p.lastEditedAt || p.createdAt || Date.now()).toISOString(),
+            });
+          }
+        }
+      }
+
+      setRecentProjects(
+        sorted.slice(0, 6).map((p) => ({
+          id: p.id,
+          name: p.name,
+          domain: p.formData?.domain || "No domain set",
+          niche: p.nicheId || p.formData?.niche || "Local Business",
+          main_city: p.formData?.mainCity || p.serviceAreaCities?.[0]?.city || "All regions",
+          updated_at: new Date(p.lastEditedAt || p.createdAt || Date.now()).toISOString(),
+          publishedUrl: p.publishedUrl,
+          hostingProvider: p.hostingProvider,
+        }))
+      );
+
+      setPagesToOptimize(staleList);
+      setStats({
+        projectsCount: propProjects.length,
+        totalPagesCount: totalPages,
+        optimizedThisMonth: optMonthCount,
+        needingRefresh: staleCount,
+      });
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       const supabase = getSupabaseBrowserClient();
@@ -97,7 +166,7 @@ export function TeamDashboard({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [propProjects]);
 
   useEffect(() => {
     loadDashboardData();
@@ -267,11 +336,18 @@ export function TeamDashboard({
                     <div className="text-[11px] text-slate-400">
                       {p.domain || "No domain set"} • {p.main_city || "All regions"}
                     </div>
-                    <div className="text-[10px] text-slate-400 flex items-center gap-1">
-                      <Clock className="w-2.5 h-2.5" />
-                      <span>
-                        Updated {new Date(p.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </span>
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        <span>
+                          Updated {new Date(p.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                      {p.publishedUrl && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                          Live
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))}

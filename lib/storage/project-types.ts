@@ -139,6 +139,10 @@ export interface SavedProject {
   // Rank & Rent Configuration & Leads
   rankRentConfig?: RankRentConfig;
   leads?: CapturedLead[];
+
+  // Hosting & Publishing
+  publishedUrl?: string;
+  hostingProvider?: string;
 }
 
 export type RankRentStatus = "available" | "rented" | "prospecting" | "paused";
