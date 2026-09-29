@@ -356,11 +356,11 @@ export default function DashboardPage() {
 
   // Settings Panel State
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"models" | "images" | "preferences">("models");
+  const [settingsTab, setSettingsTab] = useState<"models" | "images" | "preferences" | "cloudflare">("models");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
   const handleOpenSettings = (
-    tab: "models" | "images" | "preferences" = "models",
+    tab: "models" | "images" | "preferences" | "cloudflare" = "models",
     message: string | null = null
   ) => {
     setSettingsTab(tab);
@@ -3922,6 +3922,8 @@ export default function DashboardPage() {
           handleOpenSettings("preferences");
         } else if (tab === "settings-ai") {
           handleOpenSettings("models");
+        } else if (tab === "publishing") {
+          handleOpenSettings("cloudflare");
         } else if (tab === "new-website") {
           setNavTab("projects");
           setViewMode("builder");

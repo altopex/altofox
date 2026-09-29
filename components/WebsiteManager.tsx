@@ -59,7 +59,9 @@ import {
   Check,
   X,
   Network,
+  UploadCloud,
 } from "lucide-react";
+import { PublishModal } from "./publishing/PublishModal";
 import { InternalLinkingDashboard } from "./InternalLinkingDashboard";
 import { useProjectPresence } from "@/lib/supabase/presence";
 import { ConflictModal } from "./editor/ConflictModal";
@@ -159,6 +161,7 @@ export function WebsiteManager({
   const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
   const [isAddNewPageModalOpen, setIsAddNewPageModalOpen] = useState(false);
   const [newPageInitialData, setNewPageInitialData] = useState<AddNewPageInitialData | null>(null);
+  const [isPublishModalOpen, setIsPublishModalOpen] = useState(false);
 
   // Settings & Custom Content Instructions
   const [settingsInstructions, setSettingsInstructions] = useState<string>(
@@ -771,6 +774,16 @@ export function WebsiteManager({
           >
             <Layers className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Find &amp; Replace</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsPublishModalOpen(true)}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold transition shadow-xs"
+            title="Publish website directly to Cloudflare Pages edge hosting"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Publish</span>
           </button>
 
           <div className="relative group">
@@ -2020,6 +2033,19 @@ export function WebsiteManager({
           setActiveTab("pages");
         }}
       />
+
+      {/* Cloudflare Direct Publishing Modal */}
+      {isPublishModalOpen && (
+        <PublishModal
+          isOpen={isPublishModalOpen}
+          onClose={() => setIsPublishModalOpen(false)}
+          projectName={project.name}
+          projectId={project.id}
+          files={project.files}
+          photos={project.formData?.photos || []}
+          websiteDomain={project.businessDetails?.websiteDomain || project.formData?.websiteDomain}
+        />
+      )}
     </div>
   );
 }

@@ -28,13 +28,14 @@ import {
   Zap,
   CheckSquare,
   Layers,
+  Cloud,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
 
 export interface SettingsPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: "models" | "images" | "preferences";
+  initialTab?: "models" | "images" | "preferences" | "cloudflare";
   initialMessage?: string | null;
   onSettingsUpdated: () => void;
   onClearAllData?: () => void;
@@ -165,7 +166,7 @@ export function SettingsPanel({
   onSettingsUpdated,
   onClearAllData,
 }: SettingsPanelProps) {
-  const [activeTab, setActiveTab] = useState<"models" | "images" | "preferences">(initialTab);
+  const [activeTab, setActiveTab] = useState<"models" | "images" | "preferences" | "cloudflare">(initialTab);
 
   // Default AI Provider & Model
   const [defaultProvider, setDefaultProvider] = useState<ProviderType>("gemini");
@@ -232,6 +233,41 @@ export function SettingsPanel({
   const [prefQualityReview, setPrefQualityReview] = useState(true);
   const [prefSavedMessage, setPrefSavedMessage] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // Cloudflare Connection States
+  const [cfTokenInput, setCfTokenInput] = useState("");
+  const [cfAccountInput, setCfAccountInput] = useState("");
+  const [cfAccountNameInput, setCfAccountNameInput] = useState("");
+  const [showCfToken, setShowCfToken] = useState(false);
+  const [cfMaskedToken, setCfMaskedToken] = useState("");
+  const [cfConnected, setCfConnected] = useState(false);
+  const [cfAccountName, setCfAccountName] = useState("");
+  const [cfStatusError, setCfStatusError] = useState<string | null>(null);
+  const [cfIsTesting, setCfIsTesting] = useState(false);
+  const [cfTestResult, setCfTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [cfIsSaving, setCfIsSaving] = useState(false);
+  const [cfSaveMessage, setCfSaveMessage] = useState<string | null>(null);
+
+  // Cloudflare Status check
+  const loadCloudflareStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/cloudflare/status");
+      const data = await res.json();
+      if (data.connected) {
+        setCfConnected(true);
+        setCfMaskedToken(data.maskedToken || "");
+        setCfAccountName(data.accountName || "Connected Cloudflare Account");
+        setCfAccountInput(data.accountId || "");
+        setCfAccountNameInput(data.accountName || "");
+        setCfStatusError(null);
+      } else {
+        setCfConnected(false);
+        setCfStatusError(data.error || null);
+      }
+    } catch {
+      setCfConnected(false);
+    }
+  }, []);
 
   // Load all settings from localStorage
   const loadAllSettings = useCallback(() => {
@@ -372,7 +408,83 @@ export function SettingsPanel({
         }
       })
       .catch(() => {});
-  }, []);
+
+    // Load Cloudflare status from server
+    loadCloudflareStatus();
+  }, [loadCloudflareStatus]);
+
+  const handleTestCloudflare = async () => {
+    setCfIsTesting(true);
+    setCfTestResult(null);
+    try {
+      const payload: any = {};
+      if (cfTokenInput.trim()) payload.apiToken = cfTokenInput.trim();
+      if (cfAccountInput.trim()) payload.accountId = cfAccountInput.trim();
+
+      const res = await fetch("/api/cloudflare/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setCfTestResult({
+          success: true,
+          message: `Connection verified! Account: ${data.accountName || "Active"}`,
+        });
+      } else {
+        setCfTestResult({
+          success: false,
+          message: data.error || "Connection test failed. Please verify token & account ID.",
+        });
+      }
+    } catch (err: any) {
+      setCfTestResult({
+        success: false,
+        message: err.message || "Network error testing Cloudflare connection.",
+      });
+    } finally {
+      setCfIsTesting(false);
+    }
+  };
+
+  const handleSaveCloudflare = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cfTokenInput.trim() || !cfAccountInput.trim()) {
+      setCfSaveMessage("Please enter both API Token and Account ID.");
+      return;
+    }
+
+    setCfIsSaving(true);
+    setCfSaveMessage(null);
+    try {
+      const res = await fetch("/api/cloudflare/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiToken: cfTokenInput.trim(),
+          accountId: cfAccountInput.trim(),
+          accountName: cfAccountNameInput.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCfConnected(true);
+        setCfMaskedToken(data.maskedToken);
+        setCfAccountName(data.accountName);
+        setCfTokenInput("");
+        setCfSaveMessage("Cloudflare credentials verified and securely saved!");
+        onSettingsUpdated();
+        setTimeout(() => setCfSaveMessage(null), 4000);
+      } else {
+        setCfSaveMessage(data.error || "Failed to save credentials.");
+      }
+    } catch (err: any) {
+      setCfSaveMessage(err.message || "Network error saving credentials.");
+    } finally {
+      setCfIsSaving(false);
+    }
+  };
 
   const handleToggleSmartFallback = async (enabled: boolean) => {
     setSmartFallback(enabled);
@@ -1159,6 +1271,22 @@ export function SettingsPanel({
               >
                 <Globe className="w-4 h-4" />
                 <span>Preferences</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab("cloudflare")}
+                className={`flex-1 py-2.5 px-2.5 text-xs sm:text-sm font-semibold rounded-t-[8px] flex items-center justify-center space-x-1.5 border-b-2 transition ${
+                  activeTab === "cloudflare"
+                    ? "border-[#4F46E5] text-[#4F46E5] bg-[#EEF2FF]/40"
+                    : "border-transparent text-[#64748B] hover:text-[#0F172A] hover:bg-slate-50"
+                }`}
+              >
+                <Cloud className="w-4 h-4 text-orange-500" />
+                <span>Cloudflare</span>
+                {cfConnected && (
+                  <span className="w-2 h-2 rounded-full bg-[#10B981]" />
+                )}
               </button>
             </div>
           </div>
@@ -2539,6 +2667,205 @@ export function SettingsPanel({
                       </div>
                     )}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* ================= TAB 4: CLOUDFLARE EDGE HOSTING ================= */}
+            {activeTab === "cloudflare" && (
+              <div className="space-y-5 animate-in fade-in duration-150">
+                {/* Cloudflare Connection Overview Banner */}
+                <div
+                  className={`p-4 rounded-[12px] border ${
+                    cfConnected
+                      ? "bg-emerald-50/70 border-emerald-200 text-emerald-950"
+                      : "bg-orange-50/60 border-orange-200 text-slate-800"
+                  }`}
+                >
+                  <div className="flex items-start space-x-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        cfConnected
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-orange-100 text-orange-600"
+                      }`}
+                    >
+                      <Cloud className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold uppercase tracking-wider">
+                          {cfConnected ? "Cloudflare Pages Connected" : "Connect Cloudflare Pages"}
+                        </h4>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            cfConnected
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {cfConnected ? "Active" : "Not Connected"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                        {cfConnected
+                          ? `Publish static websites directly to Cloudflare edge hosting with instant SSL, 330+ global CDN nodes, and custom domain mapping.`
+                          : `Publish static websites directly to Cloudflare Pages edge hosting. No manual ZIP downloads or uploads required.`}
+                      </p>
+                      {cfConnected && cfMaskedToken && (
+                        <div className="mt-2 text-[11px] font-mono bg-white/80 border border-emerald-200 rounded-[8px] px-2.5 py-1 text-emerald-900 inline-block">
+                          Token: {cfMaskedToken} {cfAccountName ? `• ${cfAccountName}` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cloudflare Credentials Form */}
+                <form onSubmit={handleSaveCloudflare} className="bg-white border border-[#E2E8F0] rounded-[12px] p-4 sm:p-5 space-y-4 shadow-xs">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                      Cloudflare API Credentials
+                    </h3>
+                    <p className="text-[11px] text-[#64748B] mt-0.5">
+                      Credentials are encrypted using AES-256-GCM server-side and never exposed to the browser.
+                    </p>
+                  </div>
+
+                  {/* API Token Input */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#0F172A]">
+                        Cloudflare API Token <span className="text-rose-500">*</span>
+                      </label>
+                      <a
+                        href="https://dash.cloudflare.com/profile/api-tokens"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-[#4F46E5] hover:text-[#4338CA] flex items-center gap-1 font-medium"
+                      >
+                        <span>Create Token</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showCfToken ? "text" : "password"}
+                        value={cfTokenInput}
+                        onChange={(e) => setCfTokenInput(e.target.value)}
+                        placeholder={cfMaskedToken || "Paste your Cloudflare API token here"}
+                        className="input-base pr-10 text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCfToken(!showCfToken)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                        title={showCfToken ? "Hide token" : "Show token"}
+                      >
+                        {showCfToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-[#64748B]">
+                      Requires permissions: <code className="bg-slate-100 px-1 rounded">Account &gt; Cloudflare Pages &gt; Edit</code>
+                    </p>
+                  </div>
+
+                  {/* Account ID Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#0F172A]">
+                      Cloudflare Account ID <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={cfAccountInput}
+                      onChange={(e) => setCfAccountInput(e.target.value)}
+                      placeholder="32-character hex Account ID (found on Pages dashboard)"
+                      className="input-base text-xs font-mono"
+                    />
+                    <p className="text-[10px] text-[#64748B]">
+                      Located in your Cloudflare dashboard sidebar under &quot;Account ID&quot;.
+                    </p>
+                  </div>
+
+                  {/* Optional Account Identifier / Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#0F172A]">
+                      Account Name / Identifier <span className="text-[10px] font-normal text-slate-400">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={cfAccountNameInput}
+                      onChange={(e) => setCfAccountNameInput(e.target.value)}
+                      placeholder="e.g. My Agency Cloudflare"
+                      className="input-base text-xs"
+                    />
+                  </div>
+
+                  {/* Action Buttons: Test Connection & Save */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-[#E2E8F0]">
+                    <button
+                      type="button"
+                      onClick={handleTestCloudflare}
+                      disabled={cfIsTesting}
+                      className="inline-flex items-center justify-center space-x-1.5 px-3.5 py-2 rounded-[10px] border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold transition disabled:opacity-50"
+                    >
+                      {cfIsTesting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />}
+                      <span>{cfIsTesting ? "Testing…" : "Test Connection"}</span>
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={cfIsSaving}
+                      className="inline-flex items-center justify-center space-x-1.5 px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-xs transition disabled:opacity-50"
+                    >
+                      {cfIsSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      <span>{cfIsSaving ? "Saving…" : "Save Cloudflare Credentials"}</span>
+                    </button>
+                  </div>
+
+                  {/* Feedback Messages */}
+                  {cfTestResult && (
+                    <div
+                      className={`p-3 rounded-[10px] border text-xs ${
+                        cfTestResult.success
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                          : "bg-rose-50 border-rose-200 text-rose-800"
+                      }`}
+                    >
+                      {cfTestResult.message}
+                    </div>
+                  )}
+
+                  {cfSaveMessage && (
+                    <div className="p-3 rounded-[10px] border bg-indigo-50 border-indigo-200 text-indigo-900 text-xs">
+                      {cfSaveMessage}
+                    </div>
+                  )}
+                </form>
+
+                {/* Setup Instructions Card */}
+                <div className="bg-slate-50 border border-slate-200 rounded-[12px] p-4 space-y-2.5 text-xs text-slate-600">
+                  <h4 className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                    <span>How to set up your Cloudflare API Token</span>
+                  </h4>
+                  <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-slate-600 leading-relaxed">
+                    <li>
+                      Log in to your <strong>Cloudflare Dashboard</strong> and navigate to <strong>My Profile &gt; API Tokens</strong>.
+                    </li>
+                    <li>
+                      Click <strong>Create Token</strong> &rarr; choose <strong>Custom token</strong>.
+                    </li>
+                    <li>
+                      Grant permissions: <strong>Account &gt; Cloudflare Pages &gt; Edit</strong> and <strong>Account &gt; Account Settings &gt; Read</strong>.
+                    </li>
+                    <li>
+                      Set Account Resources to <strong>Include &gt; All accounts</strong> (or your primary account).
+                    </li>
+                    <li>
+                      Copy the generated token and paste it above along with your 32-character Account ID.
+                    </li>
+                  </ol>
                 </div>
               </div>
             )}

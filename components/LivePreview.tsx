@@ -27,7 +27,9 @@ import {
   Search,
   FileEdit,
   Database,
+  UploadCloud,
 } from "lucide-react";
+import { PublishModal } from "./publishing/PublishModal";
 import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
 import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
 import { WebsiteQualityAuditReport, auditWebsiteQuality } from "../lib/quality/website-quality-auditor";
@@ -133,6 +135,7 @@ export function LivePreview({
 
   const [telClickedNotice, setTelClickedNotice] = useState<string | null>(null);
   const [showSchemaModal, setShowSchemaModal] = useState(false);
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Synchronize state when project changes and ensure canonical files (sitemap, robots, etc.)
   useEffect(() => {
@@ -757,6 +760,15 @@ export function LivePreview({
           </button>
           <button
             type="button"
+            onClick={() => setShowPublishModal(true)}
+            className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-[10px] bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-xs font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0"
+            title="Publish website directly to Cloudflare Pages edge hosting"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>Publish</span>
+          </button>
+          <button
+            type="button"
             onClick={handleDownloadZip}
             disabled={isZipping}
             className="inline-flex items-center space-x-2 px-4 py-2 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-sm transition disabled:opacity-75"
@@ -1174,12 +1186,22 @@ export function LivePreview({
             </div>
 
             <div className="space-y-2 pt-1">
-              {/* Primary Download Button */}
+              {/* Primary Publish to Cloudflare Button */}
+              <button
+                type="button"
+                onClick={() => setShowPublishModal(true)}
+                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-4 rounded-[10px] bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white text-sm font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Publish to Cloudflare Pages</span>
+              </button>
+
+              {/* Download ZIP Package Button */}
               <button
                 type="button"
                 onClick={handleDownloadZip}
                 disabled={isZipping}
-                className="w-full inline-flex items-center justify-center space-x-2 py-3 px-4 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-75"
+                className="w-full inline-flex items-center justify-center space-x-2 py-2.5 px-4 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-sm transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-75"
               >
                 {isZipping ? (
                   <>
@@ -1425,6 +1447,19 @@ export function LivePreview({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cloudflare Direct Publishing Modal */}
+      {showPublishModal && (
+        <PublishModal
+          isOpen={showPublishModal}
+          onClose={() => setShowPublishModal(false)}
+          projectName={project.name}
+          projectId={project.projectId}
+          files={currentFiles}
+          photos={project.photos}
+          websiteDomain={project.websiteDomain}
+        />
       )}
     </div>
   );
