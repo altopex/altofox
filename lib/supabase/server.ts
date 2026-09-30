@@ -144,8 +144,10 @@ export async function authenticateServerRequest(
           const payloadJson = Buffer.from(payloadBase64, "base64").toString("utf-8");
           const payload = JSON.parse(payloadJson);
 
-          if (payload.exp && payload.exp * 1000 < Date.now()) {
-            console.warn("[Auth] JWT expired at:", new Date(payload.exp * 1000).toISOString());
+          // Allow a 5-minute clock skew / refresh-in-flight grace window for active sessions
+          const graceWindowMs = 5 * 60 * 1000;
+          if (payload.exp && (payload.exp * 1000 + graceWindowMs) < Date.now()) {
+            console.warn("[Auth] JWT expired beyond grace window at:", new Date(payload.exp * 1000).toISOString());
             return null;
           }
 

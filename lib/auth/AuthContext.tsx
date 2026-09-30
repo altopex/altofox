@@ -34,16 +34,32 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function getCookieDomain(): string {
+  if (typeof window === "undefined") return "";
+  const host = window.location.hostname;
+  if (host.endsWith("ranklocal.site")) return "; Domain=.ranklocal.site";
+  return "";
+}
+
 function setAuthCookies(token: string | null, status: string | null) {
   if (typeof document === "undefined") return;
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  const domainPart = getCookieDomain();
+
   if (token) {
-    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
-    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    // Also set host-only cookie for maximum browser compatibility
+    if (domainPart) {
+      document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    }
     try {
       localStorage.setItem("ranklocal_token_persist", token);
     } catch {}
   } else {
+    document.cookie = `ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
+    document.cookie = `altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
     document.cookie = `ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
     document.cookie = `altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
     try {
@@ -51,9 +67,15 @@ function setAuthCookies(token: string | null, status: string | null) {
     } catch {}
   }
   if (status) {
-    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
-    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    if (domainPart) {
+      document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+    }
   } else {
+    document.cookie = `ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
+    document.cookie = `altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
     document.cookie = `ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
     document.cookie = `altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
   }
@@ -65,6 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const profileRef = useRef<Profile | null>(null);
+  profileRef.current = profile;
   const lastActiveUpdateRef = useRef<number>(0);
 
   const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
@@ -128,9 +152,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function initAuth() {
       try {
-        // 1. First check /api/auth/check-status (fast, cookie-based, resilient verification)
+        // 1. Proactively check Supabase local session
+        let activeSession: Session | null = null;
         try {
-          const statusRes = await fetch("/api/auth/check-status");
+          const { data: sessionData, error: sessionErr } = await supabase.auth.getSession();
+          if (!sessionErr && sessionData?.session) {
+            activeSession = sessionData.session;
+          }
+        } catch (e) {
+          console.warn("[Auth] getSession check notice:", e);
+        }
+
+        // Check if access token is expired or expiring in < 60 seconds
+        const isTokenExpired = activeSession?.expires_at
+          ? activeSession.expires_at * 1000 <= Date.now() + 60000
+          : false;
+
+        // 2. Proactive Session Refresh if expired or missing from memory but refresh token exists in localStorage
+        if (!activeSession || isTokenExpired) {
+          try {
+            console.log("[Auth] Performing resilient session refresh...");
+            const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
+            if (!refreshErr && refreshData?.session) {
+              activeSession = refreshData.session;
+              console.log("[Auth] Session refreshed successfully!");
+            }
+          } catch (refErr) {
+            console.warn("[Auth] Proactive refresh attempt note:", refErr);
+          }
+        }
+
+        if (activeSession?.user) {
+          if (!mounted) return;
+          setSession(activeSession);
+          setUser(activeSession.user);
+          if (activeSession.access_token) {
+            setAuthCookies(activeSession.access_token, "approved");
+          }
+          await loadUserProfile(activeSession.user.id, activeSession.user.email, activeSession.access_token);
+          if (mounted) setLoading(false);
+          return;
+        }
+
+        // 3. Fallback check via /api/auth/check-status (cookie-backed session verification)
+        try {
+          const statusRes = await fetch("/api/auth/check-status", { credentials: "same-origin" });
           if (statusRes.ok) {
             const statusData = await statusRes.json();
             if (statusData?.authenticated && mounted) {
@@ -158,37 +224,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 aud: "authenticated",
                 created_at: loadedProfile.created_at,
               });
+              setAuthCookies(null, loadedProfile.status);
               if (mounted) setLoading(false);
               return;
             }
           }
         } catch {
-          // If check-status fails, fall through to client token check
+          // ignore network glitch on fallback check
         }
 
-        // 2. Client token check with 2.5-second timeout guard so it NEVER hangs
-        const timeoutPromise = new Promise<{ data: { session: null } }>((resolve) =>
-          setTimeout(() => resolve({ data: { session: null } }), 2500)
-        );
-
-        let initialSession: Session | null = null;
-        try {
-          const sessionRes: any = await Promise.race([
-            supabase.auth.getSession(),
-            timeoutPromise,
-          ]);
-          initialSession = sessionRes?.data?.session || null;
-        } catch {
-          initialSession = null;
-        }
-
-        if (!mounted) return;
-
-        if (initialSession?.user) {
-          setSession(initialSession);
-          setUser(initialSession.user);
-          await loadUserProfile(initialSession.user.id, initialSession.user.email, initialSession.access_token);
-        } else {
+        // Only clear if genuinely no session exists anywhere
+        if (mounted) {
           setSession(null);
           setUser(null);
           setProfile(null);
@@ -209,24 +255,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const subRes = supabase.auth.onAuthStateChange(
         async (event, currentSession) => {
           if (!mounted) return;
+          console.log(`[Auth] Auth event: ${event}`);
+
+          if (event === "SIGNED_OUT") {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setAuthCookies(null, null);
+            return;
+          }
+
           if (currentSession?.user) {
             setSession(currentSession);
             setUser(currentSession.user);
             if (currentSession.access_token) {
-              setAuthCookies(currentSession.access_token, profile?.status || "approved");
+              setAuthCookies(currentSession.access_token, profileRef.current?.status || "approved");
             }
-            await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
+            if (event === "SIGNED_IN" || !profileRef.current) {
+              await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
+            }
           }
         }
       );
       subscription = subRes.data?.subscription;
     } catch {}
 
+    // Tab wake-up / visibility change listener: silently refresh tokens when user returns to tab
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === "visible") {
+        try {
+          const { data } = await supabase.auth.getSession();
+          if (data?.session?.expires_at && data.session.expires_at * 1000 <= Date.now() + 120000) {
+            console.log("[Auth] Tab visible and session expiring soon; proactively refreshing...");
+            await supabase.auth.refreshSession();
+          }
+        } catch {}
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       mounted = false;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (subscription?.unsubscribe) subscription.unsubscribe();
     };
-  }, [loadUserProfile, profile?.status]);
+  }, [loadUserProfile]);
 
   const signInWithPassword = async (email: string, password: string) => {
     try {

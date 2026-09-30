@@ -506,9 +506,9 @@ export default function DashboardPage() {
       const storedModel = localStorage.getItem(`altofox_model_${storedProvider}`);
       if (storedModel) setActiveModel(storedModel);
     } else {
-      // Check if any other provider has a saved key
-      const otherProviders: ProviderType[] = ["openai", "gemini", "openrouter"];
-      const fallback = otherProviders.find((p) => {
+    // Check if any other provider has a saved key in local storage
+      const allProviders: ProviderType[] = ["openai", "gemini", "deepseek", "anthropic", "groq", "openrouter", "custom"];
+      const fallback = allProviders.find((p) => {
         const k = localStorage.getItem(`altofox_key_${p}`);
         return !!(k && k.trim());
       });
@@ -524,6 +524,31 @@ export default function DashboardPage() {
         setHasKey(false);
       }
     }
+
+    // Also asynchronously verify server-stored keys so server-configured models work seamlessly
+    fetch("/api/keys")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success) {
+          const serverProviders = Array.isArray(data.providers) ? data.providers : [];
+          const serverProfiles = Array.isArray(data.profiles) ? data.profiles : [];
+          const activeServerKey = serverProviders.find((p: any) => p.hasKey) || serverProfiles.find((p: any) => p.hasKey);
+
+          if (activeServerKey) {
+            setHasKey(true);
+            const activeId = data.settings?.activeProviderId;
+            const activeProf = serverProfiles.find((p: any) => p.id === activeId && p.hasKey);
+            if (activeProf?.presetId) {
+              setActiveProvider(activeProf.presetId as ProviderType);
+              if (activeProf.model) setActiveModel(activeProf.model);
+            } else if (activeServerKey.provider) {
+              setActiveProvider(activeServerKey.provider as ProviderType);
+              if (activeServerKey.defaultModel) setActiveModel(activeServerKey.defaultModel);
+            }
+          }
+        }
+      })
+      .catch(() => {});
 
     // Check Image API Keys
     const pexels = localStorage.getItem("altofox_pexels_key");
@@ -2286,6 +2311,14 @@ export default function DashboardPage() {
                           <RefreshCw className="w-3.5 h-3.5" />
                           <span>Retry AI Generation</span>
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSettings("models", "Verify or update your AI API key")}
+                          className="inline-flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-sm transition"
+                        >
+                          <Key className="w-3.5 h-3.5 text-amber-300" />
+                          <span>Check AI Settings</span>
+                        </button>
                         {generationError.canFallback && (
                           <button
                             type="button"
@@ -2293,7 +2326,7 @@ export default function DashboardPage() {
                             className="inline-flex items-center space-x-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
                           >
                             <Zap className="w-3.5 h-3.5 text-amber-200" />
-                            <span>Assemble with Curated Templates</span>
+                            <span>Assemble with Curated Templates (&lt; 1s)</span>
                           </button>
                         )}
                         <button
@@ -3990,9 +4023,25 @@ export default function DashboardPage() {
     );
   }
 
-  // Protected Dashboard Guard
+  // Protected Dashboard Guard: Only redirect when definitively unauthenticated
   if (!user) {
     if (typeof window !== "undefined") {
+      const hasStoredAuth =
+        Boolean(localStorage.getItem("ranklocal_token_persist")) ||
+        Boolean(localStorage.getItem("ranklocal_team_auth")) ||
+        Boolean(localStorage.getItem("altofox_team_auth"));
+
+      if (hasStoredAuth) {
+        // Session refresh or verification is underway; give it a brief recovery moment
+        return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <p className="text-sm font-medium text-slate-400">Restoring your session…</p>
+          </div>
+        );
+      }
       window.location.href = "/login?redirect=/dashboard";
     }
     return null;

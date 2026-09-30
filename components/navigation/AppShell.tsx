@@ -229,9 +229,14 @@ export function AppShell({
             <RankLocalIcon className="w-8 h-8 shrink-0" />
             {!sidebarCollapsed && (
               <div className="leading-tight">
-                <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
-                  {BRAND.name} Studio
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white">
+                    {BRAND.name} Studio
+                  </span>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60">
+                    v{BRAND.version}
+                  </span>
+                </div>
                 <span className="block text-[10px] text-slate-400 font-medium">
                   Internal Team Builder
                 </span>

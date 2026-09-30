@@ -97,6 +97,7 @@ export function middleware(req: NextRequest) {
     pathname.startsWith("/api/projects/export") ||
     pathname.startsWith("/api/projects/analyze") ||
     pathname.startsWith("/api/projects/improve") ||
+    pathname.includes("/preview") ||
     pathname.includes("/download");
 
   const isProtectedApiRoute =

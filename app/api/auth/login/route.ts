@@ -72,12 +72,16 @@ export async function POST(req: NextRequest) {
     const token = result.session.access_token;
     const status = result.profile.status || "approved";
 
+    const host = req.headers.get("host") || "";
+    const isRankLocal = host.includes("ranklocal.site");
+
     // Set authoritative auth cookies for middleware & client
     const cookieOpts = {
       path: "/",
       maxAge: 604800,
       sameSite: "lax" as const,
       secure: isSecure,
+      ...(isRankLocal ? { domain: ".ranklocal.site" } : {}),
     };
     response.cookies.set("ranklocal_token", token, cookieOpts);
     response.cookies.set("ranklocal_status", status, cookieOpts);

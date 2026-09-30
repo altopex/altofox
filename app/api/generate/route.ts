@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       city,
       focusKeywords,
       targetKeywords,
+      keywords,
       prompt,
     } = body;
 
@@ -95,10 +96,10 @@ export async function POST(req: NextRequest) {
       businessHours: (formData?.businessHours || "").trim(),
       websiteDomain: (formData?.websiteDomain || "").trim(),
       targetKeywords: formatKeywordsForStorage(
-        parseKeywordList(formData?.keywords || formData?.targetKeywords || focusKeywords || targetKeywords || "")
+        parseKeywordList(formData?.keywords || formData?.targetKeywords || keywords || focusKeywords || targetKeywords || "")
       ),
       keywords: parseKeywordList(
-        formData?.keywords || formData?.targetKeywords || focusKeywords || targetKeywords || ""
+        formData?.keywords || formData?.targetKeywords || keywords || focusKeywords || targetKeywords || ""
       ),
       pagesToCreate: Array.isArray(formData?.pagesToCreate) && formData.pagesToCreate.length > 0
         ? formData.pagesToCreate
@@ -334,6 +335,30 @@ export async function POST(req: NextRequest) {
     } catch (attempt1Err: any) {
       console.warn("[Generate] Attempt 1 failed:", attempt1Err?.message || attempt1Err);
       lastError = attempt1Err?.message || String(attempt1Err);
+
+      const errLower = (lastError || "").toLowerCase();
+      const isAuthError =
+        errLower.includes("401") ||
+        errLower.includes("unauthorized") ||
+        errLower.includes("invalid api key") ||
+        errLower.includes("403") ||
+        errLower.includes("forbidden");
+
+      // Fast fail: never stall the user by retrying with the exact same unauthorized key!
+      if (isAuthError) {
+        console.warn(`[Generate] Authentication failure for ${providerType}. Skipping Attempt 2.`);
+        return NextResponse.json(
+          {
+            success: false,
+            error: `AI generation failed: ${lastError}`,
+            canFallbackToTemplates: true,
+            isAuthError: true,
+            provider: providerType,
+            model: targetModel,
+          },
+          { status: 401 }
+        );
+      }
 
       // Attempt 2: Concise repair prompt with context (20s budget)
       try {

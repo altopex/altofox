@@ -107,6 +107,7 @@ export const PROVIDER_PRESETS: Record<ProviderType, ProviderPreset> = {
     id: "groq",
     name: "Groq",
     description: "Llama 3.3 70B, Llama 3.1 8B at ultra-high inference speeds",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
     defaultModel: "llama-3.3-70b-versatile",
     popularModels: [
       { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B Versatile", description: "Near-instant generation" },
@@ -120,6 +121,7 @@ export const PROVIDER_PRESETS: Record<ProviderType, ProviderPreset> = {
     id: "deepseek",
     name: "DeepSeek",
     description: "DeepSeek Chat (V3) and DeepSeek Reasoner (R1)",
+    defaultBaseUrl: "https://api.deepseek.com/v1",
     defaultModel: "deepseek-chat",
     popularModels: [
       { id: "deepseek-chat", label: "DeepSeek-V3", description: "Highly capable coding model" },
@@ -132,6 +134,7 @@ export const PROVIDER_PRESETS: Record<ProviderType, ProviderPreset> = {
     id: "openrouter",
     name: "OpenRouter",
     description: "Access 100+ models (Claude, GPT-4, Llama, Mistral, Qwen)",
+    defaultBaseUrl: "https://openrouter.ai/api/v1",
     defaultModel: "anthropic/claude-3.5-sonnet",
     popularModels: [
       { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet via OpenRouter" },

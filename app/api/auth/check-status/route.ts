@@ -19,33 +19,23 @@ export async function GET(req: NextRequest) {
       email: auth.user.email,
     });
 
+    const host = req.headers.get("host") || "";
+    const isRankLocal = host.includes("ranklocal.site");
     const isSecure = process.env.NODE_ENV === "production";
 
+    const cookieOpts = {
+      path: "/",
+      maxAge: 604800,
+      sameSite: "lax" as const,
+      secure: isSecure,
+      ...(isRankLocal ? { domain: ".ranklocal.site" } : {}),
+    };
+
     // Keep the cookies refreshed with current status and token
-    response.cookies.set("ranklocal_status", auth.profile.status, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
-    response.cookies.set("altofox_status", auth.profile.status, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
-    response.cookies.set("ranklocal_token", auth.accessToken, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
-    response.cookies.set("altofox_token", auth.accessToken, {
-      path: "/",
-      maxAge: 604800,
-      sameSite: "lax",
-      secure: isSecure,
-    });
+    response.cookies.set("ranklocal_status", auth.profile.status, cookieOpts);
+    response.cookies.set("altofox_status", auth.profile.status, cookieOpts);
+    response.cookies.set("ranklocal_token", auth.accessToken, cookieOpts);
+    response.cookies.set("altofox_token", auth.accessToken, cookieOpts);
 
     return response;
   } catch {

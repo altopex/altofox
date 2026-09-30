@@ -87,10 +87,15 @@ export async function authFetch(
       if (refreshData?.session?.access_token && !refreshError) {
         const newToken = refreshData.session.access_token;
 
-        // Sync fresh token to cookies & localStorage
+        // Sync fresh token to cookies & localStorage with domain coverage
         const isSecure = window.location.protocol === "https:" ? "; Secure" : "";
-        document.cookie = `ranklocal_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
-        document.cookie = `altofox_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+        const domainPart = window.location.hostname.endsWith("ranklocal.site") ? "; Domain=.ranklocal.site" : "";
+        document.cookie = `ranklocal_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+        document.cookie = `altofox_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+        if (domainPart) {
+          document.cookie = `ranklocal_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+          document.cookie = `altofox_token=${encodeURIComponent(newToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+        }
         try {
           localStorage.setItem("ranklocal_token_persist", newToken);
         } catch {}

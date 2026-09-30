@@ -1,6 +1,6 @@
 {
   "name": "ranklocal",
-  "version": "0.1.0",
+  "version": "5.3.5",
   "private": true,
   "engines": {
     "node": ">=20.0.0"
