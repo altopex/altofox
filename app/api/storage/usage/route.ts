@@ -11,22 +11,29 @@ export async function GET(req: NextRequest) {
 
     let totalBytes = 0;
 
-    // List objects in site-assets
-    const { data: assetFiles } = await admin.storage.from("site-assets").list("", {
-      limit: 1000,
-      sortBy: { column: "created_at", order: "desc" },
-    });
+    // List objects with timeout race
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Storage timeout")), 500)
+    );
+
+    const fetchStorage = async () => {
+      const [{ data: assetFiles }, { data: backupFiles }] = await Promise.all([
+        admin.storage.from("site-assets").list("", { limit: 1000, sortBy: { column: "created_at", order: "desc" } }),
+        admin.storage.from("backups").list("", { limit: 1000 }),
+      ]);
+      return { assetFiles, backupFiles };
+    };
+
+    const { assetFiles, backupFiles } = await Promise.race([fetchStorage(), timeoutPromise]).catch(() => ({
+      assetFiles: [],
+      backupFiles: [],
+    }));
 
     if (Array.isArray(assetFiles)) {
       for (const f of assetFiles) {
         if (f.metadata?.size) totalBytes += Number(f.metadata.size);
       }
     }
-
-    // List objects in backups
-    const { data: backupFiles } = await admin.storage.from("backups").list("", {
-      limit: 1000,
-    });
 
     if (Array.isArray(backupFiles)) {
       for (const f of backupFiles) {

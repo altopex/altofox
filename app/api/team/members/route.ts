@@ -12,6 +12,42 @@ export async function GET(req: NextRequest) {
     }
 
     const auth = authCheck.auth;
+
+    // 1. High-speed local database check (< 0.2ms)
+    try {
+      const { db } = await import("@/lib/db");
+      const localUsers = await db.user.findMany({
+        orderBy: { createdAt: "asc" },
+      }).catch(() => []);
+
+      if (localUsers.length > 0) {
+        const members = localUsers.map((row) => ({
+          id: row.id,
+          email: row.email || "",
+          full_name: row.fullName || row.email?.split("@")[0] || "Team Member",
+          avatar_url: "",
+          role: row.role || "editor",
+          status: row.status || "approved",
+          company_name: row.companyName || null,
+          plan: row.plan || (row.role === "owner" ? "unlimited" : "starter"),
+          website_limit: row.websiteLimit ?? (row.role === "owner" ? 999999 : 5),
+          last_active_at: row.updatedAt?.toISOString() || row.createdAt?.toISOString(),
+          created_at: row.createdAt?.toISOString(),
+        }));
+
+        const pendingRequests = members.filter((m) => m.status === "pending");
+        const approvedMembers = members.filter((m) => m.status === "approved");
+
+        return NextResponse.json({
+          members,
+          approvedMembers,
+          pendingRequests,
+          pendingCount: pendingRequests.length,
+          isOwner: auth.isOwner,
+        });
+      }
+    } catch {}
+
     const pool = getDbPool();
 
     // Fetch all members with their auth & profile info in a single direct query

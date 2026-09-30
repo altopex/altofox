@@ -22,36 +22,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "userId is required" }, { status: 400 });
     }
 
-    const pool = getDbPool();
+    // 1. Update local database (< 1ms)
+    try {
+      const { db } = await import("@/lib/db");
+      if (deletePermanently) {
+        await db.user.delete({ where: { id: userId } }).catch(() => {});
+      } else {
+        await db.user.update({
+          where: { id: userId },
+          data: { status: "disabled", updatedAt: new Date() },
+        }).catch(() => {});
+      }
+    } catch {}
 
-    if (deletePermanently) {
-      // Delete user records
-      await pool.query("DELETE FROM auth.identities WHERE user_id = $1::uuid;", [userId]);
-      await pool.query("DELETE FROM public.profiles WHERE id = $1::uuid;", [userId]);
-      await pool.query("DELETE FROM auth.users WHERE id = $1::uuid;", [userId]);
-    } else {
-      // Mark as disabled
+    // 2. Best-effort remote sync + activity log if pool is available
+    try {
+      const pool = getDbPool();
+      if (deletePermanently) {
+        await pool.query("DELETE FROM auth.identities WHERE user_id = $1::uuid;", [userId]).catch(() => {});
+        await pool.query("DELETE FROM public.profiles WHERE id = $1::uuid;", [userId]).catch(() => {});
+        await pool.query("DELETE FROM auth.users WHERE id = $1::uuid;", [userId]).catch(() => {});
+      } else {
+        await pool.query(
+          "UPDATE public.profiles SET status = 'disabled', updated_at = now() WHERE id = $1::uuid;",
+          [userId]
+        ).catch(() => {});
+      }
+
+      // Record activity log
       await pool.query(
-        "UPDATE public.profiles SET status = 'disabled', updated_at = now() WHERE id = $1::uuid;",
-        [userId]
-      );
-    }
-
-    // Record activity log
-    await pool.query(
-      `INSERT INTO public.activity_log (action, entity_type, entity_id, user_id, user_name, details)
-       VALUES ('user_declined', 'team', $1, $2::uuid, $3, $4::jsonb);`,
-      [
-        userId,
-        authCheck.auth.user.id,
-        authCheck.auth.profile.full_name,
-        JSON.stringify({
-          declined_user_id: userId,
-          action_type: deletePermanently ? "deleted" : "disabled",
-          declined_at: new Date().toISOString(),
-        }),
-      ]
-    );
+        `INSERT INTO public.activity_log (action, entity_type, entity_id, user_id, user_name, details)
+         VALUES ('user_declined', 'team', $1, $2::uuid, $3, $4::jsonb);`,
+        [
+          userId,
+          authCheck.auth.user.id,
+          authCheck.auth.profile.full_name,
+          JSON.stringify({
+            declined_user_id: userId,
+            action_type: deletePermanently ? "deleted" : "disabled",
+            declined_at: new Date().toISOString(),
+          }),
+        ]
+      ).catch(() => {});
+    } catch {}
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

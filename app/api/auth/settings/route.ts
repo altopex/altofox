@@ -7,11 +7,16 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const admin = getSupabaseAdminClient();
-    const { data, error } = await admin
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Settings timeout")), 500)
+    );
+    const queryPromise = admin
       .from("app_settings")
       .select("signup_mode, contact_email, google_auth_enabled")
       .limit(1)
       .single();
+
+    const { data, error } = (await Promise.race([queryPromise, timeoutPromise])) as any;
 
     if (error || !data) {
       return NextResponse.json({

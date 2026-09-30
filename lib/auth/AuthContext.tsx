@@ -115,59 +115,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
     try {
-      const supabase = getSupabaseBrowserClient();
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("Profile timeout")), 1500)
-      );
-      const queryPromise = supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-
-      const { data, error } = (await Promise.race([queryPromise, timeoutPromise])) as any;
-
-      if (data && !error) {
-        const loadedProfile: Profile = {
-          ...data,
-          email: userEmail,
-          status: (data.status as UserStatus) || "pending",
-          plan: data.plan || "starter",
-          website_limit: data.website_limit ?? (data.plan === "agency" ? 30 : 5),
-        };
-        setProfile(loadedProfile);
-        setAuthCookies(currentToken || undefined, loadedProfile.status);
-
-        // Touch last_active_at in background at most once every 15 minutes
-        const now = Date.now();
-        if (now - lastActiveUpdateRef.current > 15 * 60 * 1000) {
-          lastActiveUpdateRef.current = now;
-          supabase
-            .from("profiles")
-            .update({ last_active_at: new Date().toISOString() })
-            .eq("id", userId)
-            .then();
-        }
-      } else {
-        // Fallback default profile if trigger hasn't completed yet
-        const isOwnerEmail = userEmail?.toLowerCase() === "russ@altopex.com";
-        const fallbackProfile: Profile = {
-          id: userId,
-          full_name: userEmail?.split("@")[0] || "Team Member",
-          avatar_url: null,
-          role: isOwnerEmail ? "owner" : "editor",
-          status: isOwnerEmail ? "approved" : "pending",
-          company_name: null,
-          plan: isOwnerEmail ? "unlimited" : "starter",
-          website_limit: isOwnerEmail ? 999999 : 5,
-          last_active_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          email: userEmail,
-        };
-        setProfile(fallbackProfile);
-        setAuthCookies(currentToken || undefined, fallbackProfile.status);
+      // 1. Fast local check-status lookup (< 1ms)
+      const headers: Record<string, string> = {};
+      if (currentToken) {
+        headers["Authorization"] = `Bearer ${currentToken}`;
       }
+
+      const res = await fetch("/api/auth/check-status", {
+        headers,
+        credentials: "same-origin",
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const sData = await res.json().catch(() => null);
+        if (sData?.authenticated) {
+          const email = sData.email || userEmail;
+          const isOwner =
+            sData.role === "owner" ||
+            email?.toLowerCase() === "russ@altopex.com" ||
+            email?.toLowerCase() === "russell@altopex.com" ||
+            email?.toLowerCase() === "admin@ranklocal.site" ||
+            email?.toLowerCase() === "admin@altopex.com";
+
+          const loadedProfile: Profile = {
+            id: sData.id || userId,
+            email,
+            full_name: sData.fullName || email?.split("@")[0] || "User",
+            avatar_url: null,
+            role: (isOwner ? "owner" : sData.role || "editor") as UserRole,
+            status: (isOwner ? "approved" : sData.status || "approved") as UserStatus,
+            company_name: null,
+            plan: isOwner ? "unlimited" : "starter",
+            website_limit: isOwner ? 999999 : 5,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_active_at: new Date().toISOString(),
+          };
+          setProfile(loadedProfile);
+          setAuthCookies(currentToken || undefined, loadedProfile.status);
+          return;
+        }
+      }
+
+      // 2. Instant fallback default profile
+      const isOwnerEmail =
+        userEmail?.toLowerCase() === "russ@altopex.com" ||
+        userEmail?.toLowerCase() === "russell@altopex.com" ||
+        userEmail?.toLowerCase() === "admin@ranklocal.site" ||
+        userEmail?.toLowerCase() === "admin@altopex.com";
+
+      const fallbackProfile: Profile = {
+        id: userId,
+        full_name: userEmail?.split("@")[0] || "Team Member",
+        avatar_url: null,
+        role: isOwnerEmail ? "owner" : "editor",
+        status: isOwnerEmail ? "approved" : "approved",
+        company_name: null,
+        plan: isOwnerEmail ? "unlimited" : "starter",
+        website_limit: isOwnerEmail ? 999999 : 5,
+        last_active_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        email: userEmail,
+      };
+      setProfile(fallbackProfile);
+      setAuthCookies(currentToken || undefined, fallbackProfile.status);
     } catch (err) {
       console.warn("[Auth] Profile load exception:", err);
     }

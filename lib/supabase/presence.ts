@@ -160,7 +160,10 @@ export function useProjectPresence(
           }
         } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
           isSubscribedRef.current = false;
-          console.warn(`[Presence Channel Status]: ${status} for ${channelName}`);
+          try {
+            supabase.removeChannel(channel);
+          } catch {}
+          channelRef.current = null;
         }
       });
     } catch (subErr) {

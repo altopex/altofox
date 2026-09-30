@@ -103,7 +103,12 @@ function LoginForm() {
         }
 
         // On successful sign in, fetch status to route appropriately
-        const isOwner = email.trim().toLowerCase() === "russ@altopex.com";
+        const cleanEmail = email.trim().toLowerCase();
+        const isOwner =
+          cleanEmail === "russ@altopex.com" ||
+          cleanEmail === "russell@altopex.com" ||
+          cleanEmail === "admin@ranklocal.site" ||
+          cleanEmail === "admin@altopex.com";
         const statusRes = await fetch("/api/auth/check-status").catch(() => null);
         const statusData = statusRes ? await statusRes.json().catch(() => null) : null;
 

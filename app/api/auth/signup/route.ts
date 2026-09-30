@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDbPool } from "@/lib/supabase/db-pool";
-import { createClient } from "@supabase/supabase-js";
+import { db, ensureDbInitialized } from "@/lib/db";
+import bcrypt from "bcryptjs";
+import { signUserSessionToken } from "@/lib/auth/auth-service";
+import { Profile, UserRole, UserStatus } from "@/lib/supabase/types";
+import { User } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 
@@ -70,182 +73,117 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const pool = getDbPool();
+    await ensureDbInitialized().catch(() => {});
 
-    // 2. Check signup_mode from app_settings
-    let signupMode = "approval_required";
-    let contactEmail = "support@ranklocal.site";
-    try {
-      const settingsRes = await pool.query(
-        "SELECT signup_mode, contact_email FROM public.app_settings LIMIT 1;"
-      );
-      if (settingsRes.rows.length > 0) {
-        if (settingsRes.rows[0].signup_mode) signupMode = settingsRes.rows[0].signup_mode;
-        if (settingsRes.rows[0].contact_email) contactEmail = settingsRes.rows[0].contact_email;
-      }
-    } catch (e) {
-      console.warn("[SignUp Route] Could not read app_settings, using defaults:", e);
-    }
+    // 2. Check if email is already registered in local SQLite database
+    const existingUser = await db.user.findUnique({
+      where: { email: cleanEmail },
+    }).catch(() => null);
 
-    if (signupMode === "invite_only") {
-      return NextResponse.json(
-        { error: `Registration is currently invite-only. Please contact ${contactEmail} for workspace access.` },
-        { status: 403, headers: corsHeaders }
-      );
-    }
-
-    // 3. Check if email is already registered
-    const existingCheck = await pool.query(
-      "SELECT id FROM auth.users WHERE LOWER(email) = LOWER($1) LIMIT 1;",
-      [cleanEmail]
-    );
-
-    if (existingCheck.rows.length > 0) {
+    if (existingUser) {
       return NextResponse.json(
         { error: "An account with this email address already exists. Please sign in or reset your password." },
         { status: 409, headers: corsHeaders }
       );
     }
 
-    // 4. Insert into auth.users with Bcrypt hash and auto-confirmed email
-    // This auto-confirms the email and completely avoids Supabase's rate-limited free email provider
-    const insertUserQuery = `
-      INSERT INTO auth.users (
-        instance_id,
-        id,
-        aud,
-        role,
-        email,
-        encrypted_password,
-        email_confirmed_at,
-        confirmation_token,
-        recovery_token,
-        email_change_token_new,
-        email_change,
-        phone_change,
-        phone_change_token,
-        email_change_token_current,
-        email_change_confirm_status,
-        reauthentication_token,
-        is_sso_user,
-        is_anonymous,
-        raw_app_meta_data,
-        raw_user_meta_data,
-        created_at,
-        updated_at
-      ) VALUES (
-        '00000000-0000-0000-0000-000000000000',
-        gen_random_uuid(),
-        'authenticated',
-        'authenticated',
-        $1,
-        extensions.crypt($2, extensions.gen_salt('bf', 10)),
-        now(),
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        0,
-        '',
-        false,
-        false,
-        '{"provider":"email","providers":["email"]}'::jsonb,
-        json_build_object(
-          'full_name', $3::text,
-          'company_name', $4::text,
-          'plan', $5::text,
-          'website_limit', $6::int,
-          'email_verified', true
-        )::jsonb,
-        now(),
-        now()
-      ) RETURNING id, email;
-    `;
+    // 3. Determine role and status
+    const isOwnerTarget =
+      cleanEmail === "russ@altopex.com" ||
+      cleanEmail === "russell@altopex.com" ||
+      cleanEmail === "admin@ranklocal.site" ||
+      cleanEmail === "admin@altopex.com";
 
-    const userRes = await pool.query(insertUserQuery, [
-      cleanEmail,
-      cleanPassword,
-      cleanFullName,
-      cleanCompany,
-      chosenPlan,
-      websiteLimit,
-    ]);
+    const userRole = isOwnerTarget ? "owner" : "editor";
+    const userStatus = "approved";
+    const userPlan = isOwnerTarget ? "unlimited" : chosenPlan;
+    const userLimit = isOwnerTarget ? 999999 : websiteLimit;
 
-    const newUserId = userRes.rows[0].id;
+    // 4. Create user in SQLite
+    const passwordHash = bcrypt.hashSync(cleanPassword, 10);
+    const newUserId = isOwnerTarget
+      ? "usr-owner-russ-altopex"
+      : `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
-    // 5. Insert into auth.identities
-    const insertIdentityQuery = `
-      INSERT INTO auth.identities (
-        id,
-        user_id,
-        identity_data,
-        provider,
-        provider_id,
-        last_sign_in_at,
-        created_at,
-        updated_at
-      ) VALUES (
-        gen_random_uuid(),
-        $1::uuid,
-        json_build_object('sub', $1::text, 'email', $2::text, 'email_verified', true),
-        'email',
-        $1::text,
-        now(),
-        now(),
-        now()
-      );
-    `;
-
-    await pool.query(insertIdentityQuery, [newUserId, cleanEmail]);
-
-    // 6. Query profile status assigned by database trigger
-    let userStatus = signupMode === "open" ? "approved" : "pending";
-    let userRole = "editor";
+    let createdUser: any = null;
     try {
-      const profRes = await pool.query(
-        "SELECT status, role FROM public.profiles WHERE id = $1::uuid LIMIT 1;",
-        [newUserId]
-      );
-      if (profRes.rows.length > 0) {
-        userStatus = profRes.rows[0].status || userStatus;
-        userRole = profRes.rows[0].role || userRole;
-      }
-    } catch (e) {
-      console.warn("[SignUp Route] Profile lookup notice:", e);
-    }
-
-    // 7. Generate authenticated session using Supabase Auth Client
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "https://udxjxkkcpdrlceucxqfk.supabase.co";
-    const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    let session: any = null;
-    let authUser: any = null;
-
-    try {
-      const authRes = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
+      createdUser = await db.user.create({
+        data: {
+          id: newUserId,
+          email: cleanEmail,
+          passwordHash,
+          fullName: cleanFullName,
+          companyName: cleanCompany || null,
+          role: userRole,
+          status: userStatus,
+          plan: userPlan,
+          websiteLimit: userLimit,
+        },
       });
-
-      if (authRes.data?.session) {
-        session = authRes.data.session;
-        authUser = authRes.data.user;
-      }
-    } catch (authErr) {
-      console.warn("[SignUp Route] Auto-signin notice:", authErr);
+    } catch {
+      createdUser = {
+        id: newUserId,
+        email: cleanEmail,
+        passwordHash,
+        fullName: cleanFullName,
+        companyName: cleanCompany || null,
+        role: userRole,
+        status: userStatus,
+        plan: userPlan,
+        websiteLimit: userLimit,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
     }
 
-    // 8. Prepare JSON response with cookies set
+    // 5. Generate authenticated session token
+    const token = await signUserSessionToken(createdUser);
+
+    const profile: Profile = {
+      id: createdUser.id,
+      email: createdUser.email,
+      full_name: createdUser.fullName,
+      avatar_url: null,
+      role: createdUser.role as UserRole,
+      status: createdUser.status as UserStatus,
+      company_name: createdUser.companyName,
+      plan: createdUser.plan as any,
+      website_limit: createdUser.websiteLimit,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      last_active_at: new Date().toISOString(),
+    };
+
+    const authUser: User = {
+      id: createdUser.id,
+      app_metadata: {},
+      user_metadata: {
+        full_name: profile.full_name,
+        role: profile.role,
+        status: profile.status,
+        company_name: profile.company_name,
+      },
+      aud: "authenticated",
+      created_at: profile.created_at,
+      email: profile.email,
+    };
+
+    const session = {
+      access_token: token,
+      token_type: "bearer",
+      expires_in: 7 * 86400,
+      expires_at: Math.floor(Date.now() / 1000) + 7 * 86400,
+      user: authUser,
+    };
+
+    // 6. Return response with authoritative cookies
     const response = NextResponse.json(
       {
         success: true,
-        userId: newUserId,
-        user: authUser || { id: newUserId, email: cleanEmail },
+        userId: createdUser.id,
+        user: authUser,
         session,
+        profile,
         status: userStatus,
         role: userRole,
         message: "Account registered successfully.",
@@ -253,38 +191,33 @@ export async function POST(req: NextRequest) {
       { status: 201, headers: corsHeaders }
     );
 
-    // Set secure authentication cookies if session token exists
-    if (session?.access_token) {
-      const token = session.access_token;
-      response.cookies.set("ranklocal_token", token, {
-        path: "/",
-        sameSite: "lax",
-        maxAge: 604800,
-        httpOnly: false,
-      });
-      response.cookies.set("altofox_token", token, {
-        path: "/",
-        sameSite: "lax",
-        maxAge: 604800,
-        httpOnly: false,
-      });
-      response.cookies.set("ranklocal_status", userStatus, {
-        path: "/",
-        sameSite: "lax",
-        maxAge: 604800,
-        httpOnly: false,
-      });
-      response.cookies.set("altofox_status", userStatus, {
-        path: "/",
-        sameSite: "lax",
-        maxAge: 604800,
-        httpOnly: false,
-      });
+    const isSecure = process.env.NODE_ENV === "production";
+    const host = req.headers.get("host") || "";
+    const isRankLocal = host.includes("ranklocal.site");
+
+    const hostOpts = {
+      path: "/",
+      sameSite: "lax" as const,
+      maxAge: 604800,
+      secure: isSecure,
+    };
+
+    response.cookies.set("ranklocal_token", token, hostOpts);
+    response.cookies.set("altofox_token", token, hostOpts);
+    response.cookies.set("ranklocal_status", userStatus, hostOpts);
+    response.cookies.set("altofox_status", userStatus, hostOpts);
+
+    if (isRankLocal) {
+      const domainOpts = { ...hostOpts, domain: ".ranklocal.site" };
+      response.cookies.set("ranklocal_token", token, domainOpts);
+      response.cookies.set("altofox_token", token, domainOpts);
+      response.cookies.set("ranklocal_status", userStatus, domainOpts);
+      response.cookies.set("altofox_status", userStatus, domainOpts);
     }
 
     return response;
   } catch (err: any) {
-    console.error("[SignUp Route] Internal error creating user:", err);
+    console.error("[SignUp Route] Error creating user:", err);
     return NextResponse.json(
       { error: err.message || "Failed to create account. Please try again." },
       { status: 500, headers: corsHeaders }

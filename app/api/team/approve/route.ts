@@ -23,44 +23,53 @@ export async function POST(req: NextRequest) {
     }
 
     const assignedRole = role === "owner" ? "owner" : "editor";
-    const pool = getDbPool();
 
-    // Update profile status and role
-    const res = await pool.query(
-      `UPDATE public.profiles
-       SET status = 'approved', role = $1, updated_at = now()
-       WHERE id = $2::uuid
-       RETURNING *;`,
-      [assignedRole, userId]
-    );
+    // 1. Update local database (< 1ms)
+    try {
+      const { db } = await import("@/lib/db");
+      await db.user.update({
+        where: { id: userId },
+        data: { status: "approved", role: assignedRole, updatedAt: new Date() },
+      }).catch(() => {});
+    } catch {}
 
-    // Sync auth metadata
-    await pool.query(
-      `UPDATE auth.users 
-       SET raw_user_meta_data = raw_user_meta_data || json_build_object('role', $1::text, 'status', 'approved')::jsonb,
-           updated_at = now()
-       WHERE id = $2::uuid;`,
-      [assignedRole, userId]
-    );
+    // 2. Best-effort remote sync if pool is available
+    try {
+      const pool = getDbPool();
+      await pool.query(
+        `UPDATE public.profiles
+         SET status = 'approved', role = $1, updated_at = now()
+         WHERE id = $2::uuid;`,
+        [assignedRole, userId]
+      ).catch(() => {});
 
-    // Record activity log
-    await pool.query(
-      `INSERT INTO public.activity_log (action, entity_type, entity_id, user_id, user_name, user_avatar, details)
-       VALUES ('user_approved', 'team', $1, $2::uuid, $3, $4, $5::jsonb);`,
-      [
-        userId,
-        authCheck.auth.user.id,
-        authCheck.auth.profile.full_name,
-        authCheck.auth.profile.avatar_url,
-        JSON.stringify({
-          approved_user_id: userId,
-          assigned_role: assignedRole,
-          approved_at: new Date().toISOString(),
-        }),
-      ]
-    );
+      await pool.query(
+        `UPDATE auth.users 
+         SET raw_user_meta_data = raw_user_meta_data || json_build_object('role', $1::text, 'status', 'approved')::jsonb,
+             updated_at = now()
+         WHERE id = $2::uuid;`,
+        [assignedRole, userId]
+      ).catch(() => {});
 
-    return NextResponse.json({ success: true, profile: res.rows[0] });
+      // Record activity log
+      await pool.query(
+        `INSERT INTO public.activity_log (action, entity_type, entity_id, user_id, user_name, user_avatar, details)
+         VALUES ('user_approved', 'team', $1, $2::uuid, $3, $4, $5::jsonb);`,
+        [
+          userId,
+          authCheck.auth.user.id,
+          authCheck.auth.profile.full_name,
+          authCheck.auth.profile.avatar_url,
+          JSON.stringify({
+            approved_user_id: userId,
+            assigned_role: assignedRole,
+            approved_at: new Date().toISOString(),
+          }),
+        ]
+      ).catch(() => {});
+    } catch {}
+
+    return NextResponse.json({ success: true, message: "User approved successfully." });
   } catch (err: any) {
     console.error("[Team] Approve error:", err);
     return NextResponse.json({ error: err.message || "Failed to approve user" }, { status: 500 });

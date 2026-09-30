@@ -40,28 +40,53 @@ export async function POST(req: NextRequest) {
 
     const assignedRole = role === "owner" ? "owner" : "editor";
     const assignedName = fullName?.trim() || cleanEmail.split("@")[0];
+    // 1. Sync with local database (< 1ms)
+    try {
+      const { db } = await import("@/lib/db");
+      const existing = await db.user.findUnique({ where: { email: cleanEmail } });
+      if (existing) {
+        await db.user.update({
+          where: { email: cleanEmail },
+          data: { role: assignedRole, status: "approved", fullName: assignedName },
+        });
+      } else {
+        await db.user.create({
+          data: {
+            id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            email: cleanEmail,
+            fullName: assignedName,
+            role: assignedRole,
+            status: "approved",
+            plan: "starter",
+            websiteLimit: 5,
+          },
+        });
+      }
+    } catch {}
+
     const pool = getDbPool();
 
-    // 3. Check if user is already registered in the system
-    const userCheck = await pool.query(
-      `SELECT u.id, u.email, p.role, p.status 
-       FROM auth.users u 
-       LEFT JOIN public.profiles p ON u.id = p.id 
-       WHERE LOWER(u.email) = LOWER($1) 
-       LIMIT 1;`,
-      [cleanEmail]
-    );
-
-    if (userCheck.rows.length > 0) {
-      const existingUser = userCheck.rows[0];
-      
-      // User exists - update profile role & ensure approval
-      await pool.query(
-        `UPDATE public.profiles 
-         SET role = $1, status = 'approved', full_name = COALESCE(NULLIF(full_name, ''), $2), updated_at = now() 
-         WHERE id = $3::uuid;`,
-        [assignedRole, assignedName, existingUser.id]
+    // 2. Check if user is already registered in remote system
+    try {
+      const userCheck = await pool.query(
+        `SELECT u.id, u.email, p.role, p.status 
+         FROM auth.users u 
+         LEFT JOIN public.profiles p ON u.id = p.id 
+         WHERE LOWER(u.email) = LOWER($1) 
+         LIMIT 1;`,
+        [cleanEmail]
       );
+
+      if (userCheck.rows.length > 0) {
+        const existingUser = userCheck.rows[0];
+        
+        // User exists - update profile role & ensure approval
+        await pool.query(
+          `UPDATE public.profiles 
+           SET role = $1, status = 'approved', full_name = COALESCE(NULLIF(full_name, ''), $2), updated_at = now() 
+           WHERE id = $3::uuid;`,
+          [assignedRole, assignedName, existingUser.id]
+        );
 
       // Sync user metadata
       await pool.query(
@@ -90,53 +115,55 @@ export async function POST(req: NextRequest) {
         ]
       );
 
-      return NextResponse.json({
-        success: true,
-        message: `Member ${cleanEmail} is already registered. Role successfully updated to ${assignedRole}.`,
-        user: {
-          id: existingUser.id,
-          email: cleanEmail,
-          role: assignedRole,
-        },
-      });
-    }
+        return NextResponse.json({
+          success: true,
+          message: `Member ${cleanEmail} is already registered. Role successfully updated to ${assignedRole}.`,
+          user: {
+            id: existingUser.id,
+            email: cleanEmail,
+            role: assignedRole,
+          },
+        });
+      }
+    } catch {}
 
     // 4. Generate cryptographically secure invitation token with 7-day expiration
     const inviteToken =
       crypto.randomUUID().replace(/-/g, "") + crypto.randomBytes(16).toString("hex");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7-day expiration window
 
-    // Store in team_invitations table
-    await pool.query(
-      `INSERT INTO public.team_invitations (email, full_name, role, token, invited_by, status, expires_at, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5::uuid, 'pending', $6, now(), now())
-       ON CONFLICT (token) DO UPDATE 
-       SET role = EXCLUDED.role, expires_at = EXCLUDED.expires_at, updated_at = now();`,
-      [cleanEmail, assignedName, assignedRole, inviteToken, auth.user.id, expiresAt.toISOString()]
-    );
-
     // Form invite URL
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://ranklocal.site";
     const inviteUrl = `${siteUrl}/signup?invite=${inviteToken}&email=${encodeURIComponent(cleanEmail)}`;
 
-    // Log to audit activity_log
-    await pool.query(
-      `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
-       VALUES ($1::uuid, $2, $3, 'invite', 'team', $4, $5::jsonb);`,
-      [
-        auth.user.id,
-        auth.profile.full_name || "Owner",
-        auth.profile.avatar_url,
-        inviteToken,
-        JSON.stringify({
-          description: `${auth.profile.full_name || "Owner"} issued invitation to ${cleanEmail} as ${assignedRole}`,
-          invitedEmail: cleanEmail,
-          assignedRole,
-          expiresAt: expiresAt.toISOString(),
-          inviteUrl,
-        }),
-      ]
-    );
+    // Best-effort remote database logging
+    try {
+      await pool.query(
+        `INSERT INTO public.team_invitations (email, full_name, role, token, invited_by, status, expires_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5::uuid, 'pending', $6, now(), now())
+         ON CONFLICT (token) DO UPDATE 
+         SET role = EXCLUDED.role, expires_at = EXCLUDED.expires_at, updated_at = now();`,
+        [cleanEmail, assignedName, assignedRole, inviteToken, auth.user.id, expiresAt.toISOString()]
+      ).catch(() => {});
+
+      await pool.query(
+        `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
+         VALUES ($1::uuid, $2, $3, 'invite', 'team', $4, $5::jsonb);`,
+        [
+          auth.user.id,
+          auth.profile.full_name || "Owner",
+          auth.profile.avatar_url,
+          inviteToken,
+          JSON.stringify({
+            description: `${auth.profile.full_name || "Owner"} issued invitation to ${cleanEmail} as ${assignedRole}`,
+            invitedEmail: cleanEmail,
+            assignedRole,
+            expiresAt: expiresAt.toISOString(),
+            inviteUrl,
+          }),
+        ]
+      ).catch(() => {});
+    } catch {}
 
     // 5. Return standard HTTP 200 response with invitation details
     return NextResponse.json({

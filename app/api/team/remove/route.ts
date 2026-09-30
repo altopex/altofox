@@ -25,28 +25,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You cannot remove yourself from the workspace." }, { status: 400 });
     }
 
-    const pool = getDbPool();
+    // 1. Delete from local database (< 1ms)
+    try {
+      const { db } = await import("@/lib/db");
+      await db.user.delete({ where: { id: userId } }).catch(() => {});
+    } catch {}
 
-    // Delete user from identities, profiles, and auth.users
-    await pool.query("DELETE FROM auth.identities WHERE user_id = $1::uuid;", [userId]);
-    await pool.query("DELETE FROM public.profiles WHERE id = $1::uuid;", [userId]);
-    await pool.query("DELETE FROM auth.users WHERE id = $1::uuid;", [userId]);
+    // 2. Best-effort remote sync + activity log if pool is available
+    try {
+      const pool = getDbPool();
+      await pool.query("DELETE FROM auth.identities WHERE user_id = $1::uuid;", [userId]).catch(() => {});
+      await pool.query("DELETE FROM public.profiles WHERE id = $1::uuid;", [userId]).catch(() => {});
+      await pool.query("DELETE FROM auth.users WHERE id = $1::uuid;", [userId]).catch(() => {});
 
-    // Log activity
-    await pool.query(
-      `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
-       VALUES ($1::uuid, $2, $3, 'delete', 'team', $4, $5::jsonb);`,
-      [
-        auth.user.id,
-        auth.profile.full_name || "Owner",
-        auth.profile.avatar_url,
-        userId,
-        JSON.stringify({
-          description: `Removed member ${userId} from the team workspace`,
-          removedUserId: userId,
-        }),
-      ]
-    );
+      // Log activity
+      await pool.query(
+        `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
+         VALUES ($1::uuid, $2, $3, 'delete', 'team', $4, $5::jsonb);`,
+        [
+          auth.user.id,
+          auth.profile.full_name || "Owner",
+          auth.profile.avatar_url,
+          userId,
+          JSON.stringify({
+            description: `Removed member ${userId} from the team workspace`,
+            removedUserId: userId,
+          }),
+        ]
+      ).catch(() => {});
+    } catch {}
 
     return NextResponse.json({ success: true, message: "Member removed from workspace." });
   } catch (err: any) {

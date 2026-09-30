@@ -1,6 +1,15 @@
 import { Pool } from "pg";
 
 let pool: Pool | null = null;
+let poolBrokenUntil = 0;
+
+export function isDbPoolHealthy(): boolean {
+  return Date.now() > poolBrokenUntil;
+}
+
+export function markDbPoolUnhealthy(): void {
+  poolBrokenUntil = Date.now() + 60000; // 60-second backoff
+}
 
 export function getDbPool(): Pool {
   if (!pool) {
@@ -13,9 +22,9 @@ export function getDbPool(): Pool {
       ssl: {
         rejectUnauthorized: false,
       },
-      max: 10,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      max: 5,
+      idleTimeoutMillis: 15000,
+      connectionTimeoutMillis: 1500,
     });
   }
   return pool;

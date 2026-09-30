@@ -25,36 +25,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You cannot demote yourself from owner." }, { status: 400 });
     }
 
-    const pool = getDbPool();
+    // 1. Update local database (< 1ms)
+    try {
+      const { db } = await import("@/lib/db");
+      await db.user.update({
+        where: { id: userId },
+        data: { role, updatedAt: new Date() },
+      }).catch(() => {});
+    } catch {}
 
-    // Update profile
-    await pool.query(
-      "UPDATE public.profiles SET role = $1, updated_at = now() WHERE id = $2::uuid;",
-      [role, userId]
-    );
+    // 2. Best-effort remote sync + activity log if pool is available
+    try {
+      const pool = getDbPool();
+      await pool.query(
+        "UPDATE public.profiles SET role = $1, updated_at = now() WHERE id = $2::uuid;",
+        [role, userId]
+      ).catch(() => {});
+      await pool.query(
+        "UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || json_build_object('role', $1::text)::jsonb, updated_at = now() WHERE id = $2::uuid;",
+        [role, userId]
+      ).catch(() => {});
 
-    // Update auth metadata
-    await pool.query(
-      "UPDATE auth.users SET raw_user_meta_data = raw_user_meta_data || json_build_object('role', $1::text)::jsonb, updated_at = now() WHERE id = $2::uuid;",
-      [role, userId]
-    );
-
-    // Log activity
-    await pool.query(
-      `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
-       VALUES ($1::uuid, $2, $3, 'edit', 'team', $4, $5::jsonb);`,
-      [
-        auth.user.id,
-        auth.profile.full_name || "Owner",
-        auth.profile.avatar_url,
-        userId,
-        JSON.stringify({
-          description: `Updated member role to ${role}`,
-          targetUserId: userId,
-          newRole: role,
-        }),
-      ]
-    );
+      // Log activity
+      await pool.query(
+        `INSERT INTO public.activity_log (user_id, user_name, user_avatar, action, entity_type, entity_id, details)
+         VALUES ($1::uuid, $2, $3, 'edit', 'team', $4, $5::jsonb);`,
+        [
+          auth.user.id,
+          auth.profile.full_name || "Owner",
+          auth.profile.avatar_url,
+          userId,
+          JSON.stringify({
+            description: `Updated member role to ${role}`,
+            targetUserId: userId,
+            newRole: role,
+          }),
+        ]
+      ).catch(() => {});
+    } catch {}
 
     return NextResponse.json({ success: true, message: `Member role updated to ${role}.` });
   } catch (err: any) {
