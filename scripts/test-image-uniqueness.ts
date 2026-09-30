@@ -328,13 +328,13 @@ async function runImageUniquenessTests() {
   for (const h of heroImages) {
     const isCopyrightFree = isCopyrightFreeHeroPhoto(h.src);
     if (!isCopyrightFree) {
-      invalidHeroSources.push(`Hero on ${h.page} is not from Pexels, Pixabay, or Unsplash: ${h.src}`);
+      invalidHeroSources.push(`Hero on ${h.page} is not copyright-free photography (Pexels, Pixabay, AI): ${h.src}`);
     }
   }
 
   assert(
     invalidHeroSources.length === 0,
-    "All hero section images must be copyright-free photography from Pexels, Pixabay, or Unsplash (Zero Bing thumbnails for hero)",
+    "All hero section images must be copyright-free photography from Pexels, Pixabay, or AI (Zero Bing thumbnails for hero)",
     invalidHeroSources.join("; ")
   );
 

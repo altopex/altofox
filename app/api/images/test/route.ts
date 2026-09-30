@@ -88,8 +88,47 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (source === "google") {
+      const cx = (body.cx || "").trim();
+      if (!cx) {
+        return NextResponse.json(
+          { success: false, message: "Please provide a Search Engine ID (CX) along with your Google API Key." },
+          { status: 400 }
+        );
+      }
+      try {
+        const testUrl = `https://customsearch.googleapis.com/customsearch/v1?key=${encodeURIComponent(trimmedKey)}&cx=${encodeURIComponent(cx)}&searchType=image&q=plumbing&num=1&safe=active`;
+        const res = await fetch(testUrl);
+        if (res.status === 200) {
+          const data = await res.json();
+          const itemsCount = (data.items || []).length;
+          return NextResponse.json({
+            success: true,
+            message: `Connected to Google Image Search API! Successfully retrieved ${itemsCount > 0 ? "live image results" : "response"}.`,
+          });
+        }
+        if (res.status === 400 || res.status === 403) {
+          const data = await res.json().catch(() => null);
+          const errDetail = data?.error?.message || "Invalid Google API key or Search Engine ID (CX).";
+          return NextResponse.json({
+            success: false,
+            message: errDetail,
+          });
+        }
+        return NextResponse.json({
+          success: false,
+          message: `Google API returned status ${res.status}. Please check your key and CX.`,
+        });
+      } catch (err) {
+        return NextResponse.json({
+          success: false,
+          message: err instanceof Error ? err.message : "Network error contacting Google Custom Search API.",
+        });
+      }
+    }
+
     return NextResponse.json(
-      { success: false, message: "Invalid image source. Must be 'bing', 'pexels', or 'pixabay'." },
+      { success: false, message: "Invalid image source. Must be 'bing', 'pexels', 'pixabay', or 'google'." },
       { status: 400 }
     );
   } catch (error) {

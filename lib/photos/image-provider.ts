@@ -1,10 +1,11 @@
 import { detectTradeCategory, resolvePhoto, ResolvedImage, extractPhotoId } from "./photo-service";
 import { validateImageUrl } from "./image-validator";
 import { generateTradeSvgDataUri, generateTradeSvg } from "./trade-svg-fallback";
-import { tryGenerateAiImage } from "./ai-image-service";
+import { tryGenerateAiImage, buildZeroConfigAiImageUrl } from "./ai-image-service";
 import { buildBingImageUrl, searchPexels, searchPixabay } from "./stock-service";
+import { searchGoogleImages, buildGoogleImageQuery } from "./google-image-service";
 
-export type ImageProviderType = "bing" | "pexels" | "pixabay" | "unsplash";
+export type ImageProviderType = "google" | "bing" | "pexels" | "pixabay" | "ai";
 
 export interface ImageContext {
   pageTitle?: string;
@@ -296,20 +297,50 @@ export function generateDynamicImageQuery(
   const cleanService = service.toLowerCase();
 
   if (slot === "hero") {
-    if (context.pageType === "service" || (context.serviceName && context.serviceName.toLowerCase() !== trade.toLowerCase())) {
-      baseQuery = location
-        ? `${tradeNoun} ${service} residential service ${location}`
-        : `${tradeNoun} ${service} specialist repairing system`;
-      baseAlt = location ? `Professional ${service} in ${location}` : `Professional ${service} specialist`;
+    if (context.targetKeyword && location) {
+      baseQuery = buildGoogleImageQuery({
+        keyword: context.targetKeyword,
+        location,
+        city: context.city,
+        state: context.state || context.stateCode,
+      });
+      const cleanLoc = location.replace(/,/g, " ").replace(/\s+/g, " ").trim();
+      const capKeyword = context.targetKeyword.charAt(0).toUpperCase() + context.targetKeyword.slice(1);
+      baseAlt = `${capKeyword} in ${cleanLoc}`;
+    } else if (context.pageType === "service" || (context.serviceName && context.serviceName.toLowerCase() !== trade.toLowerCase())) {
+      if (location) {
+        baseQuery = buildGoogleImageQuery({
+          keyword: service,
+          location,
+          city: context.city,
+          state: context.state || context.stateCode,
+        });
+        const cleanLoc = location.replace(/,/g, " ").replace(/\s+/g, " ").trim();
+        const capService = service.charAt(0).toUpperCase() + service.slice(1);
+        baseAlt = `${capService} in ${cleanLoc}`;
+      } else {
+        baseQuery = `${tradeNoun} ${service} specialist repairing system`;
+        baseAlt = `Professional ${service} specialist`;
+      }
     } else if (context.pageType === "location" || (location && !context.serviceName)) {
-      baseQuery = `licensed ${tradeNoun} residential service ${location}`;
+      baseQuery = buildGoogleImageQuery({
+        keyword: tradeNoun,
+        location,
+        city: context.city,
+        state: context.state || context.stateCode,
+      });
       baseAlt = `Licensed ${trade} serving ${location}`;
     } else if (context.targetKeyword) {
       baseQuery = `professional ${tradeNoun} ${context.targetKeyword} residential`;
       baseAlt = `${context.targetKeyword} by local specialists`;
     } else {
       baseQuery = location
-        ? `professional ${tradeNoun} residential contractor ${location}`
+        ? buildGoogleImageQuery({
+            keyword: tradeNoun,
+            location,
+            city: context.city,
+            state: context.state || context.stateCode,
+          })
         : `professional ${tradeNoun} residential contractor job site`;
       baseAlt = location ? `Trusted ${trade} in ${location}` : `Top-rated ${trade} service`;
     }
@@ -615,6 +646,8 @@ export async function resolveValidatedPageImage(
     usedQueries?: Set<string>;
     pexelsKey?: string;
     pixabayKey?: string;
+    googleKey?: string;
+    googleCx?: string;
     openaiKey?: string;
     providerCredentials?: {
       provider?: string;
@@ -675,10 +708,53 @@ export async function resolveValidatedPageImage(
   // 3. Assemble candidate sources in order of preference
   const candidates: Array<{ url: string; source: string; alt?: string; title?: string }> = [];
 
+  const googleKey = (options.googleKey || process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_CUSTOM_SEARCH_KEY || "").trim();
+  const googleCx = (options.googleCx || process.env.GOOGLE_SEARCH_ENGINE_ID || process.env.GOOGLE_CUSTOM_SEARCH_CX || "").trim();
+  const isGooglePreferred = options.preferredSource === "google";
+
+  // Priority Candidate: Google Image Search API (Finds live, relevant web images without downloading)
+  if ((isGooglePreferred || (googleKey && googleCx)) && googleKey && googleCx) {
+    try {
+      const googleResults = await searchGoogleImages(query, googleKey, googleCx, { num: 5, timeoutMs: 3500 });
+      for (const g of googleResults) {
+        if (!tracker || !tracker.isUrlUsed(g.url)) {
+          candidates.push({
+            url: g.url,
+            source: "Google Images",
+            alt,
+            title: intent.subject,
+          });
+          if (isGooglePreferred) break;
+        }
+      }
+    } catch (_) {}
+  }
+
   if (isHero) {
     // =========================================================================
-    // HERO IMAGES: EXCLUSIVELY COPYRIGHT-FREE HIGH-RES PHOTOS (Pexels / Pixabay / Unsplash)
+    // HERO IMAGES: EXCLUSIVELY COPYRIGHT-FREE HIGH-RES PHOTOS (Pexels / Pixabay / AI Generation)
     // =========================================================================
+
+    // Priority AI Candidate if AI is the preferred source
+    if (options.preferredSource === "ai") {
+      const aiCreds = options.providerCredentials || (options.openaiKey ? { apiKey: options.openaiKey } : undefined);
+      const aiResult = await tryGenerateAiImage(
+        {
+          trade: tradeCategory,
+          service: intent.subject || context.serviceName,
+          location: [context.city, context.state].filter(Boolean).join(", "),
+          slot: "hero",
+          width: 1920,
+          height: 1080,
+          seed: index + 1,
+        },
+        aiCreds,
+        4000
+      );
+      if (aiResult?.url && (!tracker || !tracker.isUrlUsed(aiResult.url))) {
+        candidates.push({ url: aiResult.url, source: "AI-Generated", alt, title: intent.subject });
+      }
+    }
 
     // Candidate 1: Pexels API (if key available)
     if (options.pexelsKey) {
@@ -706,26 +782,47 @@ export async function resolveValidatedPageImage(
       } catch (_) {}
     }
 
-    // Candidate 3: Curated Royalty-Free Copyright-Free Unsplash Hero Registry
+    // Candidate 3: Curated Royalty-Free Copyright-Free Pexels Trade Registry
     const usedSet = tracker ? tracker.getUsedUrlsSet() : undefined;
     const curatedHero = resolvePhoto(tradeCategory, "hero", intent.subject || query, index, usedSet);
     if (!tracker || !tracker.isUrlUsed(curatedHero.url)) {
-      candidates.push({ url: curatedHero.url, source: "Curated Unsplash", alt: curatedHero.alt, title: intent.subject });
+      candidates.push({ url: curatedHero.url, source: "Pexels Trade Stock", alt: curatedHero.alt, title: intent.subject });
     }
 
     // Candidate 4 & 5: Additional offset copyright-free heroes
     for (let offset = 1; offset <= 4; offset++) {
       const nextHero = resolvePhoto(tradeCategory, "hero", query, index + offset, usedSet);
       if (!candidates.some((c) => c.url === nextHero.url) && (!tracker || !tracker.isUrlUsed(nextHero.url))) {
-        candidates.push({ url: nextHero.url, source: "Curated Unsplash", alt: nextHero.alt, title: intent.subject });
+        candidates.push({ url: nextHero.url, source: "Pexels Trade Stock", alt: nextHero.alt, title: intent.subject });
       }
     }
   } else {
     // =========================================================================
-    // SMALL SIZE IMAGES: CAN CALL FROM BING WITH DYNAMICALLY ALTERED UNIQUE KEYWORDS (q=keywords+change)
+    // SMALL SIZE IMAGES: BING WITH DYNAMICALLY ALTERED UNIQUE KEYWORDS + PEXELS + AI FALLBACK
     // =========================================================================
 
     const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
+
+    // Priority AI Candidate if AI is the preferred source
+    if (provider === "ai") {
+      const aiCreds = options.providerCredentials || (options.openaiKey ? { apiKey: options.openaiKey } : undefined);
+      const aiResult = await tryGenerateAiImage(
+        {
+          trade: tradeCategory,
+          service: intent.subject || context.serviceName,
+          location: [context.city, context.state].filter(Boolean).join(", "),
+          slot,
+          width,
+          height,
+          seed: index + 50,
+        },
+        aiCreds,
+        3000
+      );
+      if (aiResult?.url && (!tracker || !tracker.isUrlUsed(aiResult.url))) {
+        candidates.push({ url: aiResult.url, source: "AI-Generated", alt, title: intent.subject });
+      }
+    }
 
     // Candidate 1: Bing with dynamically altered unique keywords
     const uniqueBingQuery = tracker
@@ -733,7 +830,7 @@ export async function resolveValidatedPageImage(
       : normalizeBingQuery(query);
     const bingUrl = buildBingThumbnailUrl(uniqueBingQuery, width, height, index + 1);
 
-    if (provider !== "unsplash") {
+    if (provider !== "ai") {
       candidates.push({
         url: bingUrl,
         source: "Bing",
@@ -928,6 +1025,8 @@ export function resolvePageImage(
     usedQueries?: Set<string>;
     pexelsKey?: string;
     pixabayKey?: string;
+    googleKey?: string;
+    googleCx?: string;
     deduplicationTracker?: ImageDeduplicationTracker;
   } = {}
 ): PageImageResult {
@@ -967,14 +1066,35 @@ export function resolvePageImage(
 
   if (isHero) {
     // HERO: MUST be high-res copyright-free photography
-    primaryUrl = curatedPhoto.url;
-    source = "Unsplash";
-  } else {
-    // SMALL SIZE: Can call from Bing with dynamically altered unique keywords
-    const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
-    if (provider === "unsplash") {
+    if (options.preferredSource === "ai") {
+      primaryUrl = buildZeroConfigAiImageUrl({
+        trade: tradeCategory,
+        slot: "hero",
+        service: intent.subject || context.serviceName,
+        location: [context.city, context.state].filter(Boolean).join(", "),
+        width,
+        height,
+        seed: index + 1,
+      });
+      source = "AI-Generated";
+    } else {
       primaryUrl = curatedPhoto.url;
-      source = "Unsplash";
+      source = "Pexels";
+    }
+  } else {
+    // SMALL SIZE: Can call from Bing with dynamically altered unique keywords or AI
+    const provider = options.preferredSource || (process.env.IMAGE_PROVIDER as ImageProviderType) || "bing";
+    if (provider === "ai") {
+      primaryUrl = buildZeroConfigAiImageUrl({
+        trade: tradeCategory,
+        slot,
+        service: intent.subject || context.serviceName,
+        location: [context.city, context.state].filter(Boolean).join(", "),
+        width,
+        height,
+        seed: index + 50,
+      });
+      source = "AI-Generated";
     } else {
       const uniqueQuery = tracker
         ? tracker.generateUniqueBingQuery(query, tradeCategory, slot, index)

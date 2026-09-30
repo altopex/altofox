@@ -1,13 +1,14 @@
 /**
- * AI Image Generation Fallback Service (RankLocal)
+ * AI Image Generation Service (RankLocal)
  * 
- * When external stock image searches fail or are blocked, this service generates
- * trade-specific, localized commercial photography using the existing configured AI credentials.
+ * Generates trade-specific, localized commercial photography using either:
+ * 1. Configured OpenAI DALL-E credentials (uses existing OpenAI key without extra setup)
+ * 2. High-speed, zero-config photorealistic AI generation (Flux engine, zero keys required)
  * 
  * Strict safety rules:
- * 1. Never blocks website generation if AI image fails or key is missing.
- * 2. Uses realistic, trade-specific, non-hallucinatory prompts.
- * 3. Enforces timeout limits so generation does not hang.
+ * 1. Never blocks website generation if AI generation fails or key is missing.
+ * 2. Uses realistic, trade-specific, non-hallucinatory commercial contractor prompts.
+ * 3. Enforces timeout limits so generation never hangs.
  */
 
 import { getProviderCredentials } from "../ai/keys";
@@ -20,6 +21,7 @@ export interface GenerateImageOptions {
   slot?: "hero" | "service" | "about" | "gallery" | "avatar" | "trust";
   width?: number;
   height?: number;
+  seed?: number | string;
 }
 
 export interface GeneratedImageResult {
@@ -50,6 +52,28 @@ export function buildCommercialImagePrompt(options: GenerateImageOptions): strin
   return `Commercial photography of professional ${trade} work, specifically ${service}${locContext}. ${framing}, realistic lighting, modern clean equipment, natural textures, 4k commercial photography, no text, no logos, no watermarks.`;
 }
 
+/**
+ * Builds a zero-configuration photorealistic AI generation URL.
+ * Requires no external API keys or paid accounts, producing trade-accurate images instantly.
+ */
+export function buildZeroConfigAiImageUrl(
+  options: GenerateImageOptions,
+  seed?: number | string
+): string {
+  const prompt = buildCommercialImagePrompt(options);
+  const cleanPrompt = encodeURIComponent(
+    prompt
+      .replace(/[^\w\s,.-]/g, " ")
+      .trim()
+      .replace(/\s+/g, " ")
+  );
+  const width = options.width || (options.slot === "hero" ? 1200 : 800);
+  const height = options.height || (options.slot === "hero" ? 675 : 533);
+  const resolvedSeed = seed || options.seed || Math.floor(Math.random() * 999999);
+
+  return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&nologo=true&model=flux&seed=${resolvedSeed}`;
+}
+
 export interface AiImageCredentials {
   apiKey?: string;
   baseUrl?: string;
@@ -58,7 +82,8 @@ export interface AiImageCredentials {
 }
 
 /**
- * Attempts AI image generation using configured AI provider (OpenAI DALL-E or custom OpenAI-compatible endpoint)
+ * Attempts AI image generation using configured AI provider (OpenAI DALL-E or custom endpoint)
+ * and falls back seamlessly to the built-in zero-config photorealistic AI engine.
  */
 export async function tryGenerateAiImage(
   options: GenerateImageOptions,
@@ -90,68 +115,71 @@ export async function tryGenerateAiImage(
     apiKey = process.env.OPENAI_API_KEY.trim();
   }
 
-  if (!apiKey) {
-    return null; // AI image generation key not present; skip to local fallback
-  }
-
   const prompt = buildCommercialImagePrompt(options);
 
-  // Compute endpoint: custom base URL if provided, otherwise standard OpenAI
-  let endpoint = "https://api.openai.com/v1/images/generations";
-  if (baseUrl) {
-    endpoint = baseUrl.endsWith("/images/generations")
-      ? baseUrl
-      : `${baseUrl.replace(/\/+$/, "")}/images/generations`;
+  // 1. If an OpenAI or compatible key is available, attempt DALL-E generation
+  if (apiKey) {
+    let endpoint = "https://api.openai.com/v1/images/generations";
+    if (baseUrl) {
+      endpoint = baseUrl.endsWith("/images/generations")
+        ? baseUrl
+        : `${baseUrl.replace(/\/+$/, "")}/images/generations`;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "dall-e-2", // Fast, reliable generation with low latency
+          prompt,
+          n: 1,
+          size: options.slot === "hero" ? "1024x1024" : "512x512",
+          response_format: "url",
+        }),
+      });
+
+      clearTimeout(timer);
+
+      if (res.ok) {
+        const data = await res.json();
+        const candidateUrl = data?.data?.[0]?.url;
+
+        if (candidateUrl) {
+          const validation = await validateImageUrl(candidateUrl, 3000);
+          if (validation.valid) {
+            return {
+              url: candidateUrl,
+              source: "AI-Generated",
+              prompt,
+              revisedPrompt: data?.data?.[0]?.revised_prompt,
+            };
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn(`[AiImage] Dedicated API generation skipped: ${err?.message || "Timeout"}`);
+    }
   }
 
+  // 2. Zero-config photorealistic AI fallback (Flux engine)
+  // Generates unique, 100% relevant commercial photography without requiring extra API keys
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    const res = await fetch(endpoint, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "dall-e-2", // Fast, reliable generation with low latency
-        prompt,
-        n: 1,
-        size: options.slot === "hero" ? "1024x1024" : "512x512",
-        response_format: "url",
-      }),
-    });
-
-    clearTimeout(timer);
-
-    if (!res.ok) {
-      console.warn(`[AiImage] OpenAI returned status ${res.status}`);
-      return null;
-    }
-
-    const data = await res.json();
-    const candidateUrl = data?.data?.[0]?.url;
-
-    if (!candidateUrl) {
-      return null;
-    }
-
-    // Validate generated image URL
-    const validation = await validateImageUrl(candidateUrl, 3000);
-    if (!validation.valid) {
-      return null;
-    }
-
+    const zeroConfigUrl = buildZeroConfigAiImageUrl(options);
     return {
-      url: candidateUrl,
+      url: zeroConfigUrl,
       source: "AI-Generated",
       prompt,
-      revisedPrompt: data?.data?.[0]?.revised_prompt,
     };
   } catch (err: any) {
-    console.warn(`[AiImage] Image generation skipped: ${err?.message || "Timeout"}`);
+    console.warn(`[AiImage] Zero-config AI generation fallback failed: ${err?.message}`);
     return null;
   }
 }

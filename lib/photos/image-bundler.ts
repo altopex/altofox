@@ -278,6 +278,8 @@ export async function resolveImagePlanWithValidation(
     state?: string;
     pexelsKey?: string;
     pixabayKey?: string;
+    googleKey?: string;
+    googleCx?: string;
     openaiKey?: string;
     providerCredentials?: {
       provider?: string;
@@ -360,6 +362,8 @@ export async function resolveImagePlanWithValidation(
                 preferredSource: options.preferredSource,
                 pexelsKey: options.pexelsKey,
                 pixabayKey: options.pixabayKey,
+                googleKey: options.googleKey,
+                googleCx: options.googleCx,
                 openaiKey: options.openaiKey,
                 providerCredentials: options.providerCredentials,
                 deduplicationTracker,

@@ -50,7 +50,9 @@ export interface AssembleOptions {
   mapEmbed?: string;
   pexelsKey?: string;
   pixabayKey?: string;
-  preferredSource?: "bing" | "pexels" | "pixabay";
+  googleKey?: string;
+  googleCx?: string;
+  preferredSource?: "bing" | "pexels" | "pixabay" | "google" | "ai";
   linkStyle?: LinkStyle;
   useFolderStructure?: boolean;
   blogPosts?: BlogPostData[];
@@ -340,6 +342,8 @@ export async function assembleWebsite(
       state: data.site.address?.state,
       pexelsKey: options?.pexelsKey,
       pixabayKey: options?.pixabayKey,
+      googleKey: options?.googleKey,
+      googleCx: options?.googleCx,
       providerCredentials: options?.fastOfflinePreview ? undefined : options?.providerCredentials,
       validateNetwork: options?.fastOfflinePreview ? false : (options?.validateNetwork ?? false),
       fastOfflinePreview: options?.fastOfflinePreview,

@@ -110,7 +110,7 @@ export function renderCtaBanner(
   const bgUrl =
     bgPhoto?.localPath ||
     bgPhoto?.url ||
-    "https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80";
+    "https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=1200";
   const remoteUrl = bgPhoto?.url || bgUrl;
 
   // Variant 1: Photo Background

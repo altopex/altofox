@@ -210,6 +210,14 @@ export function SettingsPanel({
   const [isTestingCustom, setIsTestingCustom] = useState<boolean>(false);
 
   // Image Sources states
+  const [savedGoogleKey, setSavedGoogleKey] = useState("");
+  const [googleKeyInput, setGoogleKeyInput] = useState("");
+  const [savedGoogleCx, setSavedGoogleCx] = useState("");
+  const [googleCxInput, setGoogleCxInput] = useState("");
+  const [showGoogleKey, setShowGoogleKey] = useState(false);
+  const [isEditingGoogleKey, setIsEditingGoogleKey] = useState(false);
+  const [googleStatus, setGoogleStatus] = useState<"connected" | "not_connected" | "error">("not_connected");
+
   const [savedPexelsKey, setSavedPexelsKey] = useState("");
   const [pexelsKeyInput, setPexelsKeyInput] = useState("");
   const [showPexelsKey, setShowPexelsKey] = useState(false);
@@ -222,11 +230,11 @@ export function SettingsPanel({
   const [isEditingPixabayKey, setIsEditingPixabayKey] = useState(false);
   const [pixabayStatus, setPixabayStatus] = useState<"connected" | "not_connected" | "error">("not_connected");
 
-  const [preferredImageSource, setPreferredImageSource] = useState<"bing" | "pexels" | "pixabay">("bing");
-  const [testingImageSource, setTestingImageSource] = useState<"bing" | "pexels" | "pixabay" | null>(null);
+  const [preferredImageSource, setPreferredImageSource] = useState<"bing" | "pexels" | "pixabay" | "google">("bing");
+  const [testingImageSource, setTestingImageSource] = useState<"bing" | "pexels" | "pixabay" | "google" | null>(null);
   const [imageTestResults, setImageTestResults] = useState<
-    Record<"bing" | "pexels" | "pixabay", { success: boolean; message: string } | null>
-  >({ bing: null, pexels: null, pixabay: null });
+    Record<"bing" | "pexels" | "pixabay" | "google", { success: boolean; message: string } | null>
+  >({ bing: null, pexels: null, pixabay: null, google: null });
 
   // Preferences states
   const [prefCountry, setPrefCountry] = useState("United States");
@@ -407,6 +415,14 @@ export function SettingsPanel({
     setDefaultModel(storedActiveModel);
 
     // Load image keys & settings
+    const googleKey = localStorage.getItem("altofox_google_search_key") || "";
+    const googleCx = localStorage.getItem("altofox_google_search_cx") || "";
+    setSavedGoogleKey(googleKey);
+    setGoogleKeyInput(googleKey);
+    setSavedGoogleCx(googleCx);
+    setGoogleCxInput(googleCx);
+    setGoogleStatus(googleKey && googleCx ? "connected" : "not_connected");
+
     const pexelsKey = localStorage.getItem("altofox_pexels_key") || "";
     setSavedPexelsKey(pexelsKey);
     setPexelsKeyInput(pexelsKey);
@@ -418,7 +434,7 @@ export function SettingsPanel({
     setPixabayStatus(pixabayKey ? "connected" : "not_connected");
 
     const prefSource =
-      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay" | "google") || "bing";
     setPreferredImageSource(prefSource);
 
     // Load preferences
@@ -1130,7 +1146,7 @@ export function SettingsPanel({
   };
 
   // Test Image Source API Key
-  const handleTestImageKey = async (source: "bing" | "pexels" | "pixabay") => {
+  const handleTestImageKey = async (source: "bing" | "pexels" | "pixabay" | "google") => {
     if (source === "bing") {
       setTestingImageSource("bing");
       setImageTestResults((prev) => ({ ...prev, bing: null }));
@@ -1153,6 +1169,51 @@ export function SettingsPanel({
             message: err instanceof Error ? err.message : "Network error testing Bing CDN.",
           },
         }));
+      } finally {
+        setTestingImageSource(null);
+      }
+      return;
+    }
+
+    if (source === "google") {
+      const rawKey = googleKeyInput.trim() || savedGoogleKey;
+      const rawCx = googleCxInput.trim() || savedGoogleCx;
+      if (!rawKey || !rawCx) {
+        setImageTestResults((prev) => ({
+          ...prev,
+          google: { success: false, message: "Please enter both Google API Key and Search Engine ID (CX)." },
+        }));
+        setGoogleStatus("error");
+        return;
+      }
+      setTestingImageSource("google");
+      setImageTestResults((prev) => ({ ...prev, google: null }));
+      try {
+        const res = await fetch("/api/images/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: "google", apiKey: rawKey, cx: rawCx }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setImageTestResults((prev) => ({
+            ...prev,
+            google: { success: true, message: data.message || "Connected to Google Image Search API!" },
+          }));
+          setGoogleStatus("connected");
+        } else {
+          setImageTestResults((prev) => ({
+            ...prev,
+            google: { success: false, message: data.message || "Google test failed." },
+          }));
+          setGoogleStatus("error");
+        }
+      } catch (err) {
+        setImageTestResults((prev) => ({
+          ...prev,
+          google: { success: false, message: err instanceof Error ? err.message : "Network error testing Google API." },
+        }));
+        setGoogleStatus("error");
       } finally {
         setTestingImageSource(null);
       }
@@ -1217,7 +1278,31 @@ export function SettingsPanel({
   };
 
   // Save Image Key
-  const handleSaveImageKey = (source: "pexels" | "pixabay") => {
+  const handleSaveImageKey = (source: "pexels" | "pixabay" | "google") => {
+    if (source === "google") {
+      const key = googleKeyInput.trim() || savedGoogleKey;
+      const cx = googleCxInput.trim() || savedGoogleCx;
+      if (!key || !cx) {
+        setImageTestResults((prev) => ({
+          ...prev,
+          google: { success: false, message: "Please enter both Google API Key and Search Engine ID (CX) before saving." },
+        }));
+        return;
+      }
+      localStorage.setItem("altofox_google_search_key", key);
+      localStorage.setItem("altofox_google_search_cx", cx);
+      setSavedGoogleKey(key);
+      setSavedGoogleCx(cx);
+      setGoogleStatus("connected");
+      setIsEditingGoogleKey(false);
+      setImageTestResults((prev) => ({
+        ...prev,
+        google: { success: true, message: "Google Image credentials saved in localStorage." },
+      }));
+      onSettingsUpdated();
+      return;
+    }
+
     const key =
       source === "pexels"
         ? pexelsKeyInput.trim() || savedPexelsKey
@@ -1251,8 +1336,17 @@ export function SettingsPanel({
   };
 
   // Remove Image Key
-  const handleRemoveImageKey = (source: "pexels" | "pixabay") => {
-    if (source === "pexels") {
+  const handleRemoveImageKey = (source: "pexels" | "pixabay" | "google") => {
+    if (source === "google") {
+      localStorage.removeItem("altofox_google_search_key");
+      localStorage.removeItem("altofox_google_search_cx");
+      setSavedGoogleKey("");
+      setGoogleKeyInput("");
+      setSavedGoogleCx("");
+      setGoogleCxInput("");
+      setGoogleStatus("not_connected");
+      setIsEditingGoogleKey(false);
+    } else if (source === "pexels") {
       localStorage.removeItem("altofox_pexels_key");
       setSavedPexelsKey("");
       setPexelsKeyInput("");
@@ -1275,7 +1369,7 @@ export function SettingsPanel({
   };
 
   // Preferred Source Change
-  const handlePreferredImageSourceChange = (pref: "bing" | "pexels" | "pixabay") => {
+  const handlePreferredImageSourceChange = (pref: "bing" | "pexels" | "pixabay" | "google") => {
     setPreferredImageSource(pref);
     localStorage.setItem("altofox_image_preferred_source", pref);
     onSettingsUpdated();
@@ -1315,6 +1409,8 @@ export function SettingsPanel({
       "ranklocal_model_custom",
       "ranklocal_pexels_key",
       "ranklocal_pixabay_key",
+      "ranklocal_google_search_key",
+      "ranklocal_google_search_cx",
       "ranklocal_image_preferred_source",
       "ranklocal_dark_mode",
       // Legacy AltoFox keys
@@ -1335,6 +1431,8 @@ export function SettingsPanel({
       "altofox_model_custom",
       "altofox_pexels_key",
       "altofox_pixabay_key",
+      "altofox_google_search_key",
+      "altofox_google_search_cx",
       "altofox_image_preferred_source",
       "altofox_dark_mode",
     ];
@@ -2167,7 +2265,7 @@ export function SettingsPanel({
                   <p className="text-[11px] text-[#64748B]">
                     {BRAND.name} queries your preferred provider first. If no matching photos are returned, it automatically cascades to alternative sources.
                   </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => handlePreferredImageSourceChange("bing")}
@@ -2178,13 +2276,33 @@ export function SettingsPanel({
                       }`}
                     >
                       <div className="flex items-center justify-between w-full mb-1">
-                        <span className="text-xs font-bold text-[#0F172A]">Bing Free CDN</span>
+                        <span className="text-xs font-bold text-[#0F172A]">Bing Free (Default)</span>
                         {preferredImageSource === "bing" && (
                           <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
                         )}
                       </div>
                       <span className="text-[10px] text-[#64748B]">
                         Zero API key needed. Instant dynamic keywords (e.g. water damage, plumber in CA).
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePreferredImageSourceChange("google")}
+                      className={`p-3 rounded-[10px] border text-left transition flex flex-col justify-between ${
+                        preferredImageSource === "google"
+                          ? "bg-[#EEF2FF] border-[#4F46E5] ring-2 ring-[#4F46E5]/20"
+                          : "bg-white border-[#E2E8F0] hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="text-xs font-bold text-[#0F172A]">Google Search (Optional)</span>
+                        {preferredImageSource === "google" && (
+                          <Check className="w-3.5 h-3.5 text-[#4F46E5]" />
+                        )}
+                      </div>
+                      <span className="text-[10px] text-[#64748B]">
+                        Custom Search JSON API with exact local search queries.
                       </span>
                     </button>
 
@@ -2646,10 +2764,211 @@ export function SettingsPanel({
                         </button>
                       )}
 
-                      {savedPixabayKey && (
+                      {(savedPixabayKey) && (
                         <button
                           type="button"
                           onClick={() => handleRemoveImageKey("pixabay")}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. GOOGLE IMAGE SEARCH CARD (OPTIONAL) */}
+                <div
+                  className={`rounded-[12px] border transition overflow-hidden ${
+                    savedGoogleKey && savedGoogleCx
+                      ? "bg-white border-[#CBD5E1] shadow-xs"
+                      : "bg-white border-[#E2E8F0]"
+                  }`}
+                >
+                  {/* Card Header */}
+                  <div className="p-3.5 sm:p-4 bg-slate-50/70 border-b border-[#E2E8F0] flex items-center justify-between">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-8 h-8 rounded-[8px] bg-[#4285F4] text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                        G
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="text-xs sm:text-sm font-bold text-[#0F172A]">
+                            Google Image Search (Optional)
+                          </h3>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700">
+                            Custom Search JSON API
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#64748B]">
+                          Enables precise, localized query image search (e.g., &quot;emergency leak detection Houston Texas&quot;).
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    <div>
+                      {googleStatus === "connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]" />
+                          <span>Connected</span>
+                        </span>
+                      )}
+                      {googleStatus === "not_connected" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          <span>Not connected</span>
+                        </span>
+                      )}
+                      {googleStatus === "error" && (
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                          <span>Error</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="p-3.5 sm:p-4 space-y-3">
+                    <p className="text-[11px] text-[#64748B]">
+                      Requires a Google Custom Search API key and Programmable Search Engine CX ID. Bing Free CDN remains active as the primary default.
+                    </p>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-[#0F172A]">
+                          Google Cloud API Key
+                        </label>
+                        <a
+                          href="https://console.cloud.google.com/apis/credentials"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                        >
+                          <span>Get API key</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+
+                      {savedGoogleKey && !isEditingGoogleKey ? (
+                        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-[10px]">
+                          <span className="font-mono text-xs text-[#0F172A]">
+                            {maskApiKey(savedGoogleKey)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsEditingGoogleKey(true);
+                              setGoogleKeyInput(savedGoogleKey);
+                            }}
+                            className="text-xs font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            <span>Change</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type={showGoogleKey ? "text" : "password"}
+                            value={googleKeyInput}
+                            onChange={(e) => setGoogleKeyInput(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="input-base pr-10 font-mono text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowGoogleKey((prev) => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#0F172A]"
+                            aria-label="Toggle password visibility"
+                          >
+                            {showGoogleKey ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-[#0F172A]">
+                          Search Engine ID (CX)
+                        </label>
+                        <a
+                          href="https://programmablesearchengine.google.com/controlpanel/all"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1"
+                        >
+                          <span>Create Search Engine (CX)</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                      <input
+                        type="text"
+                        value={googleCxInput}
+                        onChange={(e) => setGoogleCxInput(e.target.value)}
+                        placeholder="e.g. 0123456789abcdef0:xyz123"
+                        className="input-base font-mono text-xs"
+                      />
+                    </div>
+
+                    {/* Test result message */}
+                    {imageTestResults.google && (
+                      <div
+                        className={`p-2.5 rounded-[8px] text-xs flex items-start space-x-2 ${
+                          imageTestResults.google.success
+                            ? "bg-[#ECFDF5] text-[#065F46] border border-[#A7F3D0]"
+                            : "bg-rose-50 text-rose-700 border border-rose-200"
+                        }`}
+                      >
+                        {imageTestResults.google.success ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#10B981] shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        )}
+                        <span>{imageTestResults.google.message}</span>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={testingImageSource === "google"}
+                        onClick={() => handleTestImageKey("google")}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[8px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition disabled:opacity-50"
+                      >
+                        {testingImageSource === "google" ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Testing…</span>
+                          </>
+                        ) : (
+                          <span>Test connection</span>
+                        )}
+                      </button>
+
+                      {(!savedGoogleKey || !savedGoogleCx || isEditingGoogleKey) && (
+                        <button
+                          type="button"
+                          onClick={() => handleSaveImageKey("google")}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-[8px] bg-[#4F46E5] hover:bg-[#4338CA] text-xs font-semibold text-white shadow-xs transition"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Save Credentials</span>
+                        </button>
+                      )}
+
+                      {(savedGoogleKey || savedGoogleCx) && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageKey("google")}
                           className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-[8px] text-xs font-semibold text-rose-600 hover:bg-rose-50 transition ml-auto"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

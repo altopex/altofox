@@ -449,7 +449,7 @@ export function improveImageAltAttributes(
 
       // 4. Ensure onerror fallback protection
       if (!/onerror=/i.test(updatedAttrs)) {
-        const tradeFallback = "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=800&auto=format&fit=crop&q=80";
+        const tradeFallback = "https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=800";
         updatedAttrs += ` onerror="this.onerror=null;this.src='${tradeFallback}';"`;
       }
 

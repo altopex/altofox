@@ -162,7 +162,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <a href="tel:5128864321" class="btn-primary">Call Now ${phone}</a>
         <picture>
           <source srcset="images/hero-plumber.webp" type="image/webp">
-          <img src="images/hero-plumber.jpg" data-remote-src="https://images.unsplash.com/photo-1581578731548-c64695cc6952" alt="Licensed Master Plumber working in Austin">
+          <img src="images/hero-plumber.jpg" data-remote-src="https://images.pexels.com/photos/6419121/pexels-photo-6419121.jpeg" alt="Licensed Master Plumber working in Austin">
         </picture>
       </div>
     </section>

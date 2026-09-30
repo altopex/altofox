@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
       demo = false,
       pexelsKey,
       pixabayKey,
-      preferredSource = "pexels",
+      googleKey,
+      googleCx,
+      preferredSource = "bing",
       // Fallback individual fields if passed flatly
       name,
       businessName,
@@ -168,16 +170,22 @@ export async function POST(req: NextRequest) {
 
     const effectivePexelsKey = (pexelsKey || formData?.pexelsKey || process.env.PEXELS_API_KEY || "").trim();
     const effectivePixabayKey = (pixabayKey || formData?.pixabayKey || process.env.PIXABAY_API_KEY || "").trim();
+    const effectiveGoogleKey = (googleKey || formData?.googleKey || process.env.GOOGLE_SEARCH_API_KEY || process.env.GOOGLE_CUSTOM_SEARCH_KEY || "").trim();
+    const effectiveGoogleCx = (googleCx || formData?.googleCx || process.env.GOOGLE_SEARCH_ENGINE_ID || process.env.GOOGLE_CUSTOM_SEARCH_CX || "").trim();
     const effectivePrefSource = (preferredSource || formData?.preferredSource || "bing") as
       | "bing"
       | "pexels"
-      | "pixabay";
+      | "pixabay"
+      | "google"
+      | "ai";
 
     const assembleOptions: AssembleOptions = {
       domain: websiteData.websiteDomain,
       mapEmbed: websiteData.googleMaps,
       pexelsKey: effectivePexelsKey || undefined,
       pixabayKey: effectivePixabayKey || undefined,
+      googleKey: effectiveGoogleKey || undefined,
+      googleCx: effectiveGoogleCx || undefined,
       preferredSource: effectivePrefSource,
       serviceAreaCities: Array.isArray(formData?.serviceAreaCities) ? formData.serviceAreaCities : undefined,
       customContentInstructions: websiteData.customContentInstructions || undefined,

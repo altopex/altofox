@@ -428,8 +428,8 @@ export async function resolveStockPhoto(options: StockPhotoSearchOptions): Promi
     width: targetWidth,
     height: targetHeight,
     alt: altText,
-    photographer: "Unsplash Contributor",
-    photographerUrl: "https://unsplash.com",
+    photographer: "Stock Contractor Contributor",
+    photographerUrl: "https://www.pexels.com",
     sourceUrl: curated.url,
     slot,
     localPath: `images/${filenameSlug}.jpg`,
@@ -449,7 +449,7 @@ export function buildCreditsTxt(photos: StockPhoto[], businessName: string): str
   lines.push("==================================================================\n");
   lines.push(
     "All photos in this directory are royalty-free assets provided under\n" +
-    "the Bing Free Image Search, Pexels, Pixabay, or Unsplash licenses for commercial & personal use.\n"
+    "the Bing Free Image Search, Pexels, or Pixabay licenses for commercial & personal use.\n"
   );
 
   const seen = new Set<string>();

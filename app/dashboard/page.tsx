@@ -553,12 +553,14 @@ export default function DashboardPage() {
     // Check Image API Keys
     const pexels = localStorage.getItem("altofox_pexels_key");
     const pixabay = localStorage.getItem("altofox_pixabay_key");
-    const hasImg = !!((pexels && pexels.trim()) || (pixabay && pixabay.trim()));
+    const google = localStorage.getItem("altofox_google_search_key");
+    const hasImg = !!((pexels && pexels.trim()) || (pixabay && pixabay.trim()) || (google && google.trim()));
     setHasImageKey(hasImg);
-    if (pexels && pixabay) setImageKeySource("Pexels & Pixabay");
-    else if (pexels) setImageKeySource("Pexels");
-    else if (pixabay) setImageKeySource("Pixabay");
-    else setImageKeySource("");
+    const activeSources: string[] = [];
+    if (google) activeSources.push("Google");
+    if (pexels) activeSources.push("Pexels");
+    if (pixabay) activeSources.push("Pixabay");
+    setImageKeySource(activeSources.join(" & ") || "");
   }, []);
 
   // Apply user preferences (default country, theme, quality review)
@@ -1548,8 +1550,10 @@ export default function DashboardPage() {
 
     const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
     const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
+    const googleKey = localStorage.getItem("altofox_google_search_key") || undefined;
+    const googleCx = localStorage.getItem("altofox_google_search_cx") || undefined;
     const preferredSource =
-      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay" | "google") || "bing";
 
     const targetFormData = lastFormDataRef.current || {
       businessName: businessName.trim() || "Local Service Co",
@@ -1569,6 +1573,8 @@ export default function DashboardPage() {
           formData: targetFormData,
           pexelsKey,
           pixabayKey,
+          googleKey,
+          googleCx,
           preferredSource,
         }),
       });
@@ -1637,8 +1643,10 @@ export default function DashboardPage() {
 
     const pexelsKey = localStorage.getItem("altofox_pexels_key") || undefined;
     const pixabayKey = localStorage.getItem("altofox_pixabay_key") || undefined;
+    const googleKey = localStorage.getItem("altofox_google_search_key") || undefined;
+    const googleCx = localStorage.getItem("altofox_google_search_cx") || undefined;
     const preferredSource =
-      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay") || "bing";
+      (localStorage.getItem("altofox_image_preferred_source") as "bing" | "pexels" | "pixabay" | "google") || "bing";
 
     const prefReview =
       (typeof window !== "undefined"
@@ -1792,6 +1800,8 @@ export default function DashboardPage() {
               : undefined) || undefined,
           pexelsKey,
           pixabayKey,
+          googleKey,
+          googleCx,
           preferredSource,
           qualityReview: prefReview,
           formData,
