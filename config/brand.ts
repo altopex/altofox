@@ -12,7 +12,7 @@ export const BRAND = {
   // Brand identity
   name: "RankLocal",
   legalName: "RankLocal Studio",
-  version: "5.3.5",
+  version: "5.3.6",
   domain: "ranklocal.site",
   siteUrl: normalizedSiteUrl,
   tagline: "AI Static Website Builder for Local Service Businesses",

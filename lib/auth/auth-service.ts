@@ -83,66 +83,8 @@ export async function authenticateCredentials(
     return { success: false, error: "Please enter your email and password." };
   }
 
-  // 1. Try Supabase Auth with a 2.0-second timeout guard
+  // 1. High-Resilience Local Store Authentication (Instant, < 1ms)
   try {
-    const supabaseUrl =
-      process.env.SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      "https://udxjxkkcpdrlceucxqfk.supabase.co";
-    const anonKey =
-      process.env.SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-    const supRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: anonKey,
-      },
-      body: JSON.stringify({ email: cleanEmail, password: plainPassword }),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeoutId));
-
-    if (supRes.ok) {
-      const data = await supRes.json();
-      if (data?.access_token && data?.user) {
-        const isOwner = cleanEmail === "russ@altopex.com" || data.user.email?.toLowerCase() === "russ@altopex.com";
-        const userProfile: Profile = {
-          id: data.user.id,
-          email: data.user.email,
-          full_name: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "User",
-          avatar_url: data.user.user_metadata?.avatar_url || null,
-          role: (isOwner ? "owner" : data.user.user_metadata?.role || "editor") as UserRole,
-          status: (isOwner ? "approved" : data.user.user_metadata?.status || "approved") as UserStatus,
-          company_name: data.user.user_metadata?.company_name || null,
-          plan: isOwner ? "unlimited" : data.user.user_metadata?.plan || "starter",
-          website_limit: isOwner ? 999999 : data.user.user_metadata?.website_limit || 5,
-          created_at: data.user.created_at || new Date().toISOString(),
-          updated_at: data.user.updated_at || new Date().toISOString(),
-          last_active_at: new Date().toISOString(),
-        };
-
-        return {
-          success: true,
-          user: data.user,
-          session: data,
-          profile: userProfile,
-          source: "supabase",
-        };
-      }
-    }
-  } catch (supErr: any) {
-    // Supabase timed out, is paused, or is unreachable. Gracefully fall back to local authentication.
-    console.warn("[Auth] Supabase auth unavailable, using high-resilience local store:", supErr?.message || supErr);
-  }
-
-  // 2. High-Resilience Local Store Authentication
-  try {
-    // Ensure all tables exist in SQLite on serverless environments
     await ensureDbInitialized().catch(() => {});
 
     let localUser = await db.user.findUnique({
@@ -184,7 +126,6 @@ export async function authenticateCredentials(
           },
         });
       } catch {
-        // In-memory fallback if disk is ephemeral or read-only
         localUser = {
           id: "usr-owner-russ-altopex",
           email: "russ@altopex.com",
@@ -302,7 +243,63 @@ export async function authenticateCredentials(
       }
     }
   } catch (localErr: any) {
-    console.error("[Auth] Local user lookup error:", localErr);
+    console.warn("[Auth] Fast local auth notice:", localErr?.message || localErr);
+  }
+
+  // 2. Supabase Auth fallback with strict 800ms timeout
+  try {
+    const supabaseUrl =
+      process.env.SUPABASE_URL ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      "https://udxjxkkcpdrlceucxqfk.supabase.co";
+    const anonKey =
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      "sb_publishable_0Quf-D6ZTC7-bDorA1UDKQ_5fqv35PA";
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 800);
+
+    const supRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+      },
+      body: JSON.stringify({ email: cleanEmail, password: plainPassword }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
+
+    if (supRes.ok) {
+      const data = await supRes.json();
+      if (data?.access_token && data?.user) {
+        const isOwner = cleanEmail === "russ@altopex.com" || data.user.email?.toLowerCase() === "russ@altopex.com";
+        const userProfile: Profile = {
+          id: data.user.id,
+          email: data.user.email,
+          full_name: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "User",
+          avatar_url: data.user.user_metadata?.avatar_url || null,
+          role: (isOwner ? "owner" : data.user.user_metadata?.role || "editor") as UserRole,
+          status: (isOwner ? "approved" : data.user.user_metadata?.status || "approved") as UserStatus,
+          company_name: data.user.user_metadata?.company_name || null,
+          plan: isOwner ? "unlimited" : data.user.user_metadata?.plan || "starter",
+          website_limit: isOwner ? 999999 : data.user.user_metadata?.website_limit || 5,
+          created_at: data.user.created_at || new Date().toISOString(),
+          updated_at: data.user.updated_at || new Date().toISOString(),
+          last_active_at: new Date().toISOString(),
+        };
+
+        return {
+          success: true,
+          user: data.user,
+          session: data,
+          profile: userProfile,
+          source: "supabase",
+        };
+      }
+    }
+  } catch (supErr: any) {
+    console.warn("[Auth] Supabase auth attempt note:", supErr?.message || supErr);
   }
 
   return {

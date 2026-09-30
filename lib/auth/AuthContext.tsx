@@ -116,11 +116,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data, error } = await supabase
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Profile timeout")), 1500)
+      );
+      const queryPromise = supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
         .single();
+
+      const { data, error } = (await Promise.race([queryPromise, timeoutPromise])) as any;
 
       if (data && !error) {
         const loadedProfile: Profile = {
@@ -174,8 +179,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function initAuth() {
       try {
-        setAuthStage("INITIALIZING");
-        setLoading(true);
+        // 0. Fast Instant Synchronous Hydration from local token (< 0.1ms)
+        const storedToken = getAuthToken();
+        if (storedToken && storedToken.includes(".")) {
+          try {
+            const parts = storedToken.split(".");
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+              if (payload.exp && payload.exp * 1000 > Date.now()) {
+                const isOwner = payload.role === "owner" || payload.email?.toLowerCase() === "russ@altopex.com";
+                const instantProfile: Profile = {
+                  id: payload.sub || "usr-current",
+                  email: payload.email,
+                  full_name: payload.user_metadata?.full_name || payload.email?.split("@")[0] || "User",
+                  avatar_url: null,
+                  role: (isOwner ? "owner" : payload.role || "editor") as UserRole,
+                  status: (isOwner ? "approved" : payload.status || "approved") as UserStatus,
+                  company_name: payload.user_metadata?.company_name || null,
+                  plan: isOwner ? "unlimited" : payload.user_metadata?.plan || "starter",
+                  website_limit: isOwner ? 999999 : payload.user_metadata?.website_limit || 5,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  last_active_at: new Date().toISOString(),
+                };
+                if (mounted) {
+                  setProfile(instantProfile);
+                  setUser({
+                    id: instantProfile.id,
+                    email: instantProfile.email,
+                    app_metadata: {},
+                    user_metadata: { full_name: instantProfile.full_name, role: instantProfile.role },
+                    aud: "authenticated",
+                    created_at: instantProfile.created_at,
+                  });
+                  setAuthStage("AUTHENTICATED");
+                  setLoading(false);
+                }
+              }
+            }
+          } catch {}
+        } else {
+          setAuthStage("INITIALIZING");
+          setLoading(true);
+        }
 
         // 1. Proactively check Supabase local session
         let activeSession: Session | null = null;

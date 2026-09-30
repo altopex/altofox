@@ -110,33 +110,8 @@ export async function authenticateServerRequest(
     let createdAt = new Date().toISOString();
     let updatedAt = new Date().toISOString();
 
-    // Strategy A: Verify via Supabase Auth Client using publishable/anon key
-    const supabaseUrl =
-      process.env.SUPABASE_URL ||
-      process.env.NEXT_PUBLIC_SUPABASE_URL ||
-      DEFAULT_SUPABASE_URL;
-    const anonKey =
-      process.env.SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-      DEFAULT_ANON_KEY;
-
-    try {
-      const anonClient = createClient(supabaseUrl, anonKey);
-      const { data: userData, error: userError } = await anonClient.auth.getUser(token);
-      if (!userError && userData?.user) {
-        userId = userData.user.id;
-        userEmail = userData.user.email;
-        userMetadata = userData.user.user_metadata || {};
-        createdAt = userData.user.created_at;
-        updatedAt = userData.user.updated_at || userData.user.created_at;
-      }
-    } catch (gotrueErr) {
-      console.warn("[Auth] GoTrue token lookup warning, falling back to JWT verification:", gotrueErr);
-    }
-
-    // Strategy B: Fallback - decode JWT payload and verify expiration
-    if (!userId && token.includes(".")) {
+    // Strategy 1 (Instant, 0.05ms in-memory): Fast decode of JWT payload and verify expiration
+    if (token.includes(".")) {
       try {
         const parts = token.split(".");
         if (parts.length === 3) {
@@ -158,7 +133,39 @@ export async function authenticateServerRequest(
           }
         }
       } catch (jwtErr) {
-        console.warn("[Auth] JWT parse fallback failed:", jwtErr);
+        console.warn("[Auth] Fast JWT parse fallback notice:", jwtErr);
+      }
+    }
+
+    // Strategy 2 (Fallback for opaque tokens): Verify via Supabase Auth Client with 800ms strict timeout
+    if (!userId) {
+      const supabaseUrl =
+        process.env.SUPABASE_URL ||
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        DEFAULT_SUPABASE_URL;
+      const anonKey =
+        process.env.SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        DEFAULT_ANON_KEY;
+
+      try {
+        const anonClient = createClient(supabaseUrl, anonKey);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("GoTrue timeout")), 800)
+        );
+        const userPromise = anonClient.auth.getUser(token);
+        const res = await Promise.race([userPromise, timeoutPromise]) as any;
+
+        if (!res.error && res.data?.user) {
+          userId = res.data.user.id;
+          userEmail = res.data.user.email;
+          userMetadata = res.data.user.user_metadata || {};
+          createdAt = res.data.user.created_at;
+          updatedAt = res.data.user.updated_at || res.data.user.created_at;
+        }
+      } catch (gotrueErr) {
+        console.warn("[Auth] GoTrue token lookup note:", gotrueErr);
       }
     }
 

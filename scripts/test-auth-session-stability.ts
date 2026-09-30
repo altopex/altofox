@@ -8,7 +8,7 @@ import { signUserSessionToken } from "../lib/auth/auth-service";
 
 async function runSessionStabilitySuite() {
   console.log("================================================================================");
-  console.log("    RANKLOCAL v5.3.5 — 18-POINT COMPREHENSIVE AUTH & SESSION STABILITY TEST     ");
+  console.log("    RANKLOCAL v5.3.6 — 18-POINT COMPREHENSIVE AUTH & SESSION STABILITY TEST     ");
   console.log("================================================================================");
 
   let ownerToken = "";
