@@ -4,6 +4,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { User, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Profile, UserRole, UserStatus } from "@/lib/supabase/types";
+import { getAuthToken } from "@/lib/auth/client-token";
+
+export type AuthStage = "INITIALIZING" | "AUTHENTICATED" | "UNAUTHENTICATED";
 
 interface SignUpParams {
   email: string;
@@ -21,6 +24,7 @@ interface AuthContextValue {
   isOwner: boolean;
   isApproved: boolean;
   loading: boolean;
+  authStage: AuthStage;
   session: Session | null;
   signInWithPassword: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (params: SignUpParams) => Promise<{ success: boolean; status?: string; requiresEmailConfirmation?: boolean; error?: string }>;
@@ -41,47 +45,65 @@ function getCookieDomain(): string {
   return "";
 }
 
-function setAuthCookies(token: string | null, status: string | null) {
+function setAuthCookies(token?: string | null, status?: string | null) {
   if (typeof document === "undefined") return;
   const isSecure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
   const domainPart = getCookieDomain();
 
-  if (token) {
-    document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
-    document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
-    // Also set host-only cookie for maximum browser compatibility
+  if (token && typeof token === "string" && token.trim().length > 10) {
+    const cleanToken = token.trim();
+    document.cookie = `ranklocal_token=${encodeURIComponent(cleanToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    document.cookie = `altofox_token=${encodeURIComponent(cleanToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    // Also set host-only cookie for maximum cross-browser compatibility
     if (domainPart) {
-      document.cookie = `ranklocal_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
-      document.cookie = `altofox_token=${encodeURIComponent(token)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `ranklocal_token=${encodeURIComponent(cleanToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `altofox_token=${encodeURIComponent(cleanToken)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
     }
     try {
-      localStorage.setItem("ranklocal_token_persist", token);
-    } catch {}
-  } else {
-    document.cookie = `ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
-    document.cookie = `altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
-    document.cookie = `ranklocal_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
-    document.cookie = `altofox_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
-    try {
-      localStorage.removeItem("ranklocal_token_persist");
+      localStorage.setItem("ranklocal_token_persist", cleanToken);
     } catch {}
   }
-  if (status) {
-    document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
-    document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+
+  if (status && typeof status === "string" && status.trim().length > 0) {
+    const cleanStatus = status.trim();
+    document.cookie = `ranklocal_status=${encodeURIComponent(cleanStatus)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
+    document.cookie = `altofox_status=${encodeURIComponent(cleanStatus)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}${domainPart}`;
     if (domainPart) {
-      document.cookie = `ranklocal_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
-      document.cookie = `altofox_status=${encodeURIComponent(status)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `ranklocal_status=${encodeURIComponent(cleanStatus)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
+      document.cookie = `altofox_status=${encodeURIComponent(cleanStatus)}; Path=/; SameSite=Lax; Max-Age=604800${isSecure}`;
     }
-  } else {
-    document.cookie = `ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
-    document.cookie = `altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
-    document.cookie = `ranklocal_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
-    document.cookie = `altofox_status=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
   }
 }
 
+function clearAuthCookies() {
+  if (typeof document === "undefined") return;
+  const isSecure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  const domainPart = getCookieDomain();
+
+  const cookieNames = [
+    "ranklocal_token",
+    "altofox_token",
+    "ranklocal_status",
+    "altofox_status",
+    "sb-access-token",
+  ];
+
+  for (const name of cookieNames) {
+    document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}`;
+    if (domainPart) {
+      document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=Lax${isSecure}${domainPart}`;
+    }
+  }
+
+  try {
+    localStorage.removeItem("ranklocal_token_persist");
+    localStorage.removeItem("ranklocal_team_auth");
+    localStorage.removeItem("altofox_team_auth");
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [authStage, setAuthStage] = useState<AuthStage>("INITIALIZING");
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -109,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           website_limit: data.website_limit ?? (data.plan === "agency" ? 30 : 5),
         };
         setProfile(loadedProfile);
-        setAuthCookies(currentToken || null, loadedProfile.status);
+        setAuthCookies(currentToken || undefined, loadedProfile.status);
 
         // Touch last_active_at in background at most once every 15 minutes
         const now = Date.now();
@@ -139,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: userEmail,
         };
         setProfile(fallbackProfile);
-        setAuthCookies(currentToken || null, fallbackProfile.status);
+        setAuthCookies(currentToken || undefined, fallbackProfile.status);
       }
     } catch (err) {
       console.warn("[Auth] Profile load exception:", err);
@@ -152,6 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function initAuth() {
       try {
+        setAuthStage("INITIALIZING");
+        setLoading(true);
+
         // 1. Proactively check Supabase local session
         let activeSession: Session | null = null;
         try {
@@ -168,10 +193,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ? activeSession.expires_at * 1000 <= Date.now() + 60000
           : false;
 
-        // 2. Proactive Session Refresh if expired or missing from memory but refresh token exists in localStorage
-        if (!activeSession || isTokenExpired) {
+        // Proactive Session Refresh if expired
+        if (activeSession && isTokenExpired) {
           try {
-            console.log("[Auth] Performing resilient session refresh...");
+            console.log("[Auth] Session near expiry, performing resilient refresh...");
             const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
             if (!refreshErr && refreshData?.session) {
               activeSession = refreshData.session;
@@ -182,10 +207,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        // 2. Fallback: Restore from localStorage if Supabase client memory didn't have it
+        if (!activeSession?.user && typeof window !== "undefined") {
+          try {
+            for (const key of ["ranklocal_team_auth", "altofox_team_auth"]) {
+              const raw = localStorage.getItem(key);
+              if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed?.access_token && parsed?.refresh_token) {
+                  const { data: restored, error: restoreErr } = await supabase.auth.setSession({
+                    access_token: parsed.access_token,
+                    refresh_token: parsed.refresh_token,
+                  });
+                  if (!restoreErr && restored?.session) {
+                    activeSession = restored.session;
+                    break;
+                  }
+                }
+              }
+            }
+          } catch (storageErr) {
+            console.warn("[Auth] LocalStorage session restore notice:", storageErr);
+          }
+        }
+
+        // If we have an active session with a user
         if (activeSession?.user) {
           if (!mounted) return;
           setSession(activeSession);
           setUser(activeSession.user);
+          setAuthStage("AUTHENTICATED");
           if (activeSession.access_token) {
             setAuthCookies(activeSession.access_token, "approved");
           }
@@ -194,9 +245,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // 3. Fallback check via /api/auth/check-status (cookie-backed session verification)
+        // 3. Fallback check via /api/auth/check-status (cookie & bearer token verification)
         try {
-          const statusRes = await fetch("/api/auth/check-status", { credentials: "same-origin" });
+          const storedToken = getAuthToken();
+          const checkHeaders: Record<string, string> = {};
+          if (storedToken) {
+            checkHeaders["Authorization"] = `Bearer ${storedToken}`;
+          }
+
+          const statusRes = await fetch("/api/auth/check-status", {
+            credentials: "same-origin",
+            headers: checkHeaders,
+          });
+
           if (statusRes.ok) {
             const statusData = await statusRes.json();
             if (statusData?.authenticated && mounted) {
@@ -224,24 +285,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 aud: "authenticated",
                 created_at: loadedProfile.created_at,
               });
-              setAuthCookies(null, loadedProfile.status);
+              setAuthStage("AUTHENTICATED");
+
+              const effectiveToken = statusData.token || storedToken || undefined;
+              if (effectiveToken) {
+                setAuthCookies(effectiveToken, loadedProfile.status);
+              } else {
+                setAuthCookies(undefined, loadedProfile.status);
+              }
+
               if (mounted) setLoading(false);
               return;
             }
           }
-        } catch {
-          // ignore network glitch on fallback check
+        } catch (checkErr) {
+          // Network error: DO NOT LOG OUT! If we have a stored JWT token that is unexpired, keep session!
+          console.warn("[Auth] check-status network notice:", checkErr);
+          const storedToken = getAuthToken();
+          if (storedToken && storedToken.includes(".")) {
+            try {
+              const parts = storedToken.split(".");
+              if (parts.length === 3) {
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+                if (payload.exp && payload.exp * 1000 > Date.now()) {
+                  // Token is still valid in time! Maintain session through network blip
+                  const isOwner = payload.role === "owner" || payload.email?.toLowerCase() === "russ@altopex.com";
+                  const fallbackProfile: Profile = {
+                    id: payload.sub || "usr-current",
+                    email: payload.email,
+                    full_name: payload.user_metadata?.full_name || payload.email?.split("@")[0] || "User",
+                    avatar_url: null,
+                    role: (isOwner ? "owner" : payload.role || "editor") as UserRole,
+                    status: (isOwner ? "approved" : payload.status || "approved") as UserStatus,
+                    company_name: payload.user_metadata?.company_name || null,
+                    plan: isOwner ? "unlimited" : payload.user_metadata?.plan || "starter",
+                    website_limit: isOwner ? 999999 : payload.user_metadata?.website_limit || 5,
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString(),
+                    last_active_at: new Date().toISOString(),
+                  };
+                  if (mounted) {
+                    setProfile(fallbackProfile);
+                    setUser({
+                      id: fallbackProfile.id,
+                      email: fallbackProfile.email,
+                      app_metadata: {},
+                      user_metadata: { full_name: fallbackProfile.full_name, role: fallbackProfile.role },
+                      aud: "authenticated",
+                      created_at: fallbackProfile.created_at,
+                    });
+                    setAuthStage("AUTHENTICATED");
+                    setLoading(false);
+                  }
+                  return;
+                }
+              }
+            } catch {}
+          }
         }
 
-        // Only clear if genuinely no session exists anywhere
+        // 4. Definitively unauthenticated
         if (mounted) {
           setSession(null);
           setUser(null);
           setProfile(null);
-          setAuthCookies(null, null);
+          setAuthStage("UNAUTHENTICATED");
+          clearAuthCookies();
         }
       } catch (err) {
         console.error("[Auth] Init error:", err);
+        if (mounted) {
+          setAuthStage("UNAUTHENTICATED");
+        }
       } finally {
         if (mounted) setLoading(false);
       }
@@ -261,13 +376,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setSession(null);
             setUser(null);
             setProfile(null);
-            setAuthCookies(null, null);
+            setAuthStage("UNAUTHENTICATED");
+            clearAuthCookies();
             return;
           }
 
           if (currentSession?.user) {
             setSession(currentSession);
             setUser(currentSession.user);
+            setAuthStage("AUTHENTICATED");
             if (currentSession.access_token) {
               setAuthCookies(currentSession.access_token, profileRef.current?.status || "approved");
             }
@@ -320,10 +437,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.user && data.session) {
+        const token = data.session.access_token;
+        const refreshToken = data.session.refresh_token;
+        const status = data.profile?.status || "approved";
+
+        // Synchronize with Supabase browser client so autoRefreshToken and listeners work!
+        const supabase = getSupabaseBrowserClient();
+        if (token && refreshToken) {
+          try {
+            await supabase.auth.setSession({
+              access_token: token,
+              refresh_token: refreshToken,
+            });
+          } catch (e) {
+            console.warn("[Auth] Supabase browser setSession notice:", e);
+          }
+        }
+
+        // Persist cookies & localStorage
+        setAuthCookies(token, status);
+
+        // Update React state
         setUser(data.user);
         setSession(data.session);
         setProfile(data.profile);
-        setAuthCookies(data.session.access_token, data.profile?.status || "approved");
+        setAuthStage("AUTHENTICATED");
+        setLoading(false);
       }
       return { success: true };
     } catch (err: any) {
@@ -370,6 +509,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (apiData.session && apiData.user) {
             setUser(apiData.user);
             setSession(apiData.session);
+            setAuthStage("AUTHENTICATED");
+            setLoading(false);
             const supabase = getSupabaseBrowserClient();
             try {
               await supabase.auth.setSession({
@@ -377,6 +518,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 refresh_token: apiData.session.refresh_token,
               });
             } catch (_) {}
+            setAuthCookies(apiData.session.access_token, apiData.status || "pending");
             await loadUserProfile(apiData.user.id, cleanEmail, apiData.session.access_token);
           } else {
             await signInWithPassword(cleanEmail, password);
@@ -436,6 +578,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (data.session) {
           setUser(data.user);
           setSession(data.session);
+          setAuthStage("AUTHENTICATED");
+          setLoading(false);
+          setAuthCookies(data.session.access_token, "pending");
           await loadUserProfile(data.user.id, data.user.email, data.session.access_token);
         }
         return {
@@ -565,7 +710,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setSession(null);
       setProfile(null);
-      setAuthCookies(null, null);
+      setAuthStage("UNAUTHENTICATED");
+      clearAuthCookies();
     }
   };
 
@@ -589,7 +735,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         status,
         isOwner,
         isApproved,
-        loading,
+        loading: authStage === "INITIALIZING",
+        authStage,
         session,
         signInWithPassword,
         signUp,
@@ -617,6 +764,7 @@ export function useAuth(): AuthContextValue {
       isOwner: false,
       isApproved: false,
       loading: false,
+      authStage: "UNAUTHENTICATED",
       session: null,
       signInWithPassword: async () => ({ success: false, error: "AuthProvider not mounted" }),
       signUp: async () => ({ success: false, error: "AuthProvider not mounted" }),

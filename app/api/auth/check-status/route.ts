@@ -12,6 +12,8 @@ export async function GET(req: NextRequest) {
 
     const response = NextResponse.json({
       authenticated: true,
+      id: auth.user.id,
+      token: auth.accessToken,
       status: auth.profile.status,
       isApproved: auth.isApproved,
       role: auth.profile.role,
@@ -23,19 +25,27 @@ export async function GET(req: NextRequest) {
     const isRankLocal = host.includes("ranklocal.site");
     const isSecure = process.env.NODE_ENV === "production";
 
-    const cookieOpts = {
+    // Set host-only cookie for standard cross-browser reliability
+    const hostOpts = {
       path: "/",
       maxAge: 604800,
       sameSite: "lax" as const,
       secure: isSecure,
-      ...(isRankLocal ? { domain: ".ranklocal.site" } : {}),
     };
 
-    // Keep the cookies refreshed with current status and token
-    response.cookies.set("ranklocal_status", auth.profile.status, cookieOpts);
-    response.cookies.set("altofox_status", auth.profile.status, cookieOpts);
-    response.cookies.set("ranklocal_token", auth.accessToken, cookieOpts);
-    response.cookies.set("altofox_token", auth.accessToken, cookieOpts);
+    response.cookies.set("ranklocal_status", auth.profile.status, hostOpts);
+    response.cookies.set("altofox_status", auth.profile.status, hostOpts);
+    response.cookies.set("ranklocal_token", auth.accessToken, hostOpts);
+    response.cookies.set("altofox_token", auth.accessToken, hostOpts);
+
+    // If on ranklocal.site, also set wildcard domain cookie
+    if (isRankLocal) {
+      const domainOpts = { ...hostOpts, domain: ".ranklocal.site" };
+      response.cookies.set("ranklocal_status", auth.profile.status, domainOpts);
+      response.cookies.set("altofox_status", auth.profile.status, domainOpts);
+      response.cookies.set("ranklocal_token", auth.accessToken, domainOpts);
+      response.cookies.set("altofox_token", auth.accessToken, domainOpts);
+    }
 
     return response;
   } catch {

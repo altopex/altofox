@@ -19,7 +19,7 @@ import {
 
 export default function PendingApprovalPage() {
   const router = useRouter();
-  const { user, profile, isApproved, signOut, refreshProfile } = useAuth();
+  const { user, profile, isApproved, signOut, refreshProfile, loading: authLoading } = useAuth();
   const [checking, setChecking] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date>(new Date());
 
@@ -42,6 +42,13 @@ export default function PendingApprovalPage() {
       setChecking(false);
     }
   }, [refreshProfile, router]);
+
+  // If unauthenticated, redirect to login
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace("/login");
+    }
+  }, [authLoading, user, router]);
 
   // If already approved in context, redirect immediately
   useEffect(() => {

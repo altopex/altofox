@@ -44,13 +44,42 @@ export function middleware(req: NextRequest) {
   let token = req.cookies.get("ranklocal_token")?.value || req.cookies.get("altofox_token")?.value;
   let status = req.cookies.get("ranklocal_status")?.value || req.cookies.get("altofox_status")?.value;
 
+  // Also check Supabase cookie variants if not found in custom cookies
+  if (!token && typeof req.cookies?.getAll === "function") {
+    const allCookies = req.cookies.getAll();
+    if (Array.isArray(allCookies)) {
+      for (const cookie of allCookies) {
+        if (
+          cookie.name === "sb-access-token" ||
+          (cookie.name.startsWith("sb-") && cookie.name.endsWith("-auth-token"))
+        ) {
+          try {
+            const raw = decodeURIComponent(cookie.value).trim();
+            if (raw.startsWith("[") || raw.startsWith("{")) {
+              const parsed = JSON.parse(raw);
+              token = parsed.access_token || parsed[0] || raw;
+            } else {
+              token = raw;
+            }
+            if (token) break;
+          } catch {
+            token = cookie.value;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   const authHeader = req.headers.get("authorization");
-  if (!token && authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.replace("Bearer ", "").trim();
+  if (!token && authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    token = authHeader.replace(/^[Bb]earer\s+/, "").trim();
   }
 
   const isAuthenticated = Boolean(token);
-  const isApproved = isAuthenticated && status === "approved";
+  // An authenticated user is treated as approved unless explicitly pending or disabled
+  const isExplicitlyPending = status === "pending" || status === "disabled";
+  const isApproved = isAuthenticated && !isExplicitlyPending;
 
   // 2. Handle /dashboard and protected app routes
   const isDashboardRoute = pathname.startsWith("/dashboard");
@@ -63,7 +92,7 @@ export function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    if (!isApproved) {
+    if (isExplicitlyPending) {
       return NextResponse.redirect(new URL("/pending", req.url));
     }
 
@@ -86,7 +115,7 @@ export function middleware(req: NextRequest) {
     if (isApproved) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
-    if (isAuthenticated && !isApproved) {
+    if (isExplicitlyPending) {
       return NextResponse.redirect(new URL("/pending", req.url));
     }
     return NextResponse.next();

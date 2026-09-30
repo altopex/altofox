@@ -76,17 +76,24 @@ export async function POST(req: NextRequest) {
     const isRankLocal = host.includes("ranklocal.site");
 
     // Set authoritative auth cookies for middleware & client
-    const cookieOpts = {
+    const hostOpts = {
       path: "/",
       maxAge: 604800,
       sameSite: "lax" as const,
       secure: isSecure,
-      ...(isRankLocal ? { domain: ".ranklocal.site" } : {}),
     };
-    response.cookies.set("ranklocal_token", token, cookieOpts);
-    response.cookies.set("ranklocal_status", status, cookieOpts);
-    response.cookies.set("altofox_token", token, cookieOpts);
-    response.cookies.set("altofox_status", status, cookieOpts);
+    response.cookies.set("ranklocal_token", token, hostOpts);
+    response.cookies.set("ranklocal_status", status, hostOpts);
+    response.cookies.set("altofox_token", token, hostOpts);
+    response.cookies.set("altofox_status", status, hostOpts);
+
+    if (isRankLocal) {
+      const domainOpts = { ...hostOpts, domain: ".ranklocal.site" };
+      response.cookies.set("ranklocal_token", token, domainOpts);
+      response.cookies.set("ranklocal_status", status, domainOpts);
+      response.cookies.set("altofox_token", token, domainOpts);
+      response.cookies.set("altofox_status", status, domainOpts);
+    }
 
     return response;
   } catch (error: any) {

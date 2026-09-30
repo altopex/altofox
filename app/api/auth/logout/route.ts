@@ -21,14 +21,35 @@ export async function POST(req: NextRequest) {
     { headers: corsHeaders }
   );
   
-  // Clear all auth cookies
-  const cookieNames = ["ranklocal_token", "ranklocal_status", "altofox_token", "altofox_status"];
+  const host = req.headers.get("host") || "";
+  const isRankLocal = host.includes("ranklocal.site");
+
+  // Clear all auth cookies (both host-only and wildcard domain)
+  const cookieNames = [
+    "ranklocal_token",
+    "ranklocal_status",
+    "altofox_token",
+    "altofox_status",
+    "sb-access-token",
+  ];
+
   for (const name of cookieNames) {
+    // 1. Host-only clear
     response.cookies.set(name, "", {
       path: "/",
       maxAge: 0,
       expires: new Date(0),
     });
+
+    // 2. Wildcard domain clear
+    if (isRankLocal) {
+      response.cookies.set(name, "", {
+        path: "/",
+        domain: ".ranklocal.site",
+        maxAge: 0,
+        expires: new Date(0),
+      });
+    }
   }
 
   return response;

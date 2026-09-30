@@ -10,6 +10,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
 
+  // 1. Direct persisted token in localStorage
   try {
     const persisted = localStorage.getItem("ranklocal_token_persist");
     if (persisted && persisted.trim().length > 10) {
@@ -17,14 +18,64 @@ export function getAuthToken(): string | null {
     }
   } catch {}
 
+  // 2. Supabase storageKey ("ranklocal_team_auth" and "altofox_team_auth")
+  try {
+    for (const key of ["ranklocal_team_auth", "altofox_team_auth"]) {
+      const raw = localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          const token = parsed?.access_token || (Array.isArray(parsed) ? parsed[0] : null);
+          if (token && typeof token === "string" && token.trim().length > 10) {
+            return token.trim();
+          }
+        } catch {}
+      }
+    }
+
+    // Check any dynamic Supabase project key in localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("sb-") && k.endsWith("-auth-token")) {
+        const raw = localStorage.getItem(k);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            const token = parsed?.access_token || (Array.isArray(parsed) ? parsed[0] : null);
+            if (token && typeof token === "string" && token.trim().length > 10) {
+              return token.trim();
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Document cookies (ranklocal_token, altofox_token, sb-access-token, etc.)
   try {
     const cookies = document.cookie.split(";");
     for (const cookie of cookies) {
-      const [key, value] = cookie.trim().split("=");
-      if ((key === "ranklocal_token" || key === "altofox_token") && value) {
-        const decoded = decodeURIComponent(value);
-        if (decoded.trim().length > 10) {
-          return decoded.trim();
+      const [rawKey, ...valParts] = cookie.trim().split("=");
+      const key = rawKey.trim();
+      const value = valParts.join("=");
+      if (
+        (key === "ranklocal_token" ||
+          key === "altofox_token" ||
+          key === "sb-access-token" ||
+          (key.startsWith("sb-") && key.endsWith("-auth-token"))) &&
+        value
+      ) {
+        const decoded = decodeURIComponent(value).trim();
+        if (decoded.startsWith("{") || decoded.startsWith("[")) {
+          try {
+            const parsed = JSON.parse(decoded);
+            const token = parsed?.access_token || (Array.isArray(parsed) ? parsed[0] : null);
+            if (token && typeof token === "string" && token.trim().length > 10) {
+              return token.trim();
+            }
+          } catch {}
+        } else if (decoded.length > 10) {
+          return decoded;
         }
       }
     }

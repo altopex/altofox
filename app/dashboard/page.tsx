@@ -4036,32 +4036,30 @@ export default function DashboardPage() {
   // Protected Dashboard Guard: Only redirect when definitively unauthenticated
   if (!user) {
     if (typeof window !== "undefined") {
-      const hasStoredAuth =
-        Boolean(localStorage.getItem("ranklocal_token_persist")) ||
-        Boolean(localStorage.getItem("ranklocal_team_auth")) ||
-        Boolean(localStorage.getItem("altofox_team_auth"));
-
-      if (hasStoredAuth) {
-        // Session refresh or verification is underway; give it a brief recovery moment
-        return (
-          <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
-              <Sparkles className="w-6 h-6 text-white" />
-            </div>
-            <p className="text-sm font-medium text-slate-400">Restoring your session…</p>
-          </div>
-        );
-      }
       window.location.href = "/login?redirect=/dashboard";
     }
-    return null;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <p className="text-sm font-medium text-slate-400">Redirecting to sign in…</p>
+      </div>
+    );
   }
 
   if (!isApproved) {
     if (typeof window !== "undefined") {
       window.location.href = "/pending";
     }
-    return null;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white font-sans">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center animate-pulse mb-4 shadow-lg shadow-indigo-500/30">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <p className="text-sm font-medium text-slate-400">Redirecting to account status…</p>
+      </div>
+    );
   }
 
   return (
