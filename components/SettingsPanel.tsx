@@ -894,8 +894,8 @@ export function SettingsPanel({
 
     const modelToTest =
       selectedModels[providerId] === "__custom__"
-        ? customModelInputs[providerId]?.trim() || "gpt-4o"
-        : selectedModels[providerId];
+        ? customModelInputs[providerId]?.trim() || PROVIDERS.find((p) => p.id === providerId)?.defaultModel || "gemini-3.8-flash"
+        : selectedModels[providerId] || PROVIDERS.find((p) => p.id === providerId)?.defaultModel;
 
     setTestingProvider(providerId);
     setTestResults((prev) => {
@@ -1954,9 +1954,32 @@ export function SettingsPanel({
                               </div>
                               <select
                                 value={selectedModelVal}
-                                onChange={(e) =>
-                                  setSelectedModels((prev) => ({ ...prev, [provider.id]: e.target.value }))
-                                }
+                                onChange={(e) => {
+                                  const nextModel = e.target.value;
+                                  setSelectedModels((prev) => ({ ...prev, [provider.id]: nextModel }));
+                                  if (nextModel !== "__custom__") {
+                                    localStorage.setItem(`altofox_model_${provider.id}`, nextModel);
+                                    localStorage.setItem(`ranklocal_model_${provider.id}`, nextModel);
+                                    const currentActive = localStorage.getItem("altofox_active_provider") || "gemini";
+                                    if (provider.id === currentActive || provider.id === defaultProvider) {
+                                      localStorage.setItem("altofox_active_model", nextModel);
+                                      localStorage.setItem("ranklocal_active_model", nextModel);
+                                      setDefaultModel(nextModel);
+                                    }
+                                    const key = savedKeys[provider.id] || keyInputs[provider.id];
+                                    if (key) {
+                                      fetch("/api/keys", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({
+                                          provider: provider.id,
+                                          apiKey: key,
+                                          defaultModel: nextModel,
+                                        }),
+                                      }).catch(() => {});
+                                    }
+                                  }
+                                }}
                                 className="input-base text-xs"
                               >
                                 <optgroup label="Recommended Models">
@@ -1992,20 +2015,53 @@ export function SettingsPanel({
 
                               {/* Custom Model Input if Selected */}
                               {isCustomModel && (
-                                <div className="mt-2">
-                                  <input
-                                    type="text"
-                                    value={customModelInputs[provider.id] || ""}
-                                    onChange={(e) =>
-                                      setCustomModelInputs((prev) => ({
-                                        ...prev,
-                                        [provider.id]: e.target.value,
-                                      }))
-                                    }
-                                    placeholder={provider.defaultModel}
-                                    className="input-base text-xs font-mono"
-                                  />
-                                  <span className="text-[10px] text-[#64748B] mt-0.5 block">
+                                <div className="mt-2 space-y-1.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={customModelInputs[provider.id] || ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setCustomModelInputs((prev) => ({
+                                          ...prev,
+                                          [provider.id]: val,
+                                        }));
+                                      }}
+                                      placeholder={provider.defaultModel}
+                                      className="input-base text-xs font-mono flex-1"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const val = (customModelInputs[provider.id] || "").trim();
+                                        if (!val) return;
+                                        localStorage.setItem(`altofox_model_${provider.id}`, val);
+                                        localStorage.setItem(`ranklocal_model_${provider.id}`, val);
+                                        const currentActive = localStorage.getItem("altofox_active_provider") || "gemini";
+                                        if (provider.id === currentActive || provider.id === defaultProvider) {
+                                          localStorage.setItem("altofox_active_model", val);
+                                          localStorage.setItem("ranklocal_active_model", val);
+                                          setDefaultModel(val);
+                                        }
+                                        const key = savedKeys[provider.id] || keyInputs[provider.id];
+                                        if (key) {
+                                          fetch("/api/keys", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                              provider: provider.id,
+                                              apiKey: key,
+                                              defaultModel: val,
+                                            }),
+                                          }).catch(() => {});
+                                        }
+                                      }}
+                                      className="px-2.5 py-1.5 text-xs font-semibold bg-[#4F46E5] text-white rounded-[6px] hover:bg-[#4338CA] transition shrink-0"
+                                    >
+                                      Use
+                                    </button>
+                                  </div>
+                                  <span className="text-[10px] text-[#64748B] block">
                                     Enter any valid model ID supported by {provider.name} (e.g. {provider.defaultModel}).
                                   </span>
                                 </div>

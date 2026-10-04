@@ -207,6 +207,18 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
 
       setTestResult(null);
       setStatusMessage(null);
+
+      // Auto-fetch live models if key is present
+      if (currentStoredKey) {
+        fetch(`/api/keys/models?provider=${selectedProvider}&apiKey=${encodeURIComponent(currentStoredKey)}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.success && Array.isArray(data.models) && data.models.length > 0) {
+              setDiscoveredLiveModels((prev) => ({ ...prev, [selectedProvider]: data.models }));
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, [isOpen, selectedProvider]);
 

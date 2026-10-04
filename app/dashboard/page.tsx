@@ -28,7 +28,7 @@ const LivePreview = nextDynamic(
     ),
   }
 );
-import { ProviderType } from "@/lib/ai/types";
+import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
 import {
   GenerationStageName,
   GenerationFailureStage,
@@ -408,6 +408,7 @@ export default function DashboardPage() {
   // Active Provider & Model
   const [activeProvider, setActiveProvider] = useState<ProviderType>("gemini");
   const [activeModel, setActiveModel] = useState<string>("gemini-3.8-flash");
+  const [availableModelsForActiveProvider, setAvailableModelsForActiveProvider] = useState<string[]>([]);
   const [hasKey, setHasKey] = useState(false);
 
   // Form Fields State
@@ -544,7 +545,9 @@ export default function DashboardPage() {
     if (localKey && localKey.trim()) {
       setActiveProvider(storedProvider);
       setHasKey(true);
-      const storedModel = localStorage.getItem(`altofox_model_${storedProvider}`);
+      const storedModel =
+        localStorage.getItem("altofox_active_model") ||
+        localStorage.getItem(`altofox_model_${storedProvider}`);
       if (storedModel) {
         setActiveModel(normalizeModelForProvider(storedProvider, storedModel));
       }
@@ -560,7 +563,9 @@ export default function DashboardPage() {
         localStorage.setItem("altofox_active_provider", fallback);
         setActiveProvider(fallback);
         setHasKey(true);
-        const m = localStorage.getItem(`altofox_model_${fallback}`);
+        const m =
+          localStorage.getItem("altofox_active_model") ||
+          localStorage.getItem(`altofox_model_${fallback}`);
         if (m) {
           setActiveModel(normalizeModelForProvider(fallback, m));
         }
@@ -586,13 +591,15 @@ export default function DashboardPage() {
             if (activeProf?.presetId) {
               const pType = activeProf.presetId as ProviderType;
               setActiveProvider(pType);
-              if (activeProf.model) {
+              const localExplicitModel = localStorage.getItem("altofox_active_model") || localStorage.getItem(`altofox_model_${pType}`);
+              if (!localExplicitModel && activeProf.model) {
                 setActiveModel(normalizeModelForProvider(pType, activeProf.model));
               }
             } else if (activeServerKey.provider) {
               const pType = activeServerKey.provider as ProviderType;
               setActiveProvider(pType);
-              if (activeServerKey.defaultModel) {
+              const localExplicitModel = localStorage.getItem("altofox_active_model") || localStorage.getItem(`altofox_model_${pType}`);
+              if (!localExplicitModel && activeServerKey.defaultModel) {
                 setActiveModel(normalizeModelForProvider(pType, activeServerKey.defaultModel));
               }
             }
@@ -600,7 +607,6 @@ export default function DashboardPage() {
         }
       })
       .catch(() => {});
-
     // Check Image API Keys
     const pexels = localStorage.getItem("altofox_pexels_key");
     const pixabay = localStorage.getItem("altofox_pixabay_key");
@@ -613,6 +619,22 @@ export default function DashboardPage() {
     if (pixabay) activeSources.push("Pixabay");
     setImageKeySource(activeSources.join(" & ") || "");
   }, []);
+
+  // Fetch live available models for active provider whenever provider or key changes
+  useEffect(() => {
+    if (hasKey && activeProvider) {
+      const localKey = localStorage.getItem(`altofox_key_${activeProvider}`);
+      const keyParam = localKey ? `&apiKey=${encodeURIComponent(localKey)}` : "";
+      fetch(`/api/keys/models?provider=${activeProvider}${keyParam}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.success && Array.isArray(data.models) && data.models.length > 0) {
+            setAvailableModelsForActiveProvider(data.models);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeProvider, hasKey]);
 
   // Apply user preferences (default country, theme, quality review)
   const applyPreferences = useCallback(() => {
@@ -4461,30 +4483,117 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Connected AI Model Notification */}
-                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+                    {/* Connected AI Model Notification & Interactive Model Selector */}
+                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-                          <Sparkles className="w-3.5 h-3.5" />
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                          <Sparkles className="w-4 h-4" />
                         </div>
-                        <span className="text-[#64748B]">
-                          Connected Model:{" "}
-                          {hasKey ? (
-                            <>
-                              <strong className="text-[#0F172A] font-bold">{activeModel}</strong> ({activeProvider})
-                            </>
-                          ) : (
-                            <span className="text-amber-600 font-semibold">No AI model connected</span>
+                        <div>
+                          <div className="text-[#64748B] flex items-center gap-1.5">
+                            <span>Connected Provider:</span>
+                            {hasKey ? (
+                              <span className="inline-flex items-center gap-1 font-bold text-[#0F172A]">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                {activeProvider.toUpperCase()}
+                              </span>
+                            ) : (
+                              <span className="text-amber-600 font-semibold">No AI model connected</span>
+                            )}
+                          </div>
+                          {hasKey && (
+                            <p className="text-[11px] text-[#64748B] mt-0.5">
+                              Generating with: <strong className="text-[#0F172A] font-mono">{activeModel}</strong>
+                            </p>
                           )}
-                        </span>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenSettings("models")}
-                        className="font-bold text-[#4F46E5] hover:underline cursor-pointer"
-                      >
-                        Change Model
-                      </button>
+
+                      {hasKey ? (
+                        <div className="flex items-center gap-2">
+                          {/* Live Model Selector Dropdown */}
+                          <select
+                            value={activeModel}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === "__custom__") {
+                                const customName = window.prompt("Enter any custom model ID supported by " + activeProvider + ":", activeModel);
+                                if (customName && customName.trim()) {
+                                  const normalized = normalizeModelForProvider(activeProvider, customName.trim());
+                                  setActiveModel(normalized);
+                                  localStorage.setItem(`altofox_model_${activeProvider}`, normalized);
+                                  localStorage.setItem(`ranklocal_model_${activeProvider}`, normalized);
+                                  localStorage.setItem("altofox_active_model", normalized);
+                                  localStorage.setItem("ranklocal_active_model", normalized);
+                                  addToast({
+                                    type: "success",
+                                    title: "Model Switched",
+                                    message: `Now using custom model: ${normalized}`,
+                                  });
+                                }
+                                return;
+                              }
+                              const normalized = normalizeModelForProvider(activeProvider, val);
+                              setActiveModel(normalized);
+                              localStorage.setItem(`altofox_model_${activeProvider}`, normalized);
+                              localStorage.setItem(`ranklocal_model_${activeProvider}`, normalized);
+                              localStorage.setItem("altofox_active_model", normalized);
+                              localStorage.setItem("ranklocal_active_model", normalized);
+                              addToast({
+                                type: "success",
+                                title: "Model Switched",
+                                message: `Now using ${normalized} for website generation`,
+                              });
+                            }}
+                            className="bg-white border border-[#CBD5E1] text-[#0F172A] text-xs rounded-[8px] px-2.5 py-1.5 font-medium shadow-xs focus:ring-2 focus:ring-[#4F46E5] focus:border-[#4F46E5] cursor-pointer"
+                          >
+                            <optgroup label="Popular Models">
+                              {(PROVIDER_PRESETS[activeProvider]?.popularModels || []).map((m: any) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.label || m.id}
+                                </option>
+                              ))}
+                            </optgroup>
+                            {availableModelsForActiveProvider.length > 0 && (
+                              <optgroup label={`All Discovered API Models (${availableModelsForActiveProvider.length})`}>
+                                {availableModelsForActiveProvider
+                                  .filter((m) => !(PROVIDER_PRESETS[activeProvider]?.popularModels || []).some((pop: any) => pop.id === m))
+                                  .map((m) => (
+                                    <option key={m} value={m}>
+                                      {m}
+                                    </option>
+                                  ))}
+                              </optgroup>
+                            )}
+                            {activeModel &&
+                              !(PROVIDER_PRESETS[activeProvider]?.popularModels || []).some((pop: any) => pop.id === activeModel) &&
+                              !availableModelsForActiveProvider.includes(activeModel) && (
+                                <optgroup label="Custom Active Model">
+                                  <option value={activeModel}>{activeModel}</option>
+                                </optgroup>
+                              )}
+                            <optgroup label="Custom Option">
+                              <option value="__custom__">+ Enter any custom model name...</option>
+                            </optgroup>
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenSettings("models")}
+                            className="font-semibold text-xs text-[#4F46E5] hover:underline cursor-pointer px-1 py-1 shrink-0"
+                          >
+                            Settings
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenSettings("models")}
+                          className="font-bold text-[#4F46E5] hover:underline cursor-pointer"
+                        >
+                          Connect API Key
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

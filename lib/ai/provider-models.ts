@@ -267,18 +267,19 @@ export async function fetchLiveProviderModels(
           const methods: string[] = m.supportedGenerationMethods || [];
           return name.includes("gemini") && methods.includes("generateContent");
         })
-        .map((m) => String(m.name).replace(/^models\//, ""))
-        // Exclude obsolete preview models that have been deprecated
-        .filter((name) => !name.endsWith("-exp") || name.includes("thinking"));
+        .map((m) => String(m.name).replace(/^models\//, ""));
 
-      // Priority sort: gemini-2.5, gemini-2.0, gemini-1.5
+      // Priority sort: gemini-3.8, gemini-2.5, gemini-2.0, gemini-1.5
       const priorityOrder = [
+        "gemini-3.8-flash",
+        "gemini-3.8-flash-cyber",
+        "gemini-3.8-pro",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro",
         "gemini-2.0-flash",
         "gemini-2.0-flash-lite",
         "gemini-1.5-flash",
         "gemini-1.5-pro",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
       ];
 
       const sorted = [...models].sort((a, b) => {
@@ -291,7 +292,8 @@ export async function fetchLiveProviderModels(
       });
 
       // Ensure recommended models are always present
-      if (!sorted.includes("gemini-2.0-flash")) sorted.unshift("gemini-2.0-flash");
+      if (!sorted.includes("gemini-3.8-flash")) sorted.unshift("gemini-3.8-flash");
+      if (!sorted.includes("gemini-2.0-flash")) sorted.push("gemini-2.0-flash");
       if (!sorted.includes("gemini-1.5-flash")) sorted.push("gemini-1.5-flash");
 
       return Array.from(new Set(sorted));

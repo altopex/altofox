@@ -124,7 +124,7 @@ export class GeminiProvider implements IAIProvider {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: "Respond with the word OK." }] }],
-          generationConfig: { maxOutputTokens: 5 },
+          generationConfig: { maxOutputTokens: 200 },
         }),
       });
 
@@ -155,7 +155,7 @@ export class GeminiProvider implements IAIProvider {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contents: [{ role: "user", parts: [{ text: "Respond with the word OK." }] }],
-              generationConfig: { maxOutputTokens: 5 },
+              generationConfig: { maxOutputTokens: 200 },
             }),
           });
           if (retryRes.ok) {
