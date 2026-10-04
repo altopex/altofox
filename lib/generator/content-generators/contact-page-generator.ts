@@ -7,7 +7,7 @@
  *          and an upfront estimate request form.
  */
 
-import { PageGenerationContext } from "./types";
+import { PageGenerationContext, GenerationGatewayParams, isPermanentAIError } from "./types";
 import { PageContentJSON, SectionJSON } from "../content-schema";
 import { createVariationProfile, VariationProfile } from "./variation-seed";
 import { gatewayRequest, GatewayRequest } from "../../ai/provider-gateway";
@@ -187,9 +187,9 @@ export function generateContactPageDeterministic(context: PageGenerationContext)
  */
 export async function generateContactPageContent(
   context: PageGenerationContext,
-  gatewayParams?: Partial<GatewayRequest>
+  gatewayParams?: GenerationGatewayParams
 ): Promise<PageContentJSON> {
-  if (gatewayParams?.directCredentials?.apiKey) {
+  if (gatewayParams?.directCredentials?.apiKey && !gatewayParams?._state?.disabled) {
     try {
       const prompt = buildContactPagePrompt(context);
       const res = await gatewayRequest({
@@ -203,8 +203,14 @@ export async function generateContactPageContent(
       if (parsed && parsed.slug && parsed.seo && Array.isArray(parsed.sections)) {
         return parsed as PageContentJSON;
       }
-    } catch (err) {
-      console.warn("[ContactPageGenerator] AI generation failed, falling back to deterministic seed engine:", err);
+    } catch (err: any) {
+      console.warn("[ContactPageGenerator] AI generation failed, falling back to deterministic seed engine:", err?.message || err);
+      if (isPermanentAIError(err)) {
+        if (gatewayParams) {
+          if (!gatewayParams._state) gatewayParams._state = {};
+          gatewayParams._state.disabled = true;
+        }
+      }
     }
   }
 

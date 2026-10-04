@@ -95,6 +95,7 @@ interface LivePreviewProps {
   onUpdateProject?: (updatedProject: ProjectData) => void;
   isSaved?: boolean;
   onSaveForFuture?: () => void;
+  onDiscard?: () => void;
 }
 
 export function LivePreview({
@@ -109,6 +110,7 @@ export function LivePreview({
   onUpdateProject,
   isSaved,
   onSaveForFuture,
+  onDiscard,
 }: LivePreviewProps) {
   // Show mobile preview by default next to desktop preview ("split" mode)
   const [viewMode, setViewMode] = useState<"split" | "desktop" | "mobile" | "tablet">("split");
@@ -821,6 +823,16 @@ export function LivePreview({
             >
               <FolderKanban className="w-3.5 h-3.5" />
               <span>Website Manager</span>
+            </button>
+          )}
+          {onDiscard && (
+            <button
+              type="button"
+              onClick={onDiscard}
+              className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-[10px] border border-rose-200 bg-rose-50 hover:bg-rose-100 text-xs font-semibold text-rose-700 transition"
+              title="Discard temporary generated website (saves nothing to database)"
+            >
+              <span>Discard</span>
             </button>
           )}
           <button

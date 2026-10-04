@@ -857,8 +857,8 @@ export async function auditAndDifferentiateSitePages(
         },
       };
 
-      // Regenerate page
-      const regeneratedPage = await generatePageContent(newContext, gatewayParams);
+      // Regenerate page deterministically with shifted strategy to guarantee differentiation instantly
+      const regeneratedPage = await generatePageContent(newContext);
       regeneratedPage.slug = flaggedSlug;
       activePages[pageIndex] = regeneratedPage;
 

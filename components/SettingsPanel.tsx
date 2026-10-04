@@ -54,6 +54,27 @@ interface ProviderConfig {
 
 const PROVIDERS: ProviderConfig[] = [
   {
+    id: "gemini",
+    name: "Google Gemini",
+    badgeName: "Gemini",
+    icon: (
+      <div className="w-8 h-8 rounded-[8px] bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xs">
+        <Sparkles className="w-4 h-4" />
+      </div>
+    ),
+    defaultModel: "gemini-2.0-flash",
+    popularModels: [
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Recommended - Ultra Fast)" },
+      { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash-Lite" },
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Fast & Reliable)" },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (High Reasoning)" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    ],
+    placeholderKey: "AIzaSy...",
+    docsUrl: "https://aistudio.google.com/app/apikey",
+  },
+  {
     id: "openai",
     name: "OpenAI (ChatGPT)",
     badgeName: "OpenAI",
@@ -66,30 +87,68 @@ const PROVIDERS: ProviderConfig[] = [
     popularModels: [
       { id: "gpt-4o", label: "GPT-4o (Recommended - Best Quality)" },
       { id: "gpt-4o-mini", label: "GPT-4o Mini (Affordable & Fast)" },
-      { id: "gpt-4-turbo", label: "GPT-4 Turbo" },
+      { id: "gpt-4.5-preview", label: "GPT-4.5 Preview" },
       { id: "o3-mini", label: "o3-mini (High Reasoning)" },
+      { id: "o1", label: "o1 (Deep Reasoning)" },
+      { id: "gpt-4-turbo", label: "GPT-4 Turbo" },
     ],
     placeholderKey: "sk-proj-...",
     docsUrl: "https://platform.openai.com/api-keys",
   },
   {
-    id: "gemini",
-    name: "Google Gemini",
-    badgeName: "Gemini",
+    id: "anthropic",
+    name: "Anthropic (Claude)",
+    badgeName: "Claude",
     icon: (
-      <div className="w-8 h-8 rounded-[8px] bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-xs">
-        <Sparkles className="w-4 h-4" />
+      <div className="w-8 h-8 rounded-[8px] bg-amber-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        CL
       </div>
     ),
-    defaultModel: "gemini-1.5-pro",
+    defaultModel: "claude-3-5-sonnet-20241022",
     popularModels: [
-      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (Recommended)" },
-      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Ultra Fast)" },
-      { id: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
-      { id: "gemini-2.0-pro-exp", label: "Gemini 2.0 Pro" },
+      { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet (Hybrid Reasoning)" },
+      { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (Recommended)" },
+      { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
+      { id: "claude-3-opus-20240229", label: "Claude 3 Opus" },
     ],
-    placeholderKey: "AIzaSy...",
-    docsUrl: "https://aistudio.google.com/app/apikey",
+    placeholderKey: "sk-ant-...",
+    docsUrl: "https://console.anthropic.com/settings/keys",
+  },
+  {
+    id: "deepseek",
+    name: "DeepSeek",
+    badgeName: "DeepSeek",
+    icon: (
+      <div className="w-8 h-8 rounded-[8px] bg-blue-700 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        DS
+      </div>
+    ),
+    defaultModel: "deepseek-chat",
+    popularModels: [
+      { id: "deepseek-chat", label: "DeepSeek-V3" },
+      { id: "deepseek-reasoner", label: "DeepSeek-R1" },
+    ],
+    placeholderKey: "sk-...",
+    docsUrl: "https://platform.deepseek.com/api_keys",
+  },
+  {
+    id: "groq",
+    name: "Groq",
+    badgeName: "Groq",
+    icon: (
+      <div className="w-8 h-8 rounded-[8px] bg-orange-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+        <Zap className="w-4 h-4" />
+      </div>
+    ),
+    defaultModel: "llama-3.3-70b-versatile",
+    popularModels: [
+      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B Versatile" },
+      { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B Instant" },
+      { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek-R1 70B (Groq)" },
+      { id: "mixtral-8x7b-32768", label: "Mixtral 8x7B" },
+    ],
+    placeholderKey: "gsk_...",
+    docsUrl: "https://console.groq.com/keys",
   },
   {
     id: "openrouter",
@@ -103,9 +162,11 @@ const PROVIDERS: ProviderConfig[] = [
     defaultModel: "anthropic/claude-3.5-sonnet",
     popularModels: [
       { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Top Quality)" },
-      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B (Meta)" },
+      { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
       { id: "deepseek/deepseek-chat", label: "DeepSeek-V3" },
+      { id: "deepseek/deepseek-r1", label: "DeepSeek-R1" },
       { id: "openai/gpt-4o", label: "GPT-4o (OpenAI via OpenRouter)" },
+      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B (Meta)" },
     ],
     placeholderKey: "sk-or-v1-...",
     docsUrl: "https://openrouter.ai/keys",
@@ -172,7 +233,7 @@ export function SettingsPanel({
 
   // Default AI Provider & Model
   const [defaultProvider, setDefaultProvider] = useState<ProviderType>("gemini");
-  const [defaultModel, setDefaultModel] = useState<string>("gemini-1.5-pro");
+  const [defaultModel, setDefaultModel] = useState<string>("gemini-2.0-flash");
 
   // Provider states
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
@@ -181,6 +242,8 @@ export function SettingsPanel({
   const [isEditingKey, setIsEditingKey] = useState<Record<string, boolean>>({});
   const [selectedModels, setSelectedModels] = useState<Record<string, string>>({});
   const [customModelInputs, setCustomModelInputs] = useState<Record<string, string>>({});
+  const [liveProviderModels, setLiveProviderModels] = useState<Record<string, string[]>>({});
+  const [isFetchingModels, setIsFetchingModels] = useState<Record<string, boolean>>({});
   const [providerStatuses, setProviderStatuses] = useState<
     Record<string, "connected" | "not_connected" | "error">
   >({});
@@ -455,6 +518,7 @@ export function SettingsPanel({
         if (data.success && Array.isArray(data.profiles)) {
           const latencies: Record<string, number> = {};
           const caps: Record<string, any> = {};
+          const serverLiveModels: Record<string, string[]> = {};
           for (const prof of data.profiles) {
             const key =
               prof.presetId ||
@@ -462,14 +526,24 @@ export function SettingsPanel({
                 ? "gemini"
                 : prof.id.includes("openai")
                 ? "openai"
+                : prof.id.includes("anthropic")
+                ? "anthropic"
+                : prof.id.includes("deepseek")
+                ? "deepseek"
+                : prof.id.includes("groq")
+                ? "groq"
                 : prof.id.includes("openrouter")
                 ? "openrouter"
                 : "custom");
             if (prof.latencyMs) latencies[key] = prof.latencyMs;
             if (prof.capabilities) caps[key] = prof.capabilities;
+            if (prof.availableModels && Array.isArray(prof.availableModels) && prof.availableModels.length > 0) {
+              serverLiveModels[key] = prof.availableModels;
+            }
           }
           setProviderLatencies((prev) => ({ ...prev, ...latencies }));
           setProviderCapabilities((prev) => ({ ...prev, ...caps }));
+          setLiveProviderModels((prev) => ({ ...prev, ...serverLiveModels }));
           if (data.settings?.smartFallbackEnabled !== undefined) {
             setSmartFallback(data.settings.smartFallbackEnabled);
           }
@@ -849,6 +923,9 @@ export function SettingsPanel({
         if (data.capabilities) {
           setProviderCapabilities((prev) => ({ ...prev, [providerId]: data.capabilities }));
         }
+        if (data.availableModels && Array.isArray(data.availableModels) && data.availableModels.length > 0) {
+          setLiveProviderModels((prev) => ({ ...prev, [providerId]: data.availableModels }));
+        }
       } else {
         setTestResults((prev) => ({
           ...prev,
@@ -873,8 +950,26 @@ export function SettingsPanel({
     }
   };
 
+  // Fetch Live Models from Provider API
+  const handleFetchLiveModels = async (providerId: ProviderType) => {
+    const rawKey = keyInputs[providerId]?.trim() || savedKeys[providerId];
+    if (!rawKey) return;
+    setIsFetchingModels((prev) => ({ ...prev, [providerId]: true }));
+    try {
+      const res = await fetch(`/api/keys/models?provider=${providerId}&apiKey=${encodeURIComponent(rawKey)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.models) && data.models.length > 0) {
+        setLiveProviderModels((prev) => ({ ...prev, [providerId]: data.models }));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch live models for", providerId, e);
+    } finally {
+      setIsFetchingModels((prev) => ({ ...prev, [providerId]: false }));
+    }
+  };
+
   // Save Provider Key & Model
-  const handleSaveProvider = (providerId: ProviderType) => {
+  const handleSaveProvider = async (providerId: ProviderType) => {
     const rawKey = keyInputs[providerId]?.trim() || savedKeys[providerId];
     if (!rawKey) {
       setTestResults((prev) => ({
@@ -891,18 +986,38 @@ export function SettingsPanel({
 
     // Save to localStorage
     localStorage.setItem(`altofox_key_${providerId}`, rawKey);
+    localStorage.setItem(`ranklocal_key_${providerId}`, rawKey);
     localStorage.setItem(`altofox_model_${providerId}`, effectiveModel);
+    localStorage.setItem(`ranklocal_model_${providerId}`, effectiveModel);
+
+    // Sync to backend DB so server generation has credentials and chosen model
+    try {
+      await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: providerId,
+          apiKey: rawKey,
+          defaultModel: effectiveModel,
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to sync key to server DB:", e);
+    }
 
     // If no default provider was set or no key was connected, make this default
     const currentActive = localStorage.getItem("altofox_active_provider");
     const currentHasKey = currentActive && localStorage.getItem(`altofox_key_${currentActive}`);
     if (!currentHasKey) {
       localStorage.setItem("altofox_active_provider", providerId);
+      localStorage.setItem("ranklocal_active_provider", providerId);
       localStorage.setItem("altofox_active_model", effectiveModel);
+      localStorage.setItem("ranklocal_active_model", effectiveModel);
       setDefaultProvider(providerId);
       setDefaultModel(effectiveModel);
     } else if (currentActive === providerId) {
       localStorage.setItem("altofox_active_model", effectiveModel);
+      localStorage.setItem("ranklocal_active_model", effectiveModel);
       setDefaultModel(effectiveModel);
     }
 
@@ -911,7 +1026,7 @@ export function SettingsPanel({
     setProviderStatuses((prev) => ({ ...prev, [providerId]: "connected" }));
     setTestResults((prev) => ({
       ...prev,
-      [providerId]: { success: true, message: "Saved to browser successfully!" },
+      [providerId]: { success: true, message: "Saved and synchronized successfully!" },
     }));
 
     onSettingsUpdated();
@@ -1804,9 +1919,31 @@ export function SettingsPanel({
 
                             {/* Model Field */}
                             <div>
-                              <label className="block text-xs font-semibold text-[#0F172A] mb-1">
-                                Model
-                              </label>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="block text-xs font-semibold text-[#0F172A]">
+                                  Model
+                                </label>
+                                {isConnected && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleFetchLiveModels(provider.id)}
+                                    disabled={isFetchingModels[provider.id]}
+                                    className="text-[11px] text-[#4F46E5] hover:underline inline-flex items-center space-x-1 disabled:opacity-50"
+                                  >
+                                    {isFetchingModels[provider.id] ? (
+                                      <>
+                                        <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                        <span>Fetching live models...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Sparkles className="w-2.5 h-2.5" />
+                                        <span>Discover live models</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                              </div>
                               <select
                                 value={selectedModelVal}
                                 onChange={(e) =>
@@ -1814,12 +1951,35 @@ export function SettingsPanel({
                                 }
                                 className="input-base text-xs"
                               >
-                                {provider.popularModels.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.label}
-                                  </option>
-                                ))}
-                                <option value="__custom__">Custom model name...</option>
+                                <optgroup label="Recommended Models">
+                                  {provider.popularModels.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.label}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                                {liveProviderModels[provider.id] && liveProviderModels[provider.id].length > 0 && (
+                                  <optgroup label={`Discovered Live API Models (${liveProviderModels[provider.id].length})`}>
+                                    {liveProviderModels[provider.id]
+                                      .filter((m) => !provider.popularModels.some((pop) => pop.id === m))
+                                      .map((m) => (
+                                        <option key={m} value={m}>
+                                          {m}
+                                        </option>
+                                      ))}
+                                  </optgroup>
+                                )}
+                                {selectedModelVal &&
+                                  selectedModelVal !== "__custom__" &&
+                                  !provider.popularModels.some((pop) => pop.id === selectedModelVal) &&
+                                  (!liveProviderModels[provider.id] || !liveProviderModels[provider.id].includes(selectedModelVal)) && (
+                                    <optgroup label="Active Custom Model">
+                                      <option value={selectedModelVal}>{selectedModelVal}</option>
+                                    </optgroup>
+                                  )}
+                                <optgroup label="Custom">
+                                  <option value="__custom__">Custom model name...</option>
+                                </optgroup>
                               </select>
 
                               {/* Custom Model Input if Selected */}
@@ -1834,11 +1994,11 @@ export function SettingsPanel({
                                         [provider.id]: e.target.value,
                                       }))
                                     }
-                                    placeholder="e.g. mistralai/mistral-large-2411"
+                                    placeholder={provider.defaultModel}
                                     className="input-base text-xs font-mono"
                                   />
                                   <span className="text-[10px] text-[#64748B] mt-0.5 block">
-                                    Enter the exact model ID supported by {provider.name}.
+                                    Enter any valid model ID supported by {provider.name} (e.g. {provider.defaultModel}).
                                   </span>
                                 </div>
                               )}

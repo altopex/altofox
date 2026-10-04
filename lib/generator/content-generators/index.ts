@@ -26,48 +26,95 @@ export * from "./faq-page-generator";
 export * from "./blog-post-generator";
 export * from "../../quality/content-similarity-checker";
 
-import { PageGenerationContext, PageArchetype, VerifiedBusinessFacts } from "./types";
+import {
+  PageGenerationContext,
+  PageArchetype,
+  VerifiedBusinessFacts,
+  GenerationGatewayParams,
+  isPermanentAIError,
+} from "./types";
 import { PageContentJSON, SiteContentJSON, SiteNavJSON } from "../content-schema";
-import { generateHomepageContent } from "./homepage-generator";
-import { generateServicePageContent } from "./service-page-generator";
-import { generateLocationPageContent } from "./location-page-generator";
-import { generateServiceLocationContent } from "./service-location-generator";
-import { generateAboutPageContent } from "./about-page-generator";
-import { generateContactPageContent } from "./contact-page-generator";
-import { generateFaqPageContent } from "./faq-page-generator";
-import { generateBlogPostContent } from "./blog-post-generator";
+import { generateHomepageContent, generateHomepageDeterministic } from "./homepage-generator";
+import { generateServicePageContent, generateServicePageDeterministic } from "./service-page-generator";
+import { generateLocationPageContent, generateLocationPageDeterministic } from "./location-page-generator";
+import { generateServiceLocationContent, generateServiceLocationDeterministic } from "./service-location-generator";
+import { generateAboutPageContent, generateAboutPageDeterministic } from "./about-page-generator";
+import { generateContactPageContent, generateContactPageDeterministic } from "./contact-page-generator";
+import { generateFaqPageContent, generateFaqPageDeterministic } from "./faq-page-generator";
+import { generateBlogPostContent, generateBlogPostDeterministic } from "./blog-post-generator";
 import { SiteBlueprint } from "../../blueprint/site-blueprint";
 import { GatewayRequest } from "../../ai/provider-gateway";
 import { auditAndDifferentiateSitePages } from "../../quality/content-similarity-checker";
 
 /**
+ * Generates page content strictly from the deterministic archetype generator.
+ */
+export function generatePageContentDeterministic(context: PageGenerationContext): PageContentJSON {
+  switch (context.pageType) {
+    case "home":
+      return generateHomepageDeterministic(context);
+    case "service":
+      return generateServicePageDeterministic(context);
+    case "location":
+      return generateLocationPageDeterministic(context);
+    case "service_location":
+      return generateServiceLocationDeterministic(context);
+    case "about":
+      return generateAboutPageDeterministic(context);
+    case "contact":
+      return generateContactPageDeterministic(context);
+    case "faq":
+      return generateFaqPageDeterministic(context);
+    case "blog":
+      return generateBlogPostDeterministic(context);
+    default:
+      return generateServicePageDeterministic(context);
+  }
+}
+
+/**
  * Dispatches page generation to the specific archetype generator.
  * NEVER routes to a single universal prompt.
+ * Fails fast to deterministic variation if provider is unconfigured, exhausted, or down.
  */
 export async function generatePageContent(
   context: PageGenerationContext,
-  gatewayParams?: Partial<GatewayRequest>
+  gatewayParams?: GenerationGatewayParams
 ): Promise<PageContentJSON> {
-  switch (context.pageType) {
-    case "home":
-      return generateHomepageContent(context, gatewayParams);
-    case "service":
-      return generateServicePageContent(context, gatewayParams);
-    case "location":
-      return generateLocationPageContent(context, gatewayParams);
-    case "service_location":
-      return generateServiceLocationContent(context, gatewayParams);
-    case "about":
-      return generateAboutPageContent(context, gatewayParams);
-    case "contact":
-      return generateContactPageContent(context, gatewayParams);
-    case "faq":
-      return generateFaqPageContent(context, gatewayParams);
-    case "blog":
-      return generateBlogPostContent(context, gatewayParams);
-    default:
-      console.warn(`[ContentGenerator] Unknown archetype "${context.pageType}", defaulting to service page.`);
-      return generateServicePageContent(context, gatewayParams);
+  if (!gatewayParams?.directCredentials?.apiKey || gatewayParams?._state?.disabled) {
+    return generatePageContentDeterministic(context);
+  }
+
+  try {
+    switch (context.pageType) {
+      case "home":
+        return await generateHomepageContent(context, gatewayParams);
+      case "service":
+        return await generateServicePageContent(context, gatewayParams);
+      case "location":
+        return await generateLocationPageContent(context, gatewayParams);
+      case "service_location":
+        return await generateServiceLocationContent(context, gatewayParams);
+      case "about":
+        return await generateAboutPageContent(context, gatewayParams);
+      case "contact":
+        return await generateContactPageContent(context, gatewayParams);
+      case "faq":
+        return await generateFaqPageContent(context, gatewayParams);
+      case "blog":
+        return await generateBlogPostContent(context, gatewayParams);
+      default:
+        return await generateServicePageContent(context, gatewayParams);
+    }
+  } catch (err: any) {
+    console.warn(`[ContentGenerator] Page "${context.pageType}" (${context.primaryKeyword}) AI generation failed, falling back to deterministic:`, err?.message || err);
+    if (isPermanentAIError(err)) {
+      if (gatewayParams) {
+        if (!gatewayParams._state) gatewayParams._state = {};
+        gatewayParams._state.disabled = true;
+      }
+    }
+    return generatePageContentDeterministic(context);
   }
 }
 
@@ -128,6 +175,11 @@ export async function generateSiteContentFromBlueprint(
       ? "faq"
       : "hub") as any,
   }));
+
+  // Shared gateway state to allow instant fail-fast across concurrent batches if provider is exhausted
+  const sharedGatewayState: GenerationGatewayParams | undefined = gatewayParams?.directCredentials?.apiKey
+    ? { ...gatewayParams, _state: { disabled: false } }
+    : undefined;
 
   // Concurrently generate pages in batches of 3 to balance speed and provider rate limits
   const BATCH_SIZE = 3;
@@ -195,7 +247,7 @@ export async function generateSiteContentFromBlueprint(
         };
 
         contexts.set(page.slug, context);
-        const generatedPage = await generatePageContent(context, gatewayParams);
+        const generatedPage = await generatePageContent(context, sharedGatewayState);
         // Ensure slug matches blueprint path
         generatedPage.slug = page.slug;
         return generatedPage;
@@ -212,8 +264,7 @@ export async function generateSiteContentFromBlueprint(
       similarityThreshold: 0.60,
       maxRetries: 2,
       brandTerms: [verifiedFacts.businessName, verifiedFacts.phone, verifiedFacts.city],
-    },
-    gatewayParams
+    }
   );
 
   return {

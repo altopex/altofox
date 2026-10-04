@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
           latencyMs: result.latencyMs,
           capabilities: result.capabilities,
           model: result.model,
+          availableModels: result.availableModels,
           providerId: result.providerId,
           providerName: result.providerName,
         });
@@ -96,6 +97,7 @@ export async function POST(req: NextRequest) {
       latencyMs: result.latencyMs,
       capabilities: result.capabilities,
       model: result.model,
+      availableModels: result.availableModels,
       providerId: result.providerId,
       providerName: result.providerName,
     });

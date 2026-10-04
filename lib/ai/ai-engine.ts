@@ -26,6 +26,7 @@ import {
   normalizeBaseUrl,
 } from "./provider-manager";
 import { BRAND } from "@/config/brand";
+import { normalizeModelForProvider, fetchLiveProviderModels } from "./provider-models";
 
 /**
  * Extracts assistant message content from various OpenAI-compatible and proxy formats.
@@ -122,6 +123,7 @@ export interface CapabilityTestResult {
     structuredJson: boolean;
     systemInstructions: boolean;
   };
+  availableModels?: string[];
   message: string;
   error?: string;
 }
@@ -134,13 +136,22 @@ export function isTemporaryFailure(err: any): boolean {
   const msg = (err.message || String(err)).toLowerCase();
   const status = err.status || err.statusCode;
 
-  // Permanent configuration errors: NEVER trigger blind fallback
+  // Permanent configuration & billing errors: NEVER trigger blind retry or fallback loops
   if (
     status === 401 ||
+    status === 402 ||
     status === 403 ||
     msg.includes("401") ||
+    msg.includes("402") ||
     msg.includes("unauthorized") ||
     msg.includes("invalid api key") ||
+    msg.includes("quota exceeded") ||
+    msg.includes("insufficient_quota") ||
+    msg.includes("credit_balance_exhausted") ||
+    msg.includes("no credits remaining") ||
+    msg.includes("insufficient credits") ||
+    msg.includes("billing") ||
+    msg.includes("credit balance") ||
     msg.includes("model not found") ||
     msg.includes("unknown model")
   ) {
@@ -154,7 +165,6 @@ export function isTemporaryFailure(err: any): boolean {
     msg.includes("timeout") ||
     msg.includes("timed out") ||
     msg.includes("rate limit") ||
-    msg.includes("quota") ||
     msg.includes("429") ||
     msg.includes("500") ||
     msg.includes("502") ||
@@ -197,8 +207,8 @@ async function callProviderProfile(
 
   // 1. Google Gemini Provider
   if (profile.apiType === "gemini") {
-    const rawModel = targetModel || "gemini-1.5-pro";
-    const cleanedModel = rawModel.replace(/^models\//, "");
+    const rawModel = targetModel || "gemini-2.0-flash";
+    const cleanedModel = normalizeModelForProvider("gemini", rawModel);
     const base = normalizeBaseUrl(profile.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
     const url = `${base}/models/${cleanedModel}:generateContent`;
 
@@ -216,7 +226,7 @@ async function callProviderProfile(
       };
     }
 
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -233,7 +243,37 @@ async function callProviderProfile(
         const parsed = JSON.parse(errText);
         if (parsed.error?.message) errorMsg = parsed.error.message;
       } catch {}
-      throw new Error(errorMsg);
+
+      // If requested model was deprecated or not supported in v1beta, auto-retry with gemini-2.0-flash or gemini-1.5-flash
+      if (
+        res.status === 404 ||
+        errorMsg.includes("not found for API version") ||
+        errorMsg.includes("not supported for generateContent")
+      ) {
+        const fallbackTarget = cleanedModel !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
+        console.warn(`[Gemini Provider] Model "${cleanedModel}" returned 404/unsupported in v1beta. Auto-retrying with active GA model "${fallbackTarget}"...`);
+        const fallbackUrl = `${base}/models/${fallbackTarget}:generateContent`;
+        res = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": apiKey,
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+
+        if (!res.ok) {
+          const fbErrText = await res.text();
+          try {
+            const parsed = JSON.parse(fbErrText);
+            if (parsed.error?.message) errorMsg = parsed.error.message;
+          } catch {}
+          throw new Error(errorMsg);
+        }
+      } else {
+        throw new Error(errorMsg);
+      }
     }
 
     const data = await res.json();
@@ -517,7 +557,17 @@ export async function executeAIRequest(request: NormalizedAIRequest): Promise<No
   if (settings.smartFallbackEnabled) {
     const fallbackIds = settings.fallbackProviderIds || [];
     const availableFallbacks = fallbackIds
-      .map((id) => profiles.find((p) => p.id === id && p.id !== targetProfile!.id && p.apiKey && p.enabled))
+      .map((id) =>
+        profiles.find(
+          (p) =>
+            p.id === id &&
+            p.id !== targetProfile!.id &&
+            p.apiKey &&
+            p.enabled &&
+            p.apiKey !== targetProfile!.apiKey &&
+            p.model !== "default"
+        )
+      )
       .filter(Boolean) as SavedProviderProfile[];
 
     for (const fallbackProfile of availableFallbacks) {
@@ -619,6 +669,27 @@ export async function testProviderCapabilities(
       systemInstructions: true,
     };
 
+    // Query live available models from provider API
+    const rawType = String((profileOrParams as any).presetId || profileOrParams.apiType || testProfile.name || "").toLowerCase();
+    const resolvedProviderType =
+      rawType.includes("gemini")
+        ? "gemini"
+        : rawType.includes("openrouter")
+        ? "openrouter"
+        : rawType.includes("anthropic") || rawType.includes("claude")
+        ? "anthropic"
+        : rawType.includes("deepseek")
+        ? "deepseek"
+        : rawType.includes("groq")
+        ? "groq"
+        : "openai";
+
+    const liveModels = await fetchLiveProviderModels(
+      resolvedProviderType,
+      testProfile.apiKey,
+      testProfile.baseUrl
+    ).catch(() => []);
+
     // If profile has an ID, update its record
     if (profileOrParams.id) {
       await saveProviderProfile({
@@ -626,6 +697,7 @@ export async function testProviderCapabilities(
         id: profileOrParams.id,
         name,
         model: testProfile.model,
+        availableModels: liveModels.length > 0 ? liveModels : undefined,
         status: "connected",
         lastTestedAt: Date.now(),
         lastSuccessAt: Date.now(),
@@ -639,6 +711,7 @@ export async function testProviderCapabilities(
       providerId: testProfile.id,
       providerName: name,
       model: testProfile.model,
+      availableModels: liveModels.length > 0 ? liveModels : undefined,
       latencyMs,
       capabilities: detectedCapabilities,
       message: structuredJsonDetected

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
+import { normalizeModelForProvider } from "@/lib/ai/provider-models";
 import { getProviderProfile, listProviderProfiles } from "@/lib/ai/provider-manager";
 import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
 import {
@@ -361,7 +362,10 @@ export async function executeGenerationPipeline(
   let generationMethod = "ai";
   let qualityReviewApplied = false;
   const providerType = provider as ProviderType;
-  let targetModel = model || "gemini-1.5-pro";
+  let targetModel = normalizeModelForProvider(
+    providerType || "gemini",
+    model || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-2.0-flash"
+  );
 
   const verifiedFacts = {
     businessName: websiteData.businessName,
@@ -491,7 +495,11 @@ export async function executeGenerationPipeline(
       };
     }
 
-    targetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-1.5-pro";
+    const rawTargetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-2.0-flash";
+    targetModel = normalizeModelForProvider(
+      ((resolvedProvider || providerType) as ProviderType) || "gemini",
+      rawTargetModel
+    );
     if (assembleOptions.providerCredentials) {
       assembleOptions.providerCredentials.model = targetModel;
     }
@@ -507,7 +515,7 @@ export async function executeGenerationPipeline(
       },
       model: targetModel,
       maxTokens: 4000,
-      timeoutMs: 30000,
+      timeoutMs: 18000,
     };
 
     try {

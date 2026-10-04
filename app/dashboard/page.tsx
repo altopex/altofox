@@ -168,6 +168,7 @@ import {
 import { ensureProjectVersions } from "@/lib/storage/project-versions";
 import { AppShell, NavTab } from "@/components/navigation/AppShell";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { normalizeModelForProvider } from "@/lib/ai/provider-models";
 import { GenerationDecisionModal } from "@/components/GenerationDecisionModal";
 
 const LoginCard = nextDynamic(
@@ -406,7 +407,7 @@ export default function DashboardPage() {
 
   // Active Provider & Model
   const [activeProvider, setActiveProvider] = useState<ProviderType>("gemini");
-  const [activeModel, setActiveModel] = useState<string>("gemini-1.5-pro");
+  const [activeModel, setActiveModel] = useState<string>("gemini-2.0-flash");
   const [hasKey, setHasKey] = useState(false);
 
   // Form Fields State
@@ -544,7 +545,9 @@ export default function DashboardPage() {
       setActiveProvider(storedProvider);
       setHasKey(true);
       const storedModel = localStorage.getItem(`altofox_model_${storedProvider}`);
-      if (storedModel) setActiveModel(storedModel);
+      if (storedModel) {
+        setActiveModel(normalizeModelForProvider(storedProvider, storedModel));
+      }
     } else {
     // Check if any other provider has a saved key in local storage
       const allProviders: ProviderType[] = ["openai", "gemini", "deepseek", "anthropic", "groq", "openrouter", "custom"];
@@ -558,7 +561,9 @@ export default function DashboardPage() {
         setActiveProvider(fallback);
         setHasKey(true);
         const m = localStorage.getItem(`altofox_model_${fallback}`);
-        if (m) setActiveModel(m);
+        if (m) {
+          setActiveModel(normalizeModelForProvider(fallback, m));
+        }
       } else {
         setActiveProvider(storedProvider);
         setHasKey(false);
@@ -579,11 +584,17 @@ export default function DashboardPage() {
             const activeId = data.settings?.activeProviderId;
             const activeProf = serverProfiles.find((p: any) => p.id === activeId && p.hasKey);
             if (activeProf?.presetId) {
-              setActiveProvider(activeProf.presetId as ProviderType);
-              if (activeProf.model) setActiveModel(activeProf.model);
+              const pType = activeProf.presetId as ProviderType;
+              setActiveProvider(pType);
+              if (activeProf.model) {
+                setActiveModel(normalizeModelForProvider(pType, activeProf.model));
+              }
             } else if (activeServerKey.provider) {
-              setActiveProvider(activeServerKey.provider as ProviderType);
-              if (activeServerKey.defaultModel) setActiveModel(activeServerKey.defaultModel);
+              const pType = activeServerKey.provider as ProviderType;
+              setActiveProvider(pType);
+              if (activeServerKey.defaultModel) {
+                setActiveModel(normalizeModelForProvider(pType, activeServerKey.defaultModel));
+              }
             }
           }
         }
@@ -1645,6 +1656,33 @@ export default function DashboardPage() {
     }
   }, [currentProject, addToast]);
 
+  // Discard generated website entirely without saving any data to DB
+  const handleDiscardWebsite = useCallback(async () => {
+    const projId = currentProject?.projectId || pendingGeneratedSite?.data?.projectId;
+    if (projId) {
+      try {
+        await fetch(`/api/projects/${projId}`, { method: "DELETE" });
+      } catch (err) {
+        console.warn("[Dashboard] Error deleting project during discard:", err);
+      }
+      try {
+        deleteProjectFromDB(projId);
+      } catch {}
+    }
+
+    setCurrentProject(null);
+    setPendingGeneratedSite(null);
+    setIsCurrentProjectSaved(false);
+    setIsDecisionModalOpen(false);
+    setCurrentStep(1);
+
+    addToast({
+      type: "info",
+      title: "Website Discarded",
+      message: "Generated website discarded. No website data was saved to your database.",
+    });
+  }, [currentProject, pendingGeneratedSite, addToast]);
+
   // Cancel in-flight generation
   const handleCancelGeneration = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1924,12 +1962,6 @@ export default function DashboardPage() {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    const watchdogTimer = setTimeout(() => {
-      if (!abortController.signal.aborted) {
-        abortController.abort(new Error("Generation client budget (160s) exceeded."));
-      }
-    }, 160000);
-
     try {
       setGenerationStage("RESEARCHING");
       setGenerationPercent(STAGE_CONFIG.RESEARCHING.defaultPercent);
@@ -2029,26 +2061,25 @@ export default function DashboardPage() {
         setGenerationStage("FAILED_RENDER");
       }
     } catch (err: any) {
-      const isTimeout = abortController.signal.aborted || err?.name === "AbortError";
-      const errMsg = isTimeout
-        ? "Generation took longer than expected (timed out after 160 seconds). You can retry or switch to curated templates."
+      const isAborted = abortController.signal.aborted || err?.name === "AbortError";
+      const errMsg = isAborted
+        ? "Generation was cancelled. Your entered business and targeting data are safely preserved."
         : (err instanceof Error ? err.message : "Network error generating website. Please check your internet connection.");
 
-      addGenLog(isTimeout ? "Generation timed out after 160s. Targeting snapshot preserved for Retry." : `Pipeline error: ${errMsg}`, "error");
+      addGenLog(isAborted ? "Generation stopped by user. Targeting snapshot preserved." : `Pipeline error: ${errMsg}`, isAborted ? "info" : "error");
 
-      setGenerationStage("FAILED_PROVIDER");
-      setGenerationError({
+      setGenerationStage(isAborted ? "IDLE" : "FAILED_PROVIDER");
+      setGenerationError(isAborted ? null : {
         message: errMsg,
         canFallback: true,
         failedStage: "FAILED_PROVIDER",
       });
       addToast({
-        type: "error",
-        title: isTimeout ? "Generation Timeout" : "Connection Error",
+        type: isAborted ? "info" : "error",
+        title: isAborted ? "Generation Stopped" : "Generation Error",
         message: errMsg,
       });
     } finally {
-      clearTimeout(watchdogTimer);
       if (generationTimerRef.current) {
         clearInterval(generationTimerRef.current);
         generationTimerRef.current = null;
@@ -2186,6 +2217,7 @@ export default function DashboardPage() {
         }}
         onDownload={handleDownloadFromDecisionModal}
         onConfirm={handleConfirmSaveDecision}
+        onDiscard={handleDiscardWebsite}
         onClose={() => setIsDecisionModalOpen(false)}
       />
 
@@ -2496,6 +2528,7 @@ export default function DashboardPage() {
                       ? () => handlePersistProjectToDashboard(pendingGeneratedSite.data, pendingGeneratedSite.usedFormData)
                       : undefined
                   }
+                  onDiscard={handleDiscardWebsite}
                   onNewWebsite={() => {
                     setCurrentProject(null);
                     setCurrentStep(1);
@@ -2508,18 +2541,20 @@ export default function DashboardPage() {
                   }}
                   onUpdateProject={(updatedProj) => {
                     setCurrentProject(updatedProj);
-                    try {
-                      saveProjectToDB({
-                        id: updatedProj.projectId,
-                        name: updatedProj.name,
-                        provider: updatedProj.provider as any,
-                        model: updatedProj.model,
-                        prompt: `Theme: ${updatedProj.themeName || "Default"}`,
-                        createdAt: Date.now(),
-                        lastEditedAt: Date.now(),
-                        files: updatedProj.files,
-                      } as any);
-                    } catch {}
+                    if (isCurrentProjectSaved) {
+                      try {
+                        saveProjectToDB({
+                          id: updatedProj.projectId,
+                          name: updatedProj.name,
+                          provider: updatedProj.provider as any,
+                          model: updatedProj.model,
+                          prompt: `Theme: ${updatedProj.themeName || "Default"}`,
+                          createdAt: Date.now(),
+                          lastEditedAt: Date.now(),
+                          files: updatedProj.files,
+                        } as any);
+                      } catch {}
+                    }
                   }}
                   onOpenManager={() => {
                     if (!user) {
@@ -2702,15 +2737,15 @@ export default function DashboardPage() {
                         />
                       </div>
 
-                      {/* Stale Job Detection Banner */}
+                      {/* Active AI Processing Banner */}
                       {isGenerationTakingLong && (
-                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left space-y-2 animate-in fade-in duration-200">
-                          <div className="flex items-center space-x-2 text-amber-900 font-bold text-xs">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                            <span>Generation is taking longer than usual ({generationElapsedSeconds}s elapsed)</span>
+                        <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-left space-y-2 animate-in fade-in duration-200">
+                          <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs">
+                            <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 animate-pulse" />
+                            <span>AI generation in progress ({generationElapsedSeconds}s elapsed)</span>
                           </div>
-                          <p className="text-[11px] text-amber-800 leading-relaxed">
-                            The AI provider is still generating your content. Your entered business and targeting data are safely preserved. You can continue waiting, cancel generation, or assemble immediately using curated trade templates.
+                          <p className="text-[11px] text-indigo-800 leading-relaxed">
+                            The AI provider is generating detailed content for your website pages. All entered targeting details and business facts are safely preserved.
                           </p>
                           <div className="flex flex-wrap items-center gap-2 pt-1">
                             <button
@@ -2719,13 +2754,6 @@ export default function DashboardPage() {
                               className="px-2.5 py-1 text-xs font-semibold rounded bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 transition"
                             >
                               Cancel Generation
-                            </button>
-                            <button
-                              type="button"
-                              onClick={handleInstantSafeGeneration}
-                              className="px-2.5 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 text-white transition"
-                            >
-                              Instant Template Fallback (&lt;1s)
                             </button>
                           </div>
                         </div>

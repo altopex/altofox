@@ -8,7 +8,7 @@
  *          Never relies on generic fluff; embeds trade-specific failure modes.
  */
 
-import { PageGenerationContext } from "./types";
+import { PageGenerationContext, GenerationGatewayParams, isPermanentAIError } from "./types";
 import { PageContentJSON, SectionJSON } from "../content-schema";
 import { createVariationProfile, VariationProfile } from "./variation-seed";
 import { gatewayRequest, GatewayRequest } from "../../ai/provider-gateway";
@@ -676,9 +676,9 @@ export function generateServicePageDeterministic(context: PageGenerationContext)
  */
 export async function generateServicePageContent(
   context: PageGenerationContext,
-  gatewayParams?: Partial<GatewayRequest>
+  gatewayParams?: GenerationGatewayParams
 ): Promise<PageContentJSON> {
-  if (gatewayParams?.directCredentials?.apiKey) {
+  if (gatewayParams?.directCredentials?.apiKey && !gatewayParams?._state?.disabled) {
     try {
       const prompt = buildServicePagePrompt(context);
       const res = await gatewayRequest({
@@ -692,8 +692,14 @@ export async function generateServicePageContent(
       if (parsed && parsed.slug && parsed.seo && Array.isArray(parsed.sections)) {
         return parsed as PageContentJSON;
       }
-    } catch (err) {
-      console.warn(`[ServicePageGenerator] AI generation failed for ${context.primaryKeyword}, falling back to deterministic seed engine:`, err);
+    } catch (err: any) {
+      console.warn(`[ServicePageGenerator] AI generation failed for ${context.primaryKeyword}, falling back to deterministic seed engine:`, err?.message || err);
+      if (isPermanentAIError(err)) {
+        if (gatewayParams) {
+          if (!gatewayParams._state) gatewayParams._state = {};
+          gatewayParams._state.disabled = true;
+        }
+      }
     }
   }
 

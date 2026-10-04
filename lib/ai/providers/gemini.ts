@@ -18,8 +18,11 @@ export class GeminiProvider implements IAIProvider {
   }
 
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const rawModel = options.model || "gemini-1.5-pro";
-    const model = rawModel.startsWith("models/") ? rawModel.replace("models/", "") : rawModel;
+    const rawModel = options.model || "gemini-2.0-flash";
+    let model = rawModel.startsWith("models/") ? rawModel.replace("models/", "") : rawModel;
+    if (model === "gemini-2.0-flash-exp") model = "gemini-2.0-flash";
+    if (model === "gemini-2.0-pro-exp") model = "gemini-2.0-pro";
+    if (model === "gemini-2.0-flash-thinking-exp") model = "gemini-2.0-flash-thinking-exp-01-21";
 
     const contents = options.messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
@@ -30,7 +33,7 @@ export class GeminiProvider implements IAIProvider {
       contents,
       generationConfig: {
         temperature: options.temperature ?? 0.7,
-        maxOutputTokens: options.maxTokens ?? 8192,
+        maxOutputTokens: options.maxTokens ?? 14000,
       },
     };
 
@@ -41,7 +44,7 @@ export class GeminiProvider implements IAIProvider {
     }
 
     const url = `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`;
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -60,7 +63,28 @@ export class GeminiProvider implements IAIProvider {
       } catch {
         errorMsg = errText || errorMsg;
       }
-      throw new Error(errorMsg);
+
+      // Auto-recover from deprecated or unsupported model strings
+      if (
+        res.status === 404 ||
+        errorMsg.includes("not found for API version") ||
+        errorMsg.includes("not supported for generateContent")
+      ) {
+        const fallbackModel = model !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
+        console.warn(`[GeminiProvider] Model "${model}" failed with 404/unsupported. Auto-recovering with "${fallbackModel}"...`);
+        const fallbackUrl = `${this.baseUrl}/models/${fallbackModel}:generateContent?key=${this.apiKey}`;
+        res = await fetch(fallbackUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          throw new Error(errorMsg);
+        }
+      } else {
+        throw new Error(errorMsg);
+      }
     }
 
     const data = await res.json();
@@ -83,11 +107,14 @@ export class GeminiProvider implements IAIProvider {
   async testConnection(model?: string): Promise<TestConnectionResult> {
     const start = Date.now();
     try {
-      const testModel = model || "gemini-1.5-flash";
-      const cleanedModel = testModel.startsWith("models/") ? testModel.replace("models/", "") : testModel;
+      const testModel = model || "gemini-2.0-flash";
+      let cleanedModel = testModel.startsWith("models/") ? testModel.replace("models/", "") : testModel;
+      if (cleanedModel === "gemini-2.0-flash-exp") cleanedModel = "gemini-2.0-flash";
+      if (cleanedModel === "gemini-2.0-pro-exp") cleanedModel = "gemini-2.0-pro";
+
       const url = `${this.baseUrl}/models/${cleanedModel}:generateContent?key=${this.apiKey}`;
 
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -100,30 +127,55 @@ export class GeminiProvider implements IAIProvider {
 
       if (!res.ok) {
         const errText = await res.text();
+        let errorMsg = `HTTP ${res.status}: ${res.statusText}`;
         try {
           const parsed = JSON.parse(errText);
-          return {
-            success: false,
-            message: parsed.error?.message || `HTTP ${res.status}: ${res.statusText}`,
-          };
-        } catch {
-          return {
-            success: false,
-            message: `Connection failed (${res.status}): ${res.statusText}`,
-          };
+          if (parsed.error?.message) errorMsg = parsed.error.message;
+        } catch {}
+
+        // If the model was 404/unsupported, test fallback model
+        if (
+          res.status === 404 ||
+          errorMsg.includes("not found for API version") ||
+          errorMsg.includes("not supported for generateContent")
+        ) {
+          const fallbackModel = cleanedModel !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
+          const retryRes = await fetch(`${this.baseUrl}/models/${fallbackModel}:generateContent?key=${this.apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ role: "user", parts: [{ text: "Respond with the word OK." }] }],
+              generationConfig: { maxOutputTokens: 5 },
+            }),
+          });
+          if (retryRes.ok) {
+            cleanedModel = fallbackModel;
+            res = retryRes;
+          } else {
+            return { success: false, message: errorMsg };
+          }
+        } else {
+          return { success: false, message: errorMsg };
         }
       }
 
-      // Try fetching available models
+      // Fetch live available models for Gemini
       let availableModels: string[] | undefined;
       try {
         const modelsRes = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
         if (modelsRes.ok) {
           const modelsData = await modelsRes.json();
           availableModels = (modelsData.models || [])
+            .filter((m: any) => {
+              const methods: string[] = m.supportedGenerationMethods || [];
+              return methods.includes("generateContent") && String(m.name).includes("gemini");
+            })
             .map((m: { name: string }) => m.name.replace("models/", ""))
-            .filter((name: string) => name.includes("gemini"))
-            .slice(0, 15);
+            .filter((name: string) => !name.endsWith("-exp"));
+
+          if (availableModels && availableModels.length > 0) {
+            if (!availableModels.includes("gemini-2.0-flash")) availableModels.unshift("gemini-2.0-flash");
+          }
         }
       } catch {
         // Optional
@@ -131,7 +183,7 @@ export class GeminiProvider implements IAIProvider {
 
       return {
         success: true,
-        message: `Successfully connected to Google Gemini (${testModel})`,
+        message: `Successfully connected to Google Gemini (${cleanedModel})`,
         latencyMs,
         availableModels,
       };
@@ -147,13 +199,20 @@ export class GeminiProvider implements IAIProvider {
   async listModels(): Promise<string[]> {
     try {
       const res = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
-      if (!res.ok) return [];
+      if (!res.ok) return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
       const data = await res.json();
-      return (data.models || [])
+      const list = (data.models || [])
+        .filter((m: any) => {
+          const methods: string[] = m.supportedGenerationMethods || [];
+          return methods.includes("generateContent") && String(m.name).includes("gemini");
+        })
         .map((m: { name: string }) => m.name.replace("models/", ""))
-        .filter((name: string) => name.includes("gemini"));
+        .filter((name: string) => !name.endsWith("-exp"));
+
+      if (!list.includes("gemini-2.0-flash")) list.unshift("gemini-2.0-flash");
+      return list;
     } catch {
-      return [];
+      return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
   }
 }

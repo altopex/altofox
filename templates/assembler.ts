@@ -307,7 +307,37 @@ export async function assembleWebsite(
   const linkStyle: LinkStyle = options?.linkStyle || "web";
   const useFolderStructure = Boolean(options?.useFolderStructure);
 
-  const effectiveAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+  const rawAreaCities = options?.serviceAreaCities || (data.site as any).serviceAreaCities || [];
+  const defaultState = data.site.address?.state || "US";
+  const effectiveAreaCities = rawAreaCities.map((item: any) => {
+    if (typeof item === "string") {
+      const parts = item.split(",").map((s: string) => s.trim());
+      const city = parts[0] || item;
+      const stateId = parts[1] || defaultState;
+      const safeCitySlug = city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const safeStateSlug = stateId.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      return {
+        city,
+        stateId,
+        county: "",
+        slug: `${tradeSlug}-${safeCitySlug}-${safeStateSlug}.html`,
+        lat: 0,
+        lng: 0,
+      };
+    }
+    const city = item?.city || item?.name || "Local Area";
+    const stateId = item?.stateId || item?.state || defaultState;
+    const safeCitySlug = String(city).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const safeStateSlug = String(stateId).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    return {
+      city,
+      stateId,
+      county: item?.county || "",
+      lat: item?.lat || 0,
+      lng: item?.lng || 0,
+      slug: item?.slug || `${tradeSlug}-${safeCitySlug}-${safeStateSlug}.html`,
+    };
+  });
   const effectiveBlogPosts: BlogPostData[] = options?.blogPosts || (data as any).blogPosts || [];
 
   // 1. Build Master Page Registry BEFORE any HTML is generated
@@ -338,7 +368,7 @@ export async function assembleWebsite(
           city: c.city,
           stateId: c.stateId,
           county: c.county,
-          slug: c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`,
+          slug: c.slug,
           lat: c.lat,
           lng: c.lng,
         })),

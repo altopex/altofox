@@ -13,6 +13,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
+import { normalizeModelForProvider } from "@/lib/ai/provider-models";
 
 interface ProviderPreset {
   id: ProviderType;
@@ -30,12 +31,15 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   gemini: {
     id: "gemini",
     name: "Google Gemini",
-    description: "Gemini 1.5 Pro, 1.5 Flash & 2.0 with fast generation and generous limits",
-    defaultModel: "gemini-1.5-pro",
+    description: "Gemini 2.0 Flash, 1.5 Pro & Flash with fast generation and generous limits",
+    defaultModel: "gemini-2.0-flash",
     popularModels: [
-      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (Recommended)" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Recommended)" },
+      { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite" },
       { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Ultra Fast)" },
-      { id: "gemini-2.0-flash-exp", label: "Gemini 2.0 Flash" },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+      { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
     ],
     placeholderKey: "AIzaSy...",
     docsUrl: "https://aistudio.google.com/app/apikey",
@@ -43,26 +47,71 @@ const PROVIDER_PRESETS_MAP: Record<string, ProviderPreset> = {
   openai: {
     id: "openai",
     name: "OpenAI (ChatGPT)",
-    description: "GPT-4o and GPT-4o Mini flagship reasoning models",
+    description: "GPT-4o, GPT-4o Mini, o3-mini and flagship reasoning models",
     defaultModel: "gpt-4o",
     popularModels: [
       { id: "gpt-4o", label: "GPT-4o (Recommended)" },
       { id: "gpt-4o-mini", label: "GPT-4o Mini (Affordable & Fast)" },
+      { id: "gpt-4.5-preview", label: "GPT-4.5 Preview" },
+      { id: "o3-mini", label: "o3-mini" },
+      { id: "o1", label: "o1" },
       { id: "gpt-4-turbo", label: "GPT-4 Turbo" },
     ],
     placeholderKey: "sk-proj-...",
     docsUrl: "https://platform.openai.com/api-keys",
   },
+  anthropic: {
+    id: "anthropic",
+    name: "Anthropic Claude",
+    description: "Claude 3.7 Sonnet, Claude 3.5 Sonnet & Haiku with nuanced writing",
+    defaultModel: "claude-3-7-sonnet-20250219",
+    popularModels: [
+      { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet (Recommended)" },
+      { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
+      { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (Fast)" },
+      { id: "claude-3-opus-20240229", label: "Claude 3 Opus" },
+    ],
+    placeholderKey: "sk-ant-...",
+    docsUrl: "https://console.anthropic.com/settings/keys",
+  },
+  deepseek: {
+    id: "deepseek",
+    name: "DeepSeek",
+    description: "DeepSeek-V3 and DeepSeek-R1 reasoning models at disruptive economics",
+    defaultBaseUrl: "https://api.deepseek.com/v1",
+    defaultModel: "deepseek-chat",
+    popularModels: [
+      { id: "deepseek-chat", label: "DeepSeek-V3 (Recommended)" },
+      { id: "deepseek-reasoner", label: "DeepSeek-R1 (Reasoning)" },
+    ],
+    placeholderKey: "sk-...",
+    docsUrl: "https://platform.deepseek.com/api_keys",
+  },
+  groq: {
+    id: "groq",
+    name: "Groq",
+    description: "Ultra-fast inference (LPU) powered Llama 3.3 and DeepSeek-R1",
+    defaultBaseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "llama-3.3-70b-versatile",
+    popularModels: [
+      { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B (Recommended)" },
+      { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B (Instant)" },
+      { id: "deepseek-r1-distill-llama-70b", label: "DeepSeek-R1 Distill 70B" },
+    ],
+    placeholderKey: "gsk_...",
+    docsUrl: "https://console.groq.com/keys",
+  },
   openrouter: {
     id: "openrouter",
     name: "OpenRouter",
-    description: "Access 100+ AI models including Claude 3.5 Sonnet, Llama 3.3, and DeepSeek",
+    description: "Access 100+ AI models including Claude 3.7, Gemini 2.0, and DeepSeek",
     defaultModel: "anthropic/claude-3.5-sonnet",
     popularModels: [
       { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
-      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B" },
-      { id: "openai/gpt-4o", label: "GPT-4o" },
+      { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
       { id: "deepseek/deepseek-chat", label: "DeepSeek-V3" },
+      { id: "deepseek/deepseek-r1", label: "DeepSeek-R1" },
+      { id: "openai/gpt-4o", label: "GPT-4o" },
     ],
     placeholderKey: "sk-or-v1-...",
     docsUrl: "https://openrouter.ai/keys",
@@ -100,6 +149,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   const [orgIdInput, setOrgIdInput] = useState("");
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState(false);
+  const [discoveredLiveModels, setDiscoveredLiveModels] = useState<Record<string, string[]>>({});
+  const [fetchingLiveModels, setFetchingLiveModels] = useState(false);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -113,7 +164,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
   useEffect(() => {
     if (isOpen) {
       const keys: Record<string, string> = {};
-      const providers = ["gemini", "openai", "openrouter", "custom"];
+      const providers = ["gemini", "openai", "anthropic", "deepseek", "groq", "openrouter", "custom"];
       for (const p of providers) {
         const stored = localStorage.getItem(`altofox_key_${p}`) || localStorage.getItem(`ranklocal_key_${p}`);
         if (stored) keys[p] = stored;
@@ -127,7 +178,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
       const storedModel =
         localStorage.getItem(`altofox_model_${selectedProvider}`) ||
         localStorage.getItem(`ranklocal_model_${selectedProvider}`);
-      setModelInput(storedModel || preset?.defaultModel || "");
+      const rawModel = storedModel || preset?.defaultModel || "";
+      setModelInput(normalizeModelForProvider(selectedProvider as ProviderType, rawModel));
 
       const storedBaseUrl =
         localStorage.getItem(`altofox_base_url_${selectedProvider}`) ||
@@ -171,6 +223,11 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     setTestResult(null);
     setStatusMessage(null);
 
+    const modelToTest = normalizeModelForProvider(
+      selectedProvider as ProviderType,
+      modelInput.trim() || currentPreset.defaultModel
+    );
+
     try {
       const res = await fetch("/api/keys/test", {
         method: "POST",
@@ -179,7 +236,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
           provider: selectedProvider,
           apiKey: keyToTest,
           baseUrl: baseUrlInput.trim() || undefined,
-          model: modelInput.trim() || currentPreset.defaultModel,
+          model: modelToTest,
           organizationId: selectedProvider === "custom" ? orgIdInput.trim() || undefined : undefined,
           providerName: selectedProvider === "custom" ? providerNameInput.trim() || undefined : undefined,
         }),
@@ -189,6 +246,9 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
         success: data.success,
         message: data.message || (data.success ? "Connected successfully!" : "Connection failed."),
       });
+      if (data.availableModels && Array.isArray(data.availableModels) && data.availableModels.length > 0) {
+        setDiscoveredLiveModels((prev) => ({ ...prev, [selectedProvider]: data.availableModels }));
+      }
     } catch (err) {
       setTestResult({
         success: false,
@@ -196,6 +256,24 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
       });
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Discover Live Models from Provider API
+  const handleFetchLiveModels = async () => {
+    const keyToUse = keyInput.trim() || currentSavedKey;
+    if (!keyToUse) return;
+    setFetchingLiveModels(true);
+    try {
+      const res = await fetch(`/api/keys/models?provider=${selectedProvider}&apiKey=${encodeURIComponent(keyToUse)}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.models) && data.models.length > 0) {
+        setDiscoveredLiveModels((prev) => ({ ...prev, [selectedProvider]: data.models }));
+      }
+    } catch (e) {
+      console.warn("Failed to fetch live models in modal:", e);
+    } finally {
+      setFetchingLiveModels(false);
     }
   };
 
@@ -209,12 +287,14 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     }
 
     const keyToPersist = cleanKey || currentSavedKey;
+    const rawModel = modelInput.trim() || currentPreset.defaultModel;
+    const effectiveModel = normalizeModelForProvider(selectedProvider as ProviderType, rawModel);
+
     localStorage.setItem(`altofox_key_${selectedProvider}`, keyToPersist);
     localStorage.setItem(`ranklocal_key_${selectedProvider}`, keyToPersist);
-    if (modelInput.trim()) {
-      localStorage.setItem(`altofox_model_${selectedProvider}`, modelInput.trim());
-      localStorage.setItem(`ranklocal_model_${selectedProvider}`, modelInput.trim());
-    }
+    localStorage.setItem(`altofox_model_${selectedProvider}`, effectiveModel);
+    localStorage.setItem(`ranklocal_model_${selectedProvider}`, effectiveModel);
+
     if (baseUrlInput.trim()) {
       localStorage.setItem(`altofox_base_url_${selectedProvider}`, baseUrlInput.trim());
       localStorage.setItem(`ranklocal_base_url_${selectedProvider}`, baseUrlInput.trim());
@@ -233,8 +313,8 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
     // Set as active provider and model
     localStorage.setItem("altofox_active_provider", selectedProvider);
     localStorage.setItem("ranklocal_active_provider", selectedProvider);
-    localStorage.setItem("altofox_active_model", modelInput.trim() || currentPreset.defaultModel);
-    localStorage.setItem("ranklocal_active_model", modelInput.trim() || currentPreset.defaultModel);
+    localStorage.setItem("altofox_active_model", effectiveModel);
+    localStorage.setItem("ranklocal_active_model", effectiveModel);
 
     setSavedKeys((prev) => ({ ...prev, [selectedProvider]: keyToPersist }));
 
@@ -246,7 +326,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
         provider: selectedProvider,
         apiKey: keyToPersist,
         baseUrl: baseUrlInput.trim() || undefined,
-        defaultModel: modelInput.trim() || undefined,
+        defaultModel: effectiveModel,
         organizationId: selectedProvider === "custom" ? orgIdInput.trim() || undefined : undefined,
         providerName: selectedProvider === "custom" ? providerNameInput.trim() || undefined : undefined,
       }),
@@ -454,9 +534,31 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
 
             {/* Model Name Input & Suggestions */}
             <div>
-              <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                Model Name
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-[#0F172A]">
+                  Model Name
+                </label>
+                {(keyInput.trim() || currentSavedKey) && (
+                  <button
+                    type="button"
+                    onClick={handleFetchLiveModels}
+                    disabled={fetchingLiveModels}
+                    className="text-[11px] text-[#4F46E5] hover:underline flex items-center gap-1 disabled:opacity-50"
+                  >
+                    {fetchingLiveModels ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Discovering live models...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3" />
+                        <span>Discover live models</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
               <input
                 type="text"
                 value={modelInput}
@@ -464,21 +566,55 @@ export function ApiKeyModal({ isOpen, onClose, onKeysUpdated }: ApiKeyModalProps
                 placeholder={currentPreset.defaultModel}
                 className="input-base mb-2 font-mono text-xs"
               />
-              <div className="flex flex-wrap gap-1.5">
-                {currentPreset.popularModels.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => setModelInput(m.id)}
-                    className={`text-[11px] px-2.5 py-1 rounded-[6px] border transition ${
-                      modelInput === m.id
-                        ? "bg-[#EEF2FF] border-[#4F46E5] text-[#4F46E5] font-semibold"
-                        : "bg-white border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] hover:border-[#CBD5E1]"
-                    }`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
+
+              <div className="space-y-2">
+                <div>
+                  <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider block mb-1">
+                    Recommended Models
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {currentPreset.popularModels.map((m) => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setModelInput(m.id)}
+                        className={`text-[11px] px-2.5 py-1 rounded-[6px] border transition ${
+                          modelInput === m.id
+                            ? "bg-[#EEF2FF] border-[#4F46E5] text-[#4F46E5] font-semibold"
+                            : "bg-white border-[#E2E8F0] text-[#64748B] hover:text-[#0F172A] hover:border-[#CBD5E1]"
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {discoveredLiveModels[selectedProvider] && discoveredLiveModels[selectedProvider].length > 0 && (
+                  <div>
+                    <span className="text-[10px] text-[#64748B] font-semibold uppercase tracking-wider block mb-1">
+                      Discovered Live Models ({discoveredLiveModels[selectedProvider].length})
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1.5 bg-slate-50 rounded-[8px] border border-slate-200">
+                      {discoveredLiveModels[selectedProvider]
+                        .filter((m) => !currentPreset.popularModels.some((pop) => pop.id === m))
+                        .map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => setModelInput(m)}
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded-[4px] border transition ${
+                              modelInput === m
+                                ? "bg-[#4F46E5] border-[#4F46E5] text-white font-semibold"
+                                : "bg-white border-[#CBD5E1] text-[#334155] hover:border-[#4F46E5]"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

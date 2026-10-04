@@ -123,3 +123,32 @@ export interface GeneratedPageResult {
 export interface ContentGenerator {
   generate(context: PageGenerationContext): Promise<GeneratedPageResult>;
 }
+
+export interface GenerationGatewayParams {
+  _state?: { disabled?: boolean };
+  [key: string]: any;
+}
+
+export function isPermanentAIError(err: any): boolean {
+  if (!err) return false;
+  const msg = (err.message || String(err)).toLowerCase();
+  const status = err.status || err.statusCode;
+  return (
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    msg.includes("401") ||
+    msg.includes("402") ||
+    msg.includes("unauthorized") ||
+    msg.includes("invalid api key") ||
+    msg.includes("quota exceeded") ||
+    msg.includes("insufficient_quota") ||
+    msg.includes("credit_balance_exhausted") ||
+    msg.includes("no credits remaining") ||
+    msg.includes("insufficient credits") ||
+    msg.includes("billing") ||
+    msg.includes("credit balance") ||
+    msg.includes("model not found") ||
+    msg.includes("unknown model")
+  );
+}

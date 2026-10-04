@@ -22,6 +22,7 @@ export interface GenerationDecisionModalProps {
   onPreview: () => void;
   onDownload: () => void;
   onConfirm: (choice: "download-only" | "save-future") => void;
+  onDiscard?: () => void;
   onClose: () => void;
 }
 
@@ -34,6 +35,7 @@ export function GenerationDecisionModal({
   onPreview,
   onDownload,
   onConfirm,
+  onDiscard,
   onClose,
 }: GenerationDecisionModalProps) {
   const [selectedChoice, setSelectedChoice] = useState<"download-only" | "save-future">("download-only");
@@ -169,8 +171,8 @@ export function GenerationDecisionModal({
             </div>
           </div>
 
-          {/* Continue button */}
-          <div className="pt-2">
+          {/* Action Buttons: Save Website vs Discard */}
+          <div className="pt-2 space-y-2">
             <button
               type="button"
               disabled={isSaving}
@@ -182,13 +184,29 @@ export function GenerationDecisionModal({
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   <span>Saving website...</span>
                 </>
+              ) : selectedChoice === "save-future" ? (
+                <>
+                  <Database className="w-4 h-4" />
+                  <span>SAVE WEBSITE</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               ) : (
                 <>
-                  <span>Continue</span>
+                  <span>Continue to Preview</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
+
+            {onDiscard && (
+              <button
+                type="button"
+                onClick={onDiscard}
+                className="w-full py-2.5 px-4 rounded-xl border border-slate-700 hover:border-rose-500/60 hover:bg-rose-500/10 text-slate-400 hover:text-rose-300 font-medium text-xs transition flex items-center justify-center gap-1.5"
+              >
+                <span>Discard Website (Do Not Save Anything)</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

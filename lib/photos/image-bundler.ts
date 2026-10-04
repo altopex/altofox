@@ -59,7 +59,7 @@ export function createImagePlan(
   trade: string,
   city: string,
   businessName: string,
-  locationPages?: Array<{ slug?: string; city: string; stateId: string }>,
+  locationPages?: Array<string | { slug?: string; city?: string; stateId?: string; name?: string; state?: string } | any>,
   options: {
     preferredSource?: ImageProviderType;
     state?: string;
@@ -71,8 +71,9 @@ export function createImagePlan(
   const plan: ImagePlanSlot[] = [];
   const tracker = options.deduplicationTracker || new ImageDeduplicationTracker();
   const usedPaths = new Set<string>();
-  const tradeClean = trade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  const tradeCategory = detectTradeCategory(trade);
+  const safeTrade = typeof trade === "string" && trade.trim() ? trade.trim() : "Service";
+  const tradeClean = safeTrade.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const tradeCategory = detectTradeCategory(safeTrade);
 
   let photoIndex = 1;
 
@@ -216,9 +217,14 @@ export function createImagePlan(
   // 2. Plan hero images for Location Pages with unique city queries & copyright-free photos
   if (locationPages && locationPages.length > 0) {
     for (const loc of locationPages) {
-      const locCityClean = loc.city.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      const locStateClean = loc.stateId.toLowerCase();
-      const locSlug = loc.slug ? loc.slug.replace(/\.html$/, "") : `${tradeClean}-${locCityClean}-${locStateClean}`;
+      if (!loc) continue;
+      const rawCity = typeof loc === "string" ? loc.split(",")[0].trim() : (loc.city || (loc as any).name || "Local Area");
+      const rawState = typeof loc === "string" ? (loc.split(",")[1]?.trim() || options.state || "US") : (loc.stateId || (loc as any).state || options.state || "US");
+      const locCityClean = String(rawCity).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const locStateClean = String(rawState).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const locSlug = (typeof loc === "object" && loc.slug)
+        ? loc.slug.replace(/\.html$/, "")
+        : `${tradeClean}-${locCityClean}-${locStateClean}`;
       const localPath = `images/${tradeClean}-hero-${locCityClean}-${locStateClean}.jpg`;
 
       if (!usedPaths.has(localPath)) {
@@ -228,11 +234,11 @@ export function createImagePlan(
 
         const resolvedLoc = resolvePageImage(
           {
-            pageTitle: `${trade} in ${loc.city}, ${loc.stateId}`,
-            city: loc.city,
-            state: loc.stateId,
-            stateCode: loc.stateId,
-            trade,
+            pageTitle: `${safeTrade} in ${rawCity}, ${rawState}`,
+            city: rawCity,
+            state: rawState,
+            stateCode: rawState,
+            trade: safeTrade,
             slot: "hero",
             pageType: "location",
             width: 1920,
