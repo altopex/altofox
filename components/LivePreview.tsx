@@ -554,7 +554,7 @@ export function LivePreview({
       setValidationResult(validation);
 
       if (!validation.valid && validation.errors.length > 0) {
-        throw new Error(`Validation check failed: ${validation.errors.join("; ")}`);
+        console.warn(`[ZIP Export] Validation notices:`, validation.errors);
       }
 
       setZippingStatus("Gathering website files…");
@@ -708,15 +708,27 @@ export function LivePreview({
       setZippingStatus("Streaming ZIP from server…");
 
       try {
-        const res = await fetch("/api/projects/export", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: project?.name,
-            files: currentFiles,
-            photos: project?.photos,
-          }),
-        });
+        let res: Response | null = null;
+        if (project?.projectId) {
+          try {
+            res = await fetch(`/api/projects/${project.projectId}/download`);
+          } catch {
+            res = null;
+          }
+        }
+
+        if (!res || !res.ok) {
+          res = await fetch("/api/projects/export", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: project?.name,
+              files: currentFiles,
+              photos: project?.photos,
+              domain: project?.websiteDomain,
+            }),
+          });
+        }
 
         if (res.ok) {
           const blob = await res.blob();

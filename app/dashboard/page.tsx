@@ -1876,9 +1876,9 @@ export default function DashboardPage() {
 
     const watchdogTimer = setTimeout(() => {
       if (!abortController.signal.aborted) {
-        abortController.abort(new Error("Generation client budget (85s) exceeded."));
+        abortController.abort(new Error("Generation client budget (160s) exceeded."));
       }
-    }, 85000);
+    }, 160000);
 
     try {
       setGenerationStage("RESEARCHING");
@@ -1974,22 +1974,21 @@ export default function DashboardPage() {
         setGenerationStage("FAILED_RENDER");
       }
     } catch (err: any) {
-      if (err?.name === "AbortError" || abortController.signal.aborted) {
-        return;
-      }
+      const isTimeout = abortController.signal.aborted || err?.name === "AbortError";
+      const errMsg = isTimeout
+        ? "Generation took longer than expected (timed out after 160 seconds). You can retry or switch to curated templates."
+        : (err instanceof Error ? err.message : "Network error generating website. Please check your internet connection.");
+
       setGenerationStage("FAILED_PROVIDER");
       setGenerationError({
-        message: err instanceof Error ? err.message : "Network error generating website.",
+        message: errMsg,
         canFallback: true,
         failedStage: "FAILED_PROVIDER",
       });
       addToast({
         type: "error",
-        title: "Connection Error",
-        message:
-          err instanceof Error
-            ? err.message
-            : "Network error generating website. Please check your internet connection.",
+        title: isTimeout ? "Generation Timeout" : "Connection Error",
+        message: errMsg,
       });
     } finally {
       clearTimeout(watchdogTimer);

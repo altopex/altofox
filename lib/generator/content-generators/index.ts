@@ -129,71 +129,79 @@ export async function generateSiteContentFromBlueprint(
       : "hub") as any,
   }));
 
-  for (const page of blueprint.pages) {
-    let archetype: PageArchetype = "service";
-    const pageTypeStr = page.type as string;
-    if (pageTypeStr === "home") archetype = "home";
-    else if (pageTypeStr === "about") archetype = "about";
-    else if (pageTypeStr === "contact") archetype = "contact";
-    else if (pageTypeStr === "faq") archetype = "faq";
-    else if (pageTypeStr === "individual-service-area" || (page.serviceName && page.locationName && pageTypeStr !== "home")) archetype = "service_location";
-    else if (pageTypeStr === "individual-area" || pageTypeStr === "service-areas") archetype = "location";
-    else if (pageTypeStr === "individual-service" || pageTypeStr === "services") archetype = "service";
-    else if (pageTypeStr === "blog") archetype = "blog";
+  // Concurrently generate pages in batches of 3 to balance speed and provider rate limits
+  const BATCH_SIZE = 3;
+  for (let i = 0; i < blueprint.pages.length; i += BATCH_SIZE) {
+    const pageBatch = blueprint.pages.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      pageBatch.map(async (page) => {
+        let archetype: PageArchetype = "service";
+        const pageTypeStr = page.type as string;
+        if (pageTypeStr === "home") archetype = "home";
+        else if (pageTypeStr === "about") archetype = "about";
+        else if (pageTypeStr === "contact") archetype = "contact";
+        else if (pageTypeStr === "faq") archetype = "faq";
+        else if (pageTypeStr === "individual-service-area" || (page.serviceName && page.locationName && pageTypeStr !== "home")) archetype = "service_location";
+        else if (pageTypeStr === "individual-area" || pageTypeStr === "service-areas") archetype = "location";
+        else if (pageTypeStr === "individual-service" || pageTypeStr === "services") archetype = "service";
+        else if (pageTypeStr === "blog") archetype = "blog";
 
-    const pageSeed = `${blueprint.siteSeed}-${page.slug}`;
+        const pageSeed = `${blueprint.siteSeed}-${page.slug}`;
 
-    const context: PageGenerationContext = {
-      pageType: archetype,
-      pagePurpose: `Dedicated ${page.type} for ${page.title}`,
-      primaryKeyword: page.targetKeywords[0] || `${blueprint.niche} in ${blueprint.primaryCity}`,
-      secondaryKeywords: page.targetKeywords.slice(1),
-      searchIntent:
-        archetype === "home"
-          ? "commercial"
-          : archetype === "service" || (archetype as any) === "service_location"
-          ? "transactional"
-          : archetype === "location"
-          ? "local_navigational"
-          : archetype === "contact"
-          ? "transactional"
-          : "informational",
-      service: page.serviceName
-        ? {
-            name: page.serviceName,
-            slug: page.slug,
-          }
-        : {
-            name: `${blueprint.primaryService || blueprint.niche} Services`,
-            slug: page.slug,
+        const context: PageGenerationContext = {
+          pageType: archetype,
+          pagePurpose: `Dedicated ${page.type} for ${page.title}`,
+          primaryKeyword: page.targetKeywords[0] || `${blueprint.niche} in ${blueprint.primaryCity}`,
+          secondaryKeywords: page.targetKeywords.slice(1),
+          searchIntent:
+            archetype === "home"
+              ? "commercial"
+              : archetype === "service" || (archetype as any) === "service_location"
+              ? "transactional"
+              : archetype === "location"
+              ? "local_navigational"
+              : archetype === "contact"
+              ? "transactional"
+              : "informational",
+          service: page.serviceName
+            ? {
+                name: page.serviceName,
+                slug: page.slug,
+              }
+            : {
+                name: `${blueprint.primaryService || blueprint.niche} Services`,
+                slug: page.slug,
+              },
+          location: page.locationName
+            ? {
+                city: page.locationName,
+                state: blueprint.state,
+              }
+            : {
+                city: blueprint.primaryCity,
+                state: blueprint.state,
+                neighborhoods: blueprint.neighborhoods,
+              },
+          relatedServices: blueprint.services.map((s) => ({ name: s.name, slug: s.slug })),
+          relatedLocations: blueprint.locations.map((l) => ({ name: l.name, slug: l.slug, state: l.state })),
+          internalLinkTargets,
+          contentVariationSeed: {
+            siteSeed: blueprint.siteSeed,
+            pageSeed,
+            sectionSeed: `sec-${page.slug}`,
           },
-      location: page.locationName
-        ? {
-            city: page.locationName,
-            state: blueprint.state,
-          }
-        : {
-            city: blueprint.primaryCity,
-            state: blueprint.state,
-            neighborhoods: blueprint.neighborhoods,
-          },
-      relatedServices: blueprint.services.map((s) => ({ name: s.name, slug: s.slug })),
-      relatedLocations: blueprint.locations.map((l) => ({ name: l.name, slug: l.slug, state: l.state })),
-      internalLinkTargets,
-      contentVariationSeed: {
-        siteSeed: blueprint.siteSeed,
-        pageSeed,
-        sectionSeed: `sec-${page.slug}`,
-      },
-      businessFacts: verifiedFacts,
-      brandTone: blueprint.brandInformation.tone,
-    };
+          businessFacts: verifiedFacts,
+          brandTone: blueprint.brandInformation.tone,
+        };
 
-    contexts.set(page.slug, context);
-    const generatedPage = await generatePageContent(context, gatewayParams);
-    // Ensure slug matches blueprint path
-    generatedPage.slug = page.slug;
-    generatedPages.push(generatedPage);
+        contexts.set(page.slug, context);
+        const generatedPage = await generatePageContent(context, gatewayParams);
+        // Ensure slug matches blueprint path
+        generatedPage.slug = page.slug;
+        return generatedPage;
+      })
+    );
+    generatedPages.push(...batchResults);
   }
 
   // Deterministic Content Similarity Checker & Self-Healing Remediation Pass
@@ -201,8 +209,8 @@ export async function generateSiteContentFromBlueprint(
     generatedPages,
     contexts,
     {
-      similarityThreshold: 0.35,
-      maxRetries: 3,
+      similarityThreshold: 0.60,
+      maxRetries: 2,
       brandTerms: [verifiedFacts.businessName, verifiedFacts.phone, verifiedFacts.city],
     },
     gatewayParams

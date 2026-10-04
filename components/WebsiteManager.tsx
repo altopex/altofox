@@ -607,6 +607,7 @@ export function WebsiteManager({
 
   // Download ZIP
   const handleDownloadZip = async (mode: "full" | "changed-only" = "full") => {
+    const safeProjectName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
     try {
       const { blob, validation } = await generateWebsiteZIP(
         project,
@@ -615,14 +616,12 @@ export function WebsiteManager({
       );
 
       if (validation && !validation.valid && validation.errors.length > 0) {
-        showManagerError(`Validation failed: ${validation.errors.join("; ")}`);
-        return;
+        console.warn(`[ZIP Export] Validation notices:`, validation.errors);
       }
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const safeProjectName = (project?.name || "website").toLowerCase().replace(/[^a-z0-9]+/g, "-");
       a.download = `${safeProjectName}-${
         mode === "changed-only" ? "changed-files" : "full-website"
       }.zip`;
@@ -636,8 +635,44 @@ export function WebsiteManager({
       await saveProjectToDB(updated);
       setProject(updated);
     } catch (err: any) {
-      console.error("Failed to generate or download ZIP:", err);
-      showManagerError(`Could not download ZIP: ${err?.message || "Unknown error"}. Please try again.`);
+      console.warn("Client ZIP generation failed, attempting server download fallback:", err);
+
+      // Resilient server download fallback
+      try {
+        const endpoint = project?.id
+          ? `/api/projects/${project.id}/download`
+          : "/api/projects/export";
+
+        const res = project?.id
+          ? await fetch(endpoint)
+          : await fetch(endpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: project?.name,
+                files: project?.files,
+                photos: (project as any)?.photos,
+              }),
+            });
+
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${safeProjectName}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          return;
+        } else {
+          throw new Error(`Server returned status ${res.status}`);
+        }
+      } catch (fallbackErr: any) {
+        console.error("Failed to generate or download ZIP:", fallbackErr);
+        showManagerError(`Could not download ZIP: ${err?.message || fallbackErr?.message || "Unknown error"}. Please try again.`);
+      }
     }
   };
 

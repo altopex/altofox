@@ -449,15 +449,18 @@ export async function executeGenerationPipeline(
           model,
           organizationId,
           providerName,
-          false
+          true
         );
+        if (creds?.resolvedProvider) {
+          resolvedProvider = creds.resolvedProvider;
+        }
       }
 
       if (creds?.apiKey) {
         assembleOptions.providerCredentials = {
           apiKey: creds.apiKey,
           baseUrl: creds.baseUrl,
-          provider: resolvedProvider || providerType,
+          provider: resolvedProvider || creds.resolvedProvider || providerType,
           model: model || creds.defaultModel,
         };
       }
