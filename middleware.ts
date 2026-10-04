@@ -76,7 +76,25 @@ export function middleware(req: NextRequest) {
     token = authHeader.replace(/^[Bb]earer\s+/, "").trim();
   }
 
-  const isAuthenticated = Boolean(token);
+  // Fast check: verify if JWT payload is expired (with 10-second clock-skew allowance)
+  let isExpired = false;
+  if (token && token.includes(".")) {
+    try {
+      const parts = token.split(".");
+      if (parts.length === 3) {
+        const payloadBase64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+        const payloadJson = atob(payloadBase64);
+        const payload = JSON.parse(payloadJson);
+        if (payload.exp && typeof payload.exp === "number") {
+          isExpired = Date.now() >= (payload.exp * 1000) - 10000;
+        }
+      }
+    } catch {
+      // If parsing fails for a non-JWT string, let downstream routes decide
+    }
+  }
+
+  const isAuthenticated = Boolean(token) && !isExpired;
   // An authenticated user is treated as approved unless explicitly pending or disabled
   const isExplicitlyPending = status === "pending" || status === "disabled";
   const isApproved = isAuthenticated && !isExplicitlyPending;
@@ -89,7 +107,14 @@ export function middleware(req: NextRequest) {
       const redirectUrl = new URL("/login", req.url);
       const destination = pathname + search;
       redirectUrl.searchParams.set("redirect", destination);
-      return NextResponse.redirect(redirectUrl);
+      const res = NextResponse.redirect(redirectUrl);
+      if (isExpired) {
+        res.cookies.delete("ranklocal_token");
+        res.cookies.delete("altofox_token");
+        res.cookies.delete("ranklocal_status");
+        res.cookies.delete("altofox_status");
+      }
+      return res;
     }
 
     if (isExplicitlyPending) {
@@ -118,6 +143,14 @@ export function middleware(req: NextRequest) {
     if (isExplicitlyPending) {
       return NextResponse.redirect(new URL("/pending", req.url));
     }
+    if (isExpired) {
+      const res = NextResponse.next();
+      res.cookies.delete("ranklocal_token");
+      res.cookies.delete("altofox_token");
+      res.cookies.delete("ranklocal_status");
+      res.cookies.delete("altofox_status");
+      return res;
+    }
     return NextResponse.next();
   }
 
@@ -140,10 +173,17 @@ export function middleware(req: NextRequest) {
 
   if (isProtectedApiRoute) {
     if (!isAuthenticated) {
-      return NextResponse.json(
-        { error: "Unauthorized. Authentication required." },
+      const res = NextResponse.json(
+        { error: isExpired ? "Unauthorized. Session expired." : "Unauthorized. Authentication required." },
         { status: 401 }
       );
+      if (isExpired) {
+        res.cookies.delete("ranklocal_token");
+        res.cookies.delete("altofox_token");
+        res.cookies.delete("ranklocal_status");
+        res.cookies.delete("altofox_status");
+      }
+      return res;
     }
 
     // If explicit status cookie indicates pending or disabled, reject with 403

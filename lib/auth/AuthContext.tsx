@@ -99,6 +99,13 @@ function clearAuthCookies() {
     localStorage.removeItem("ranklocal_token_persist");
     localStorage.removeItem("ranklocal_team_auth");
     localStorage.removeItem("altofox_team_auth");
+    // Clear all Supabase project auth storage keys to prevent session resurrection
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && (k.startsWith("sb-") || k.includes("auth-token"))) {
+        localStorage.removeItem(k);
+      }
+    }
   } catch {}
 }
 
@@ -476,13 +483,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isInitializing = false;
     });
 
-    // Tab wake-up / visibility change listener: silently refresh tokens when user returns to tab
+    // Tab wake-up / visibility change listener: check session expiry when user returns to tab
     const handleVisibilityChange = async () => {
       if (document.visibilityState === "visible") {
         try {
+          // Check if local token expired during user inactivity
+          const storedToken = getAuthToken();
+          if (storedToken && storedToken.includes(".")) {
+            try {
+              const parts = storedToken.split(".");
+              if (parts.length === 3) {
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+                if (payload.exp && payload.exp * 1000 < Date.now()) {
+                  console.warn("[Auth] Stored session expired during inactivity, transitioning to unauthenticated.");
+                  if (mounted) {
+                    setUser(null);
+                    setSession(null);
+                    setProfile(null);
+                    setAuthStage("UNAUTHENTICATED");
+                    clearAuthCookies();
+                  }
+                  return;
+                }
+              }
+            } catch {}
+          }
+
+          // Only attempt Supabase refresh if an authentic Supabase session with refresh_token is present
           const { data } = await supabase.auth.getSession();
-          if (data?.session?.expires_at && data.session.expires_at * 1000 <= Date.now() + 120000) {
-            console.log("[Auth] Tab visible and session expiring soon; proactively refreshing...");
+          if (data?.session?.refresh_token && data.session.expires_at && data.session.expires_at * 1000 <= Date.now() + 120000) {
+            console.log("[Auth] Tab visible and Supabase session expiring soon; proactively refreshing...");
             await supabase.auth.refreshSession();
           }
         } catch {}
@@ -490,9 +520,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
+    // Multi-tab logout synchronization: when user logs out in another tab, sync state immediately
+    const handleStorageChange = (e: StorageEvent) => {
+      if (
+        (e.key === "ranklocal_token_persist" || e.key === "ranklocal_team_auth" || e.key === "altofox_team_auth") &&
+        !e.newValue
+      ) {
+        if (mounted) {
+          console.log("[Auth] Session terminated in another tab, synchronizing logout...");
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setAuthStage("UNAUTHENTICATED");
+          clearAuthCookies();
+        }
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
     return () => {
       mounted = false;
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("storage", handleStorageChange);
       if (subscription?.unsubscribe) subscription.unsubscribe();
     };
   }, [loadUserProfile]);

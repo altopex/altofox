@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     "altofox_token",
     "altofox_status",
     "sb-access-token",
+    "sb-refresh-token",
   ];
 
   for (const name of cookieNames) {
