@@ -23,6 +23,7 @@ import {
 } from "@/lib/keywords/keyword-parser";
 import { tempStorage } from "@/lib/storage/temp-storage";
 import { gatewayRequest } from "@/lib/ai/provider-gateway";
+import { createSiteBlueprint, SiteBlueprint } from "@/lib/blueprint/site-blueprint";
 import {
   GenerationPipelineTracker,
   GenerationFailureStage,
@@ -190,19 +191,7 @@ export async function POST(req: NextRequest) {
     // =========================================================================
     // STAGE 3: BLUEPRINT_READY
     // =========================================================================
-    tracker.startStage("BLUEPRINT_READY", "Computing page architecture and sitemap blueprints...");
-
-    const targetPages = computeTargetPages(websiteData);
-    console.log(
-      `[Pipeline] Assembling ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}" using theme "${activeTheme.name}".`
-    );
-
-    tracker.completeStage("BLUEPRINT_READY", `Site blueprint ready: ${targetPages.length} pages mapped.`);
-
-    // =========================================================================
-    // STAGE 4: CONTENT_PLANNING
-    // =========================================================================
-    tracker.startStage("CONTENT_PLANNING", "Structuring section schemas and conversion prompts...");
+    tracker.startStage("BLUEPRINT_READY", "Synthesizing structured Site Blueprint architecture...");
 
     const effectivePexelsKey = (pexelsKey || formData?.pexelsKey || process.env.PEXELS_API_KEY || "").trim();
     const effectivePixabayKey = (pixabayKey || formData?.pixabayKey || process.env.PIXABAY_API_KEY || "").trim();
@@ -215,6 +204,42 @@ export async function POST(req: NextRequest) {
       | "google"
       | "ai";
 
+    const siteBlueprint = createSiteBlueprint({
+      businessName: websiteData.businessName,
+      businessDescription: websiteData.businessDescription,
+      niche: websiteData.businessType,
+      primaryCity: websiteData.city,
+      state: websiteData.stateRegion,
+      services: websiteData.services || (websiteData.servicesOffered ? websiteData.servicesOffered.split(/[\n,]+/).map((s: string) => s.trim()).filter(Boolean) : undefined),
+      locations: websiteData.serviceAreasList || (websiteData.serviceAreas ? parseLocationList(websiteData.serviceAreas) : undefined),
+      keywords: websiteData.keywords || websiteData.targetKeywords,
+      phone: websiteData.phone,
+      streetAddress: websiteData.streetAddress,
+      theme: activeTheme,
+      selectedTheme: activeTheme.id,
+      preferredSource: effectivePrefSource,
+      separateServicePages: websiteData.separateServicePages,
+      separateAreaPages: websiteData.separateAreaPages,
+      pagesToCreate: websiteData.pagesToCreate,
+      yearsInBusiness: websiteData.yearsInBusiness,
+      licenseNumber: websiteData.licenseNumber,
+      styleTone: websiteData.styleTone,
+      uniqueSellingPoints: websiteData.uniqueSellingPoints,
+      customContentInstructions: websiteData.customContentInstructions,
+    });
+
+    const targetPages = computeTargetPages(websiteData, siteBlueprint);
+    console.log(
+      `[Pipeline] Structured Site Blueprint ready (${siteBlueprint.siteSeed}): ${siteBlueprint.pageCount} pages mapped for "${websiteData.businessName}" in "${websiteData.city}".`
+    );
+
+    tracker.completeStage("BLUEPRINT_READY", `Site blueprint ready (${siteBlueprint.siteSeed}): ${siteBlueprint.pageCount} pages mapped.`);
+
+    // =========================================================================
+    // STAGE 4: CONTENT_PLANNING
+    // =========================================================================
+    tracker.startStage("CONTENT_PLANNING", "Structuring section schemas and conversion prompts...");
+
     const assembleOptions: AssembleOptions = {
       domain: websiteData.websiteDomain,
       mapEmbed: websiteData.googleMaps,
@@ -225,6 +250,7 @@ export async function POST(req: NextRequest) {
       preferredSource: effectivePrefSource,
       serviceAreaCities: Array.isArray(formData?.serviceAreaCities) ? formData.serviceAreaCities : undefined,
       customContentInstructions: websiteData.customContentInstructions || undefined,
+      blueprint: siteBlueprint,
       onProgress: (stageName: GenerationStageName, progressPct: number, msg: string) => {
         tracker.startStage(stageName, msg, progressPct);
         tracker.completeStage(stageName, msg);
@@ -690,6 +716,7 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
       photos: assembled.photos || [],
       qualityReport: assembled.qualityReport,
       pipeline: tracker.getState(),
+      blueprint: siteBlueprint,
       downloadUrl: `/api/projects/${projectId}/download`,
     });
   } catch (error) {

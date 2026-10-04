@@ -45,9 +45,11 @@ import {
   renderBlogIndexHtml,
 } from "../lib/blog/blog-engine";
 import { GenerationStageName } from "../lib/pipeline/generation-pipeline";
+import { SiteBlueprint } from "../lib/blueprint/site-blueprint";
 
 export interface AssembleOptions {
   domain?: string;
+  blueprint?: SiteBlueprint;
   mapEmbed?: string;
   pexelsKey?: string;
   pixabayKey?: string;
@@ -288,6 +290,7 @@ export async function assembleWebsite(
   const effectiveBlogPosts: BlogPostData[] = options?.blogPosts || (data as any).blogPosts || [];
 
   // 1. Build Master Page Registry BEFORE any HTML is generated
+  const blueprint = options?.blueprint;
   const registry = buildMasterPageRegistry({
     businessName: data.site.businessName,
     nicheTrade: mainTrade,
@@ -297,21 +300,29 @@ export async function assembleWebsite(
       title: p.seo.title,
       navLabel: p.seo.title.split("|")[0].trim(),
     })),
-    locations: effectiveAreaCities.map((c: any) => ({
-      city: c.city,
-      stateId: c.stateId,
-      county: c.county,
-      slug: c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`,
-      lat: c.lat,
-      lng: c.lng,
-    })),
+    services: blueprint ? blueprint.services.map((s) => ({ slug: s.slug, name: s.name, description: s.description })) : undefined,
+    locations: blueprint
+      ? blueprint.locations.map((l) => ({
+          city: l.city,
+          stateId: l.state,
+          county: l.county,
+          slug: `${tradeSlug}-${l.slug}.html`,
+        }))
+      : effectiveAreaCities.map((c: any) => ({
+          city: c.city,
+          stateId: c.stateId,
+          county: c.county,
+          slug: c.slug || `${tradeSlug}-${c.city.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${c.stateId.toLowerCase()}.html`,
+          lat: c.lat,
+          lng: c.lng,
+        })),
     blogs: effectiveBlogPosts.map((b) => ({
       slug: b.slug,
       title: b.title,
       date: b.datePublished,
     })),
     hasServicesHub: true,
-    hasAreasHub: effectiveAreaCities.length > 0,
+    hasAreasHub: blueprint ? blueprint.locations.length > 0 : effectiveAreaCities.length > 0,
     hasBlogHub: effectiveBlogPosts.length > 0,
   });
 

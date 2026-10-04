@@ -183,7 +183,21 @@ export function getBusinessKeywordSlug(bizType: string): string {
 /**
  * Computes all target pages to generate based on form inputs and toggles
  */
-export function computeTargetPages(data: WebsiteFormData): TargetPage[] {
+export function computeTargetPages(
+  data: WebsiteFormData,
+  blueprint?: { pages?: { path: string; title: string; type: any; serviceName?: string; locationName?: string; metaDescription?: string }[] }
+): TargetPage[] {
+  if (blueprint?.pages && blueprint.pages.length > 0) {
+    return blueprint.pages.map((p) => ({
+      path: p.path,
+      title: p.title,
+      type: p.type,
+      serviceName: p.serviceName,
+      areaName: p.locationName,
+      description: p.metaDescription,
+    }));
+  }
+
   const targetMap = new Map<string, TargetPage>();
 
   // Always ensure index.html (Home) is first
