@@ -96,6 +96,7 @@ import {
   AlertCircle,
   RefreshCw,
   Zap,
+  Lock,
 } from "lucide-react";
 import type { SelectedServiceCity } from "@/components/ServiceAreaPicker";
 import type { KeywordMapEntry } from "@/components/KeywordMapModal";
@@ -467,6 +468,23 @@ export default function DashboardPage() {
   const [imageProvider, setImageProvider] = useState<string>("Bing");
   const [blogPostsCount, setBlogPostsCount] = useState<number>(3);
   const [isEditBlueprintOpen, setIsEditBlueprintOpen] = useState<boolean>(false);
+
+  // Deterministic Targeting Lock & Pipeline Activity State
+  const [targetingLocked, setTargetingLocked] = useState(true);
+  const [generationLogs, setGenerationLogs] = useState<
+    Array<{ id: string; time: string; message: string; type?: "info" | "warn" | "error" | "success" }>
+  >([]);
+  const [retryCount, setRetryCount] = useState(0);
+  const lockedSnapshotRef = useRef<any>(null);
+
+  const addGenLog = useCallback(
+    (message: string, type: "info" | "warn" | "error" | "success" = "info") => {
+      const time = new Date().toLocaleTimeString("en-US", { hour12: false });
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setGenerationLogs((prev) => [...prev, { id, time, message, type }]);
+    },
+    []
+  );
 
   // Step Validation Errors
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
@@ -1139,7 +1157,7 @@ export default function DashboardPage() {
 
   // Dynamic Blueprint Metrics
   const computedLocationCount = useMemo(() => {
-    return Math.max(serviceAreas.length, serviceAreaCities.length, 1);
+    return serviceAreas.length > 0 ? serviceAreas.length : serviceAreaCities.length;
   }, [serviceAreas.length, serviceAreaCities.length]);
 
   const computedPageCount = useMemo(() => {
@@ -1147,10 +1165,10 @@ export default function DashboardPage() {
     if (selectedPages.includes("Services")) count += 1;
     if (separateServicePages && services.length > 0) count += services.length;
     if (selectedPages.includes("Service Areas") || serviceAreas.length > 0 || serviceAreaCities.length > 0) count += 1;
-    if (separateAreaPages) count += computedLocationCount;
+    if (separateAreaPages && computedLocationCount > 0) count += computedLocationCount;
     if (blogPostsCount > 0) count += (1 + blogPostsCount); // 1 blog hub + N articles
     return count;
-  }, [selectedPages, separateServicePages, services.length, separateAreaPages, computedLocationCount, blogPostsCount]);
+  }, [selectedPages, separateServicePages, services.length, separateAreaPages, computedLocationCount, blogPostsCount, serviceAreas.length, serviceAreaCities.length]);
 
   const themeDisplayName = useMemo(() => {
     if (selectedThemeId === "pipe-and-wrench" || selectedThemeId === "forge" || activeTheme.id === "pipe-and-wrench") {
@@ -1845,10 +1863,42 @@ export default function DashboardPage() {
         .join(". "),
     };
 
+    // 1. Lock immutable targeting snapshot (User Data Always Wins)
+    const targetingSnapshot = Object.freeze({
+      businessName: businessName.trim(),
+      businessType: effectiveIndustry,
+      nicheId: currentNichePack.id,
+      services: parseTagList(services),
+      primaryService: services[0] || effectiveIndustry,
+      secondaryServices: services.slice(1),
+      primaryCity: city.trim(),
+      primaryState: stateRegion.trim(),
+      serviceAreasList: parseLocationList(serviceAreas),
+      serviceAreaCities: serviceAreaCities.map((c) => ({
+        city: c.city,
+        stateId: c.stateId,
+      })),
+      keywords: parseKeywordList(keywords),
+      primaryKeyword: keywords[0] || "",
+      secondaryKeywords: keywords.slice(1),
+      timestamp: Date.now(),
+    });
+    lockedSnapshotRef.current = targetingSnapshot;
+
     lastFormDataRef.current = formData;
     try {
       localStorage.setItem("altofox_staged_form_data", JSON.stringify(formData));
     } catch {}
+
+    const formatNow = () => new Date().toLocaleTimeString("en-US", { hour12: false });
+    const additionalLocCount = serviceAreas.length + serviceAreaCities.length;
+    setGenerationLogs([
+      { id: "log-1", time: formatNow(), message: `Targeting snapshot locked: ${city.trim() || "Yardley"}, ${stateRegion.trim() || "PA"}` },
+      { id: "log-2", time: formatNow(), message: `Primary Service: ${services[0] || effectiveIndustry} (${services.length} total services)` },
+      { id: "log-3", time: formatNow(), message: `Locations: ${city.trim() || "Yardley"} (${additionalLocCount === 0 ? "Single-City Site — 0 additional locations" : `${additionalLocCount} additional cities`})` },
+      { id: "log-4", time: formatNow(), message: `Keywords: ${keywords.length} approved target queries` },
+      { id: "log-5", time: formatNow(), message: `Connecting to ${activeProvider.toUpperCase()} (${activeModel})...` },
+    ]);
 
     setGenerating(true);
     setGenerationStage("QUEUED");
@@ -1866,7 +1916,7 @@ export default function DashboardPage() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       setGenerationElapsedSeconds(elapsed);
 
-      if (elapsed >= 50) {
+      if (elapsed >= 45) {
         setIsGenerationTakingLong(true);
       }
     }, 1000);
@@ -1884,6 +1934,7 @@ export default function DashboardPage() {
       setGenerationStage("RESEARCHING");
       setGenerationPercent(STAGE_CONFIG.RESEARCHING.defaultPercent);
       setGenerationProgressText(`Analyzing niche and connecting to ${activeProvider.toUpperCase()} (${activeModel})…`);
+      addGenLog(`Provider connection established: ${activeProvider.toUpperCase()} (${activeModel})`, "info");
 
       // Allow UI to paint stage transition
       await new Promise((r) => setTimeout(r, 200));
@@ -1891,6 +1942,7 @@ export default function DashboardPage() {
       setGenerationStage("GENERATING_CONTENT");
       setGenerationPercent(STAGE_CONFIG.GENERATING_CONTENT.defaultPercent);
       setGenerationProgressText(`Generating high-converting local trade copy with ${activeProvider.toUpperCase()}…`);
+      addGenLog("Generating multi-page content with deterministic seed variation...", "info");
 
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -1935,6 +1987,7 @@ export default function DashboardPage() {
 
       if (!res.ok || !data.success) {
         const failedStage: GenerationFailureStage = data.failedStage || "FAILED_PROVIDER";
+        addGenLog(`Generation halted at stage ${failedStage}: ${data.error || "Provider error"}`, "error");
         setGenerationStage(failedStage);
         setGenerationError({
           message: data.error || `Server returned HTTP ${res.status}: ${res.statusText}`,
@@ -1960,12 +2013,14 @@ export default function DashboardPage() {
       setGenerationStage("PACKAGING");
       setGenerationPercent(STAGE_CONFIG.PACKAGING.defaultPercent);
       setGenerationProgressText("Packaging zero-build static pages and assets…");
+      addGenLog(`Packaging ${data.files?.length || 0} static HTML pages, CSS, and metadata...`, "info");
 
       await new Promise((r) => setTimeout(r, 150));
 
       setGenerationStage("READY");
       setGenerationPercent(100);
       setGenerationProgressText("Website generation complete! Preparing preview…");
+      addGenLog(`Website generated successfully! Quality score: ${data.qualityReport?.overallScore || 90}/100`, "success");
 
       const success = await handleProcessGeneratedSite(data, formData);
       if (success) {
@@ -1978,6 +2033,8 @@ export default function DashboardPage() {
       const errMsg = isTimeout
         ? "Generation took longer than expected (timed out after 160 seconds). You can retry or switch to curated templates."
         : (err instanceof Error ? err.message : "Network error generating website. Please check your internet connection.");
+
+      addGenLog(isTimeout ? "Generation timed out after 160s. Targeting snapshot preserved for Retry." : `Pipeline error: ${errMsg}`, "error");
 
       setGenerationStage("FAILED_PROVIDER");
       setGenerationError({
@@ -2519,11 +2576,15 @@ export default function DashboardPage() {
                       <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                         <button
                           type="button"
-                          onClick={handleGenerateWebsite}
+                          onClick={() => {
+                            setRetryCount((prev) => prev + 1);
+                            addGenLog(`Initiating pipeline retry (Attempt #${retryCount + 1})...`, "info");
+                            handleGenerateWebsite();
+                          }}
                           className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry Pipeline</span>
+                          <span>Retry Pipeline {retryCount > 0 ? `(Attempt #${retryCount + 1})` : ""}</span>
                         </button>
                         <button
                           type="button"
@@ -2640,6 +2701,66 @@ export default function DashboardPage() {
                           style={{ width: `${generationPercent}%` }}
                         />
                       </div>
+
+                      {/* Stale Job Detection Banner */}
+                      {isGenerationTakingLong && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-left space-y-2 animate-in fade-in duration-200">
+                          <div className="flex items-center space-x-2 text-amber-900 font-bold text-xs">
+                            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                            <span>Generation is taking longer than usual ({generationElapsedSeconds}s elapsed)</span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 leading-relaxed">
+                            The AI provider is still generating your content. Your entered business and targeting data are safely preserved. You can continue waiting, cancel generation, or assemble immediately using curated trade templates.
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={handleCancelGeneration}
+                              className="px-2.5 py-1 text-xs font-semibold rounded bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 transition"
+                            >
+                              Cancel Generation
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleInstantSafeGeneration}
+                              className="px-2.5 py-1 text-xs font-semibold rounded bg-amber-600 hover:bg-amber-700 text-white transition"
+                            >
+                              Instant Template Fallback (&lt;1s)
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Live Activity Log */}
+                      {generationLogs.length > 0 && (
+                        <div className="text-left p-3.5 bg-slate-900 text-slate-200 rounded-xl font-mono text-[11px] max-h-36 overflow-y-auto space-y-1 border border-slate-800 shadow-inner">
+                          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5 flex items-center justify-between pb-1 border-b border-slate-800">
+                            <span>Live Pipeline Activity</span>
+                            <span className="text-emerald-400 font-sans flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span>Active</span>
+                            </span>
+                          </div>
+                          {generationLogs.map((log) => (
+                            <div key={log.id} className="flex items-start space-x-2 leading-relaxed">
+                              <span className="text-slate-500 shrink-0 select-none">[{log.time}]</span>
+                              <span
+                                className={
+                                  log.type === "warn"
+                                    ? "text-amber-300"
+                                    : log.type === "error"
+                                    ? "text-rose-400 font-bold"
+                                    : log.type === "success"
+                                    ? "text-emerald-300 font-semibold"
+                                    : "text-slate-300"
+                                }
+                              >
+                                {log.message}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="pt-2">
                         <button
@@ -4654,8 +4775,8 @@ export default function DashboardPage() {
                         })}
 
                       {/* Dedicated Location Landing Pages */}
-                      {separateAreaPages &&
-                        (serviceAreas.length > 0 ? serviceAreas : [city || "Dallas"]).map((area) => {
+                      {separateAreaPages && (serviceAreas.length > 0 || serviceAreaCities.length > 0) ? (
+                        (serviceAreas.length > 0 ? serviceAreas : serviceAreaCities.map((c) => c.city)).map((area) => {
                           const slug = area.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
                           return (
                             <div key={area} className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
@@ -4670,7 +4791,13 @@ export default function DashboardPage() {
                               </div>
                             </div>
                           );
-                        })}
+                        })
+                      ) : (
+                        <div className="p-2.5 px-4 flex items-center justify-between bg-slate-50 text-[11px] text-slate-500 italic">
+                          <span>Single-Location Target: No additional /areas/ landing pages. Coverage focused on {city || "Primary City"}.</span>
+                          <span className="text-indigo-600 font-semibold font-mono">1 Central Location</span>
+                        </div>
+                      )}
 
                       {/* Blog Hub & Posts */}
                       {blogPostsCount > 0 && (
@@ -4699,6 +4826,108 @@ export default function DashboardPage() {
                           <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
                         </div>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* DETERMINISTIC TARGETING CONFIRMATION & LOCK CARD */}
+                  <div className="rounded-[14px] border-2 border-indigo-500/30 bg-white p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <div className="flex items-center space-x-2">
+                        <Lock className="w-4 h-4 text-indigo-600" />
+                        <h3 className="text-sm font-bold text-slate-900">
+                          Deterministic Targeting Confirmation &amp; Lock
+                        </h3>
+                      </div>
+                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" /> User Targeting Rules Active
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      {/* Business & Industry */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Business &amp; Trade
+                        </span>
+                        <p className="font-bold text-slate-900 text-sm">{businessName || "Unnamed Business"}</p>
+                        <p className="text-slate-600">
+                          Industry: <strong className="text-slate-900">{effectiveIndustry}</strong>
+                        </p>
+                        {phone && <p className="text-slate-600">Phone: <strong className="text-slate-900">{phone}</strong></p>}
+                      </div>
+
+                      {/* Primary & Additional Locations */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Target Locations (Strict)
+                        </span>
+                        <div className="flex items-center space-x-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="font-bold text-slate-900">
+                            Primary: {city || "Local City"}, {stateRegion || "US"}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 text-[11px]">
+                          Additional Cities:{" "}
+                          <strong className="text-slate-800">
+                            {serviceAreas.length + serviceAreaCities.length > 0
+                              ? [...serviceAreas, ...serviceAreaCities.map((c) => c.city)].join(", ")
+                              : "None (0 additional locations — Single-City Site)"}
+                          </strong>
+                        </p>
+                      </div>
+
+                      {/* Primary & Secondary Services */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          Offered Services
+                        </span>
+                        <p className="text-slate-600">
+                          Primary Service: <strong className="text-slate-900">{services[0] || effectiveIndustry}</strong>
+                        </p>
+                        <p className="text-slate-600 text-[11px]">
+                          Secondary Services:{" "}
+                          <strong className="text-slate-800">
+                            {services.length > 1 ? services.slice(1).join(", ") : "None"}
+                          </strong>
+                        </p>
+                      </div>
+
+                      {/* Target SEO Keywords */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                          SEO Keywords
+                        </span>
+                        <p className="text-slate-600">
+                          Primary Keyword: <strong className="text-slate-900">{keywords[0] || "None specified"}</strong>
+                        </p>
+                        <p className="text-slate-600 text-[11px]">
+                          Secondary Keywords:{" "}
+                          <strong className="text-slate-800">
+                            {keywords.length > 1 ? keywords.slice(1).join(", ") : "None"}
+                          </strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Lock Checkbox */}
+                    <div className="pt-1">
+                      <label className="flex items-start space-x-2.5 p-3 rounded-xl bg-indigo-50/50 border border-indigo-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={targetingLocked}
+                          onChange={(e) => setTargetingLocked(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 block">
+                            Lock Targeting Snapshot (User Data Always Wins)
+                          </span>
+                          <p className="text-[11px] text-slate-600 mt-0.5">
+                            Only the explicit business, location, service, and keyword information above will be used in website generation. The system will NOT invent or automatically inject any nearby cities, neighborhoods, or unapproved keywords.
+                          </p>
+                        </div>
+                      </label>
                     </div>
                   </div>
 

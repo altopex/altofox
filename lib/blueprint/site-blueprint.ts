@@ -248,8 +248,8 @@ function generateVariationSeed(siteSeed: string): string {
  */
 export function createSiteBlueprint(input: BlueprintInput): SiteBlueprint {
   const nicheName = (input.niche || input.businessType || "Contractor").trim();
-  const primaryCityName = (input.primaryCity || input.city || "Chicago").trim();
-  const resolvedState = (input.state || input.stateRegion || "Illinois").trim();
+  const primaryCityName = (input.primaryCity || input.city || "Local Service Area").trim();
+  const resolvedState = (input.state || input.stateRegion || "").trim();
 
   // 1. Lookup Niche Pack
   const nichePack = findNicheByIndustry(nicheName);
@@ -263,14 +263,14 @@ export function createSiteBlueprint(input: BlueprintInput): SiteBlueprint {
   const matchedState = cityMatch?.stateName || resolvedState;
   const matchedCounty = cityMatch?.county;
 
-  // 3. Resolve Services (Support up to input.serviceCount or explicit array)
-  const targetServiceCount = input.serviceCount || (Array.isArray(input.services) ? input.services.length : 5);
+  // 3. Resolve Services (Strict: user-provided services win; no silent padding)
   const resolvedServices: BlueprintService[] = [];
 
   if (Array.isArray(input.services) && input.services.length > 0) {
-    input.services.slice(0, targetServiceCount).forEach((svc, index) => {
+    input.services.forEach((svc, index) => {
       if (typeof svc === "string") {
         const name = svc.trim();
+        if (!name) return;
         const slug = slugify(name);
         resolvedServices.push({
           name,
@@ -290,126 +290,72 @@ export function createSiteBlueprint(input: BlueprintInput): SiteBlueprint {
     });
   }
 
-  // If services list was short or empty, populate from Niche Pack
-  if (resolvedServices.length < targetServiceCount) {
-    const defaults = nichePack?.commonServices || [
-      "24/7 Emergency Service",
-      "Diagnostic Inspection & Repair",
-      "System Maintenance & Tune-Up",
-      "Full Replacement & Installation",
-      "Preventative Protection & Warranty",
-    ];
-
-    for (const def of defaults) {
-      if (resolvedServices.length >= targetServiceCount) break;
-      const alreadyHas = resolvedServices.some(
-        (s) => s.name.toLowerCase() === def.toLowerCase() || s.slug === slugify(def)
-      );
-      if (!alreadyHas) {
-        const slug = slugify(def);
-        resolvedServices.push({
-          name: def,
-          slug,
-          description: `Comprehensive ${def.toLowerCase()} delivered with upfront pricing and master craftsmanship.`,
-          isPrimary: resolvedServices.length === 0,
-          keywords: [`${def.toLowerCase()} ${primaryCityName.toLowerCase()}`, `local ${def.toLowerCase()}`],
-        });
-      }
-    }
+  // If user provided NO services at all, use primary service or trade default
+  if (resolvedServices.length === 0) {
+    const defaultSvcName = input.primaryService || `${tradeCategory} Services`;
+    resolvedServices.push({
+      name: defaultSvcName,
+      slug: slugify(defaultSvcName),
+      description: `Comprehensive ${defaultSvcName.toLowerCase()} delivered with upfront pricing and master craftsmanship.`,
+      isPrimary: true,
+      keywords: [`${defaultSvcName.toLowerCase()} ${primaryCityName.toLowerCase()}`, `local ${defaultSvcName.toLowerCase()}`],
+    });
   }
 
   const primaryService = input.primaryService || resolvedServices[0]?.name || `${tradeCategory} Services`;
 
-  // 4. Resolve Locations (Support up to input.locationCount or explicit array)
-  const targetLocationCount = input.locationCount || (Array.isArray(input.locations) ? input.locations.length : 5);
+  // 4. Resolve Locations (Strict: user-selected locations only; NEVER invent or pad nearby cities)
   const resolvedLocations: BlueprintLocation[] = [];
 
+  // Primary Location is always first
+  resolvedLocations.push({
+    name: primaryCityName,
+    city: primaryCityName,
+    state: matchedState,
+    slug: slugify(primaryCityName),
+    isPrimary: true,
+    county: matchedCounty,
+  });
+
+  // Only add additional locations if explicitly provided by the user
   if (Array.isArray(input.locations) && input.locations.length > 0) {
-    input.locations.slice(0, targetLocationCount).forEach((loc, index) => {
+    input.locations.forEach((loc) => {
+      const locName = (typeof loc === "string" ? loc : loc?.name || loc?.city || "").trim();
+      if (!locName || locName.toLowerCase() === primaryCityName.toLowerCase()) return;
+      if (resolvedLocations.some((l) => l.city.toLowerCase() === locName.toLowerCase())) return;
+
       if (typeof loc === "string") {
-        const name = loc.trim();
         resolvedLocations.push({
-          name,
-          city: name,
+          name: locName,
+          city: locName,
           state: matchedState,
-          slug: slugify(name),
-          isPrimary: index === 0 || name.toLowerCase() === primaryCityName.toLowerCase(),
+          slug: slugify(locName),
+          isPrimary: false,
         });
-      } else if (loc && loc.name) {
+      } else if (loc && (loc.name || loc.city)) {
         resolvedLocations.push({
-          name: loc.name,
-          city: loc.city || loc.name,
+          name: locName,
+          city: loc.city || locName,
           state: loc.state || matchedState,
-          slug: loc.slug || slugify(loc.name),
-          isPrimary: index === 0 || loc.name.toLowerCase() === primaryCityName.toLowerCase(),
+          slug: loc.slug || slugify(locName),
+          isPrimary: false,
           neighborhoods: loc.neighborhoods,
         });
       }
     });
   }
 
-  // If locations list was short, populate from nearby cities or metro
-  if (resolvedLocations.length < targetLocationCount) {
-    // Always ensure primary city is first
-    if (!resolvedLocations.some((l) => l.city.toLowerCase() === primaryCityName.toLowerCase())) {
-      resolvedLocations.unshift({
-        name: primaryCityName,
-        city: primaryCityName,
-        state: matchedState,
-        slug: slugify(primaryCityName),
-        isPrimary: true,
-        county: matchedCounty,
-      });
-    }
-
-    if (cityMatch) {
-      const nearby = getNearestSelectedCities(cityMatch, US_CITIES, 10);
-      for (const near of nearby) {
-        if (resolvedLocations.length >= targetLocationCount) break;
-        if (!resolvedLocations.some((l) => l.city.toLowerCase() === near.city.toLowerCase())) {
-          resolvedLocations.push({
-            name: near.city,
-            city: near.city,
-            state: matchedState,
-            slug: slugify(near.city),
-            isPrimary: false,
-            distanceOffset: `~${Math.round(near.distanceMiles)} miles away`,
-          });
-        }
-      }
-    }
-
-    // Default Fallbacks for major metros (e.g. Chicago)
-    if (resolvedLocations.length < targetLocationCount && primaryCityName.toLowerCase() === "chicago") {
-      const chicagoSubs = ["Naperville", "Evanston", "Aurora", "Joliet", "Schaumburg", "Oak Park"];
-      for (const sub of chicagoSubs) {
-        if (resolvedLocations.length >= targetLocationCount) break;
-        if (!resolvedLocations.some((l) => l.city.toLowerCase() === sub.toLowerCase())) {
-          resolvedLocations.push({
-            name: sub,
-            city: sub,
-            state: "Illinois",
-            slug: slugify(sub),
-            isPrimary: false,
-          });
-        }
-      }
-    }
-  }
-
-  // 5. Neighborhoods
-  const neighborhoods: string[] = input.neighborhoods || (
-    primaryCityName.toLowerCase() === "chicago"
-      ? ["Lincoln Park", "Loop", "Logan Square", "Lakeview", "Wicker Park", "West Loop"]
-      : []
-  );
+  // 5. Neighborhoods (Strict: ONLY user-provided neighborhoods, never random defaults)
+  const neighborhoods: string[] = Array.isArray(input.neighborhoods)
+    ? input.neighborhoods.filter(Boolean)
+    : [];
 
   // 6. Business Name, Phone, and Address
   const businessName = (
     input.businessName ||
     `${primaryCityName} ${tradeCategory === "Plumber" ? "Plumbing" : tradeCategory} Pros`
   ).trim();
-  const phone = (input.phone || "(312) 555-0199").trim();
+  const phone = (input.phone || "(555) 000-0000").trim();
   const rawAddress = input.address || input.streetAddress;
   let formattedAddress: SiteBlueprint["address"];
 
@@ -432,21 +378,16 @@ export function createSiteBlueprint(input: BlueprintInput): SiteBlueprint {
     };
   }
 
-  // 7. Keywords
+  // 7. Keywords (Strict: ONLY user-provided keywords; if none, use only primary service + city)
   let keywords: string[] = [];
-  if (Array.isArray(input.keywords)) {
-    keywords = input.keywords;
+  if (Array.isArray(input.keywords) && input.keywords.length > 0) {
+    keywords = input.keywords.filter(Boolean);
   } else if (typeof input.keywords === "string" && input.keywords.trim()) {
     keywords = parseKeywordList(input.keywords);
   } else if (typeof input.targetKeywords === "string" && input.targetKeywords.trim()) {
     keywords = parseKeywordList(input.targetKeywords);
   } else {
-    keywords = [
-      `${tradeCategory.toLowerCase()} in ${primaryCityName.toLowerCase()}`,
-      `best ${tradeCategory.toLowerCase()} ${primaryCityName.toLowerCase()}`,
-      `emergency ${tradeCategory.toLowerCase()}`,
-      ...resolvedServices.map((s) => `${s.name.toLowerCase()} ${primaryCityName.toLowerCase()}`),
-    ];
+    keywords = [`${primaryService.toLowerCase()} in ${primaryCityName.toLowerCase()}`];
   }
 
   // 8. Service Areas list
@@ -629,8 +570,8 @@ export function createSiteBlueprint(input: BlueprintInput): SiteBlueprint {
     targetKeywords: [`${tradeCategory.toLowerCase()} service areas`, `${primaryCityName.toLowerCase()} metro ${tradeCategory.toLowerCase()}`],
   });
 
-  // Dedicated Location Pages (for secondary locations)
-  const secondaryLocations = resolvedLocations.filter((l) => !l.isPrimary || resolvedLocations.length === 1);
+  // Dedicated Location Pages (strictly for user-approved secondary locations)
+  const secondaryLocations = resolvedLocations.filter((l) => !l.isPrimary);
   for (const loc of secondaryLocations) {
     const pagePath = `${tradeSlug}-${loc.slug}.html`;
     pages.push({

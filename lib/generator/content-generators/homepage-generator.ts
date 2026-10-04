@@ -103,9 +103,9 @@ export function generateHomepageDeterministic(context: PageGenerationContext): P
     context.primaryKeyword
   );
 
-  const phone = facts.phone || "(312) 555-0199";
-  const city = facts.city || "Chicago";
-  const state = facts.state || "IL";
+  const phone = facts.phone || "";
+  const city = facts.city || "Local Area";
+  const state = facts.state || "";
   const trade = facts.trade || "Plumbing";
 
   // Build trust badges strictly from verified facts
@@ -119,7 +119,7 @@ export function generateHomepageDeterministic(context: PageGenerationContext): P
   trustBadges.push("Upfront Flat-Rate Pricing");
 
   // Determine headlines based on variation heading style
-  let heroH1 = `${context.primaryKeyword} in ${city}, ${state}`;
+  let heroH1 = `${context.primaryKeyword} in ${city}${state ? `, ${state}` : ""}`;
   let heroSub = `Rapid-response, master-certified ${trade.toLowerCase()} services across ${city} and surrounding communities. Upfront pricing with guaranteed workmanship.`;
   let servicesHeadline = `Comprehensive ${trade} Solutions for ${city} Homeowners`;
   let whyUsHeadline = `Why Greater ${city} Trusts ${facts.businessName}`;
@@ -130,7 +130,7 @@ export function generateHomepageDeterministic(context: PageGenerationContext): P
     servicesHeadline = `Precision Diagnostics & Heavy-Duty ${trade} Repairs`;
     whyUsHeadline = `Fast Dispatch, Advanced Diagnostics, Zero Guesswork`;
   } else if (variation.headingStyle === "craftsmanship_authority") {
-    heroH1 = `Chicago Master ${trade} Craftsmen & Infrastructure Specialists`;
+    heroH1 = `${city} Master ${trade} Craftsmen & Infrastructure Specialists`;
     heroSub = `Engineered solutions for residential stacks, modern hydronics, and historic architectural code compliance across ${city}.`;
     servicesHeadline = `Master-Level Mechanical & ${trade} Installations`;
     whyUsHeadline = `True Code-Compliant Craftsmanship Backed by Written Warranties`;
@@ -166,7 +166,7 @@ export function generateHomepageDeterministic(context: PageGenerationContext): P
   // Map service areas
   const serviceAreaCities = context.relatedLocations.map((l) => l.name);
   if (serviceAreaCities.length === 0) {
-    serviceAreaCities.push(city, "Lincoln Park", "Loop", "Logan Square", "Evanston", "Oak Park");
+    serviceAreaCities.push(city);
   }
 
   // Build section list

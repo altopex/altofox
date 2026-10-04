@@ -74,9 +74,9 @@ export function generateFaqPageDeterministic(context: PageGenerationContext): Pa
     context.primaryKeyword
   );
 
-  const phone = facts.phone || "(312) 555-0199";
-  const city = facts.city || "Chicago";
-  const state = facts.state || "IL";
+  const phone = facts.phone || "";
+  const city = facts.city || "Local Area";
+  const state = facts.state || "";
   const trade = facts.trade || "Plumbing";
 
   const trustBadges: string[] = [

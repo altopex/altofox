@@ -86,21 +86,129 @@ export function ServiceAreaPicker({
   const [selectedState, setSelectedState] = useState<string>(businessState || "TX");
   const countiesForState = useMemo(() => getCountiesForState(selectedState), [selectedState]);
   const [selectedCounty, setSelectedCounty] = useState<string>(countiesForState[0] || "Dallas");
+  // Geocoded origin city fallback
+  const [geocodedHub, setGeocodedHub] = useState<CityData | null>(null);
 
-  // Manual autocomplete search
+  // Auto-geocode businessCity / businessState if not found in static US_CITIES
+  useEffect(() => {
+    if (!businessCity || !businessCity.trim()) return;
+
+    const localFound = findCityByName(businessCity, businessState);
+    if (localFound) {
+      setGeocodedHub(localFound);
+      return;
+    }
+
+    let active = true;
+    const query = `${businessCity.trim()} ${businessState?.trim() || ""}`.trim();
+    fetch(`/api/locations/search?q=${encodeURIComponent(query)}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active || !data?.results || data.results.length === 0) return;
+        const top = data.results[0];
+        const cName = top.city || businessCity;
+        const sId = top.stateId || businessState || "US";
+        setGeocodedHub({
+          id: `${cName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${sId.toLowerCase()}`,
+          city: cName,
+          stateId: sId,
+          stateName: top.stateName || sId,
+          county: top.county || "",
+          lat: top.lat,
+          lng: top.lng,
+          population: top.population || 0,
+          zips: top.zips || [],
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [businessCity, businessState]);
+
+  // Identify central business coordinates (Yardley, PA, Dallas, or user input)
+  const originCity = useMemo<CityData>(() => {
+    if (geocodedHub) return geocodedHub;
+    const found = findCityByName(businessCity, businessState);
+    if (found) return found;
+    if (businessCity?.trim()) {
+      const cName = businessCity.trim();
+      const sId = businessState?.trim() || "US";
+      return {
+        id: `${cName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${sId.toLowerCase()}`,
+        city: cName,
+        stateId: sId,
+        stateName: sId,
+        county: "",
+        lat: 40.242506,
+        lng: -74.8389704,
+        population: 0,
+        zips: [],
+      };
+    }
+    return US_CITIES[0];
+  }, [geocodedHub, businessCity, businessState]);
+
+  // Manual autocomplete search with API fallback
   const [manualQuery, setManualQuery] = useState("");
-  const searchResults = useMemo(() => searchCities(manualQuery, 8), [manualQuery]);
+  const [manualResults, setManualResults] = useState<CityData[]>([]);
+  const [isSearchingManual, setIsSearchingManual] = useState(false);
+
+  useEffect(() => {
+    const q = manualQuery.trim();
+    if (!q || q.length < 2) {
+      setManualResults([]);
+      setIsSearchingManual(false);
+      return;
+    }
+
+    const localMatches = searchCities(q, 8);
+    setManualResults(localMatches);
+
+    const timer = setTimeout(() => {
+      setIsSearchingManual(true);
+      fetch(`/api/locations/search?q=${encodeURIComponent(q)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.results && Array.isArray(data.results)) {
+            const apiCities: CityData[] = data.results.map((r: any) => ({
+              id: `${(r.city || "city").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${(r.stateId || "us").toLowerCase()}`,
+              city: r.city,
+              stateId: r.stateId || "US",
+              stateName: r.stateName || r.stateId || "United States",
+              county: r.county || "",
+              lat: r.lat,
+              lng: r.lng,
+              population: r.population || 0,
+              zips: r.zips || [],
+            }));
+
+            // Merge local and api results uniquely by city + stateId
+            const map = new Map<string, CityData>();
+            for (const c of localMatches) {
+              map.set(`${c.city.toLowerCase()}-${c.stateId.toUpperCase()}`, c);
+            }
+            for (const c of apiCities) {
+              const key = `${c.city.toLowerCase()}-${c.stateId.toUpperCase()}`;
+              if (!map.has(key)) {
+                map.set(key, c);
+              }
+            }
+            setManualResults(Array.from(map.values()).slice(0, 12));
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsSearchingManual(false);
+        });
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [manualQuery]);
 
   // Expanded city notes accordion
   const [expandedNotesCity, setExpandedNotesCity] = useState<string | null>(null);
-
-  // Identify central business coordinates
-  const originCity = useMemo(() => {
-    const found = findCityByName(businessCity, businessState);
-    if (found) return found;
-    // Fallback: look for Dallas or first city
-    return US_CITIES[0];
-  }, [businessCity, businessState]);
 
   // Cities found within radius
   const radiusCities = useMemo(() => {
@@ -504,22 +612,35 @@ export function ServiceAreaPicker({
         <div className="space-y-4 bg-slate-50 border border-slate-200 rounded-xl p-4">
           <div>
             <label className="block text-xs font-bold text-slate-900 mb-1">
-              Type City Name or ZIP Code
+              Type City Name or ZIP Code (Nationwide Search)
             </label>
-            <input
-              type="text"
-              value={manualQuery}
-              onChange={(e) => setManualQuery(e.target.value)}
-              placeholder="e.g. Frisco, McKinney, 75034"
-              className="input-base text-xs bg-white"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                value={manualQuery}
+                onChange={(e) => setManualQuery(e.target.value)}
+                placeholder="e.g. Yardley, PA, Newtown, Morrisville, 19067"
+                className="input-base text-xs bg-white pr-8"
+              />
+              {isSearchingManual && (
+                <div className="absolute right-2.5 top-2.5 text-slate-400">
+                  <div className="w-3.5 h-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Searches OpenStreetMap &amp; US Census databases. Finding any US city or borough (e.g. Yardley, PA).
+            </p>
           </div>
 
-          {searchResults.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-xs font-semibold text-slate-600">Matching Cities:</span>
+          {manualResults.length > 0 ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-slate-600">
+                <span className="font-semibold">Matching Locations ({manualResults.length}):</span>
+                <span className="text-[11px] text-indigo-600">Click to add/remove from targeting</span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {searchResults.map((c) => {
+                {manualResults.map((c) => {
                   const selected = isCitySelected(c.city, c.stateId);
                   return (
                     <div
@@ -531,25 +652,33 @@ export function ServiceAreaPicker({
                           : "border-slate-200 bg-white hover:border-slate-300 text-slate-800"
                       }`}
                     >
-                      <div>
-                        <span className="text-xs font-bold block">{c.city}, {c.stateId}</span>
-                        <span className="text-[10px] text-slate-500">
-                          {c.county} County • Pop. {c.population?.toLocaleString()}
+                      <div className="truncate pr-2">
+                        <span className="text-xs font-bold block truncate">{c.city}, {c.stateId}</span>
+                        <span className="text-[10px] text-slate-500 block truncate">
+                          {c.county ? `${c.county} • ` : ""}Lat {c.lat?.toFixed(2)}, Lng {c.lng?.toFixed(2)}
                         </span>
                       </div>
-                      <div
-                        className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                          selected ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 bg-white"
-                        }`}
-                      >
-                        {selected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded font-semibold ${
+                            selected
+                              ? "bg-indigo-600 text-white"
+                              : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                          }`}
+                        >
+                          {selected ? "Selected ✓" : "+ Add"}
+                        </span>
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-          )}
+          ) : manualQuery.trim().length >= 2 && !isSearchingManual ? (
+            <p className="text-xs text-slate-500 py-2 italic text-center">
+              No matching locations found for &ldquo;{manualQuery}&rdquo;. Try another spelling or ZIP code.
+            </p>
+          ) : null}
         </div>
       )}
 
@@ -559,7 +688,7 @@ export function ServiceAreaPicker({
           <div className="flex items-center space-x-2">
             <Layers className="w-4 h-4 text-indigo-600" />
             <h3 className="text-xs font-bold text-slate-900">
-              Selected Service Areas ({selectedCities.length} Cities)
+              Selected Service Areas ({selectedCities.length} Additional Cities)
             </h3>
           </div>
           {selectedCities.length > 0 && (
@@ -574,9 +703,15 @@ export function ServiceAreaPicker({
         </div>
 
         {selectedCities.length === 0 ? (
-          <p className="text-xs text-slate-500 py-3 text-center italic">
-            No service areas selected yet. Use the tabs above to select nearby cities and suburbs.
-          </p>
+          <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-lg text-xs text-emerald-950 flex items-start space-x-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Single-City Target Mode Active (Strict)</p>
+              <p className="text-[11px] text-emerald-800 mt-0.5">
+                Only your primary location (<strong>{originCity.city}, {originCity.stateId}</strong>) will be targeted. No secondary location pages will be generated. Nearby suburbs (like Morrisville, Newtown, Langhorne) will NOT be targeted unless you explicitly add them.
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

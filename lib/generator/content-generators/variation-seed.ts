@@ -259,26 +259,26 @@ const TECHNICAL_FAQS_BY_SERVICE: Record<string, Array<{ question: string; answer
       technicalKey: "emergency_shutoff_protocol",
     },
   ],
-  "chicago-location": [
+  "location-general": [
     {
-      question: "What unique plumbing code challenges affect older Chicago homes and bungalows?",
-      answer: "Chicago's historic brick bungalows and brownstones frequently feature original lead service lines, unvented S-traps, and aging cast-iron soil stacks. Our licensed master plumbers are intimately versed in City of Chicago Plumbing Code requirements and lead-abatement replacement standards.",
-      technicalKey: "chicago_bungalow_code",
+      question: "Are your technicians fully licensed, bonded, and insured in this service area?",
+      answer: "Yes. All our technicians hold valid state and municipal licensing, full commercial liability coverage, and comprehensive bonding to protect your property during every service visit.",
+      technicalKey: "licensing_and_insurance",
     },
     {
-      question: "How can Chicago homeowners protect their pipes from extreme winter deep freezes?",
-      answer: "During sub-zero polar vortex conditions, keep indoor thermostats at 65°F minimum, open sink cabinet doors on exterior walls to let ambient heat circulate around supply lines, and allow a pencil-thin trickle of cold water to flow from the faucet farthest from your main line.",
-      technicalKey: "polar_vortex_pipe_freeze",
+      question: "How quickly can your technicians dispatch to residential and commercial properties?",
+      answer: "With fully stocked service vehicles positioned throughout our service territory, our emergency arrival window averages 30 to 60 minutes for priority service calls.",
+      technicalKey: "local_dispatch_response_time",
     },
     {
-      question: "How quickly can your plumbers dispatch across Chicago neighborhoods?",
-      answer: "With fully stocked service vehicles positioned across north, south, and central neighborhood hubs (including Lincoln Park, Logan Square, Loop, and Lakeview), our emergency arrival window averages under 45 minutes across Cook County.",
-      technicalKey: "chicago_neighborhood_dispatch",
+      question: "Do you handle required municipal permits and inspection codes?",
+      answer: "Yes. All major installations, utility connections, and replacements that require local municipal building permits are handled directly by our team to guarantee complete code compliance.",
+      technicalKey: "local_code_and_permits",
     },
     {
-      question: "Do you handle city permit acquisition for water service repairs in Chicago?",
-      answer: "Yes. All major excavation, street cut connections, water main taps, and sewer lateral replacements require Department of Water Management (DWM) permits. We pull and file all necessary city permits directly on your behalf.",
-      technicalKey: "chicago_dwm_permits",
+      question: "Do you provide upfront pricing before any work begins?",
+      answer: "Absolutely. We conduct an on-site diagnostic inspection and provide a transparent, flat-rate written quote for your approval before starting any repair or installation.",
+      technicalKey: "upfront_transparent_pricing",
     },
   ],
 };
@@ -375,8 +375,8 @@ export function createVariationProfile(
     relevantFaqPool = TECHNICAL_FAQS_BY_SERVICE["drain-cleaning"];
   } else if (cleanSlug.includes("leak") || cleanSlug.includes("pipe")) {
     relevantFaqPool = TECHNICAL_FAQS_BY_SERVICE["leak-detection"];
-  } else if (pageType === "location" || cleanSlug.includes("chicago")) {
-    relevantFaqPool = TECHNICAL_FAQS_BY_SERVICE["chicago-location"];
+  } else if (pageType === "location") {
+    relevantFaqPool = TECHNICAL_FAQS_BY_SERVICE["location-general"];
   } else {
     // Merge selection
     relevantFaqPool = [
@@ -401,7 +401,7 @@ export function createVariationProfile(
   const supportingTopics = [
     "Annual water heater sediment flush routines and TPR valve safety testing",
     "High-definition optical sewer camera diagnostic reporting",
-    "City of Chicago Department of Water Management building code compliance",
+    "Local municipal building code compliance and safety standards",
     "Preventative winter freeze protection protocols for multi-story residential plumbing stacks",
     "Upfront flat-rate pricing transparency with itemized written estimates",
   ];

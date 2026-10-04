@@ -24,7 +24,7 @@ export function buildLocationPagePrompt(context: PageGenerationContext): string 
   const loc = context.location || {
     city: facts.city,
     state: facts.state,
-    neighborhoods: ["Lincoln Park", "Loop", "Logan Square", "Lakeview", "West Loop"],
+    neighborhoods: [],
   };
   const seed = context.contentVariationSeed;
   const variation = createVariationProfile(seed, "location", context.primaryKeyword);
@@ -41,13 +41,13 @@ CRITICAL SCOPE: Generate ONLY the "${loc.city}" location landing page. Do NOT ge
 
 PAGE CONTEXT CONTRACT:
 - Page Type: location
-- Page Purpose: Establish authentic local proximity, rapid dispatch zones across ${loc.city} neighborhoods, and explain how the team addresses local architectural infrastructure (vintage bungalows, multi-story greystones) and local winter climate conditions.
+- Page Purpose: Establish authentic local proximity, rapid dispatch zones across ${loc.city}, and explain how the team addresses local residential and commercial service needs.
 - Primary Keyword: "${context.primaryKeyword}"
 - Secondary Keywords: ${JSON.stringify(context.secondaryKeywords)}
 - Search Intent: ${context.searchIntent} (High local navigational & transactional)
 - Target City: ${loc.city}, ${loc.state}
-- County: ${loc.county || "Cook County"}
-- Neighborhoods: ${(loc.neighborhoods || []).join(", ") || "Metro area"}
+- County: ${loc.county || `${loc.city} Area`}
+- Neighborhoods: ${(loc.neighborhoods || []).join(", ") || `${loc.city} and surrounding communities`}
 - Sibling Service Areas to Link: ${context.relatedLocations.map((l) => l.name).join(", ")}
 - Services Provided in Area: ${context.relatedServices.map((s) => s.name).join(", ")}
 - Variation Seed Digest: ${variation.seedDigest}
@@ -57,10 +57,10 @@ PAGE CONTEXT CONTRACT:
 ${internalLinksJson}
 
 LOCAL COMMUNITY & INFRASTRUCTURE TOPICS TO WEAVE IN:
-- Local Housing Stock: Historic brick bungalows, two-flats, and greystones with aging cast-iron soil stacks.
-- Winter Weather Protection: Sub-zero freeze-thaw cycles, exterior wall pipe insulation, and emergency burst pipe response.
-- Municipal Compliance: City of ${loc.city} Department of Water Management code compliance and licensed permit acquisition.
-- Neighborhood Dispatch: Average dispatch window under 45 minutes across primary neighborhood hubs.
+- Local Properties: Residential homes, commercial properties, and local facilities in ${loc.city}.
+- Weather & Seasonal Protection: Year-round weather readiness and emergency dispatch across ${loc.city}, ${loc.state}.
+- Municipal Compliance: ${loc.city} and ${loc.state} local building codes and industry standards.
+- Neighborhood Dispatch: Fast dispatch windows across ${loc.city} and surrounding communities.
 
 STRICT TRUTHFULNESS & ANTI-HALLUCINATION:
 1. NEVER invent fake customer reviews, ratings, or quotes.
@@ -98,10 +98,10 @@ Return ONLY a valid JSON object matching this schema:
 export function generateLocationPageDeterministic(context: PageGenerationContext): PageContentJSON {
   const facts = context.businessFacts;
   const loc = context.location || {
-    city: facts.city || "Chicago",
-    state: facts.state || "IL",
-    neighborhoods: ["Lincoln Park", "Loop", "Logan Square", "Lakeview", "West Loop"],
-    county: "Cook County",
+    city: facts.city || "Local Area",
+    state: facts.state || "",
+    neighborhoods: [],
+    county: "",
   };
   const variation: VariationProfile = createVariationProfile(
     context.contentVariationSeed,
@@ -109,7 +109,7 @@ export function generateLocationPageDeterministic(context: PageGenerationContext
     context.primaryKeyword
   );
 
-  const phone = facts.phone || "(312) 555-0199";
+  const phone = facts.phone || "";
   const city = loc.city;
   const state = loc.state;
   const trade = facts.trade || "Plumbing";
@@ -176,19 +176,21 @@ export function generateLocationPageDeterministic(context: PageGenerationContext
     : [
         {
           title: `Intimate Familiarity with ${city} Housing Stock`,
-          description: `From historic Chicago brick bungalows with cast-iron stacks to modern high-rise condos, our master technicians know the exact piping configurations and local code standards required for lasting repairs.`,
+          description: `From historic residential properties with older plumbing stacks to modern developments, our master technicians know the exact piping configurations and regional code standards required for lasting repairs.`,
         },
         {
           title: "Sub-Zero Freeze & Thaw Protection",
           description: `During severe winter weather, our technicians provide emergency pipe thawing, burst line repairs, and exterior wall supply line insulation to safeguard your home against flooding.`,
         },
         {
-          title: "Department of Water Management Code Compliance",
+          title: "Municipal Building Code Compliance",
           description: `All sewer connections, main shutoff replacements, and backflow installations strictly comply with City of ${city} codes and municipal permitting requirements.`,
         },
         {
           title: "Stationed Across Local Neighborhood Hubs",
-          description: `Our mobile response fleet is distributed across ${neighborhoods.slice(0, 3).join(", ")}, allowing us to maintain rapid response times when emergencies arise.`,
+          description: neighborhoods.length > 0
+            ? `Our mobile response fleet is distributed across ${neighborhoods.slice(0, 3).join(", ")}, allowing us to maintain rapid response times when emergencies arise.`
+            : `Our mobile response fleet is positioned throughout the ${city} area, allowing us to maintain rapid response times when emergencies arise.`,
         },
       ];
 

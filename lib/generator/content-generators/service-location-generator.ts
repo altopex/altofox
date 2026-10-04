@@ -91,7 +91,7 @@ Return ONLY a valid JSON object matching this schema:
 export function generateServiceLocationDeterministic(context: PageGenerationContext): PageContentJSON {
   const facts = context.businessFacts;
   const svc = context.service || { name: "Water Heater Repair", slug: "water-heater-repair" };
-  const loc = context.location || { city: facts.city || "Chicago", state: facts.state || "IL" };
+  const loc = context.location || { city: facts.city || "Local Area", state: facts.state || "" };
   const variation: VariationProfile = createVariationProfile(
     context.contentVariationSeed,
     "service_location",
@@ -99,7 +99,7 @@ export function generateServiceLocationDeterministic(context: PageGenerationCont
     svc.slug
   );
 
-  const phone = facts.phone || "(312) 555-0199";
+  const phone = facts.phone || "";
   const city = loc.city;
   const state = loc.state;
 

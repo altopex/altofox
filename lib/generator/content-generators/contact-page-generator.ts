@@ -104,7 +104,7 @@ export function generateContactPageDeterministic(context: PageGenerationContext)
 
   const serviceAreaCities = context.relatedLocations.map((l) => l.name);
   if (serviceAreaCities.length === 0) {
-    serviceAreaCities.push(city, "Lincoln Park", "Loop", "Logan Square", "Evanston", "Oak Park");
+    serviceAreaCities.push(city);
   }
 
   const bannerHeadline = variation.ctaWording.bannerHeadline.replace("{city}", city).replace("{phone}", phone);

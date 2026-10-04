@@ -493,9 +493,9 @@ export function generateServicePageDeterministic(context: PageGenerationContext)
   );
   const techProfile = getServiceTechnicalProfile(svc.name, svc.slug);
 
-  const phone = facts.phone || "(312) 555-0199";
-  const city = facts.city || "Chicago";
-  const state = facts.state || "IL";
+  const phone = facts.phone || "";
+  const city = facts.city || "Local Area";
+  const state = facts.state || "";
 
   // Build trust badges strictly from verified facts
   const trustBadges: string[] = [];

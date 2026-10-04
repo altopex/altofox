@@ -429,11 +429,25 @@ export async function executeAIRequest(request: NormalizedAIRequest): Promise<No
       },
     };
   } else if (request.providerId) {
-    targetProfile = profiles.find((p) => p.id === request.providerId);
+    const pid = request.providerId;
+    targetProfile = profiles.find(
+      (p) =>
+        p.id === pid ||
+        (p as any).presetId === pid ||
+        (p as any).apiType === pid ||
+        p.id?.toLowerCase().includes(pid.toLowerCase())
+    );
   } else if (request.feature && settings.featureProviders?.[request.feature as keyof typeof settings.featureProviders]) {
     const feat = settings.featureProviders[request.feature as keyof typeof settings.featureProviders];
     if (feat?.providerId) {
-      targetProfile = profiles.find((p) => p.id === feat.providerId);
+      const fpid = feat.providerId;
+      targetProfile = profiles.find(
+        (p) =>
+          p.id === fpid ||
+          (p as any).presetId === fpid ||
+          (p as any).apiType === fpid ||
+          p.id?.toLowerCase().includes(fpid.toLowerCase())
+      );
     }
   }
 
