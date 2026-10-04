@@ -95,19 +95,73 @@ export interface GatewayResponse {
 // ---------------------------------------------------------------------------
 
 function classifyError(err: unknown): GatewayErrorReason {
+  if (err instanceof GatewayError) return err.reason;
   const msg = ((err as any)?.message || String(err)).toLowerCase();
+  const name = ((err as any)?.name || "").toLowerCase();
+
+  if (
+    name === "timeouterror" ||
+    name === "aborterror" ||
+    msg.includes("timeout") ||
+    msg.includes("timed out") ||
+    msg.includes("aborterror") ||
+    msg.includes("aborted") ||
+    msg.includes("operation was aborted")
+  ) {
+    return "timeout";
+  }
+
   if (
     msg.includes("401") ||
     msg.includes("unauthorized") ||
     msg.includes("invalid api key") ||
-    msg.includes("invalid_api_key")
-  ) return "invalid_api_key";
-  if (msg.includes("no ai provider") || msg.includes("not configured")) return "no_provider_configured";
-  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) return "rate_limited";
-  if (msg.includes("model not found") || msg.includes("does not exist") || msg.includes("404")) return "model_not_found";
-  if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("aborterror")) return "timeout";
-  if (msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("unavailable")) return "provider_unavailable";
-  if (msg.includes("malformed") || msg.includes("empty candidate") || msg.includes("no message content")) return "malformed_response";
+    msg.includes("invalid_api_key") ||
+    msg.includes("api key not valid") ||
+    msg.includes("api_key_invalid") ||
+    msg.includes("api key invalid") ||
+    msg.includes("incorrect api key") ||
+    msg.includes("authentication failed")
+  ) {
+    return "invalid_api_key";
+  }
+
+  if (msg.includes("no ai provider") || msg.includes("not configured") || msg.includes("api key is required")) {
+    return "no_provider_configured";
+  }
+
+  if (msg.includes("429") || msg.includes("rate limit") || msg.includes("quota")) {
+    return "rate_limited";
+  }
+
+  if (msg.includes("model not found") || msg.includes("does not exist") || msg.includes("404")) {
+    return "model_not_found";
+  }
+
+  if (
+    msg.includes("502") ||
+    msg.includes("503") ||
+    msg.includes("504") ||
+    msg.includes("unavailable") ||
+    msg.includes("econnreset") ||
+    msg.includes("fetch failed") ||
+    msg.includes("network")
+  ) {
+    return "provider_unavailable";
+  }
+
+  if (
+    msg.includes("malformed") ||
+    msg.includes("empty candidate") ||
+    msg.includes("no message content") ||
+    msg.includes("empty response")
+  ) {
+    return "malformed_response";
+  }
+
+  if (msg.includes("json") && (msg.includes("parse") || msg.includes("syntaxerror"))) {
+    return "json_parse_failed";
+  }
+
   return "unknown";
 }
 
@@ -138,6 +192,7 @@ export async function gatewayRequest(req: GatewayRequest): Promise<GatewayRespon
   try {
     engineResponse = await executeAIRequest(engineRequest);
   } catch (err: unknown) {
+    if (err instanceof GatewayError) throw err;
     const reason = classifyError(err);
     throw new GatewayError(
       (err as any)?.message || "AI request failed",
@@ -147,6 +202,7 @@ export async function gatewayRequest(req: GatewayRequest): Promise<GatewayRespon
 
   // Mandatory fallback logging (requirement: exact string)
   if (engineResponse.fallbackTriggered) {
+    console.warn("Primary provider failed; fallback provider used.");
     console.warn(
       `[AI Provider Gateway] Primary provider failed; fallback provider used. ` +
       `Serving from: ${engineResponse.providerName} (${engineResponse.model}).`

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProviderCredentials } from "@/lib/ai/keys";
-import { executeAIRequest } from "@/lib/ai/ai-engine";
+import { gatewayRequest } from "@/lib/ai/provider-gateway";
 import { ProviderType } from "@/lib/ai/types";
 import {
   CHAT_GENERATOR_SYSTEM_PROMPT,
@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
 
     const activeModel = model || creds.defaultModel || (targetProvider === "gemini" ? "gemini-1.5-pro" : "gpt-4o");
 
-    // 3. Execute request through RankLocal's centralized AI engine
-    const aiResponse = await executeAIRequest({
+    // 3. Execute request through RankLocal's centralized AI Provider Gateway
+    const aiResponse = await gatewayRequest({
       prompt: userPrompt,
       systemPrompt: CHAT_GENERATOR_SYSTEM_PROMPT,
       model: activeModel,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProvider, ProviderType } from "@/lib/ai";
+import { ProviderType } from "@/lib/ai/types";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
+import { gatewayRequest } from "@/lib/ai/provider-gateway";
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,26 +78,31 @@ ${currentHtml.slice(0, 18000)}`;
       }
 
       const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "custom";
-      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.CUSTOM_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
+      const activeKey = resolvedCreds?.apiKey || apiKey;
 
       if (!activeKey) {
         throw new Error("No AI provider is configured. Please configure an AI provider in Settings.");
       }
 
-      const aiProvider = getProvider(activeProviderType);
-      const resp = await aiProvider.generate({
-        model: resolvedCreds?.defaultModel || model || (activeProviderType === "custom" ? "llama3" : "gpt-4o-mini"),
+      const activeModel = resolvedCreds?.defaultModel || model || (activeProviderType === "custom" ? "llama3" : "gpt-4o-mini");
+
+      const resp = await gatewayRequest({
         prompt: userPrompt,
         systemPrompt,
-        apiKey: activeKey,
-        baseUrl: resolvedCreds?.baseUrl || baseUrl,
-        organizationId: resolvedCreds?.organizationId || organizationId,
-        providerName: resolvedCreds?.providerName || providerName,
-        jsonMode: true,
+        model: activeModel,
+        responseFormat: "json",
+        timeoutMs: 40000,
+        directCredentials: {
+          provider: activeProviderType,
+          apiKey: activeKey,
+          baseUrl: resolvedCreds?.baseUrl || baseUrl,
+          organizationId: resolvedCreds?.organizationId || organizationId,
+          providerName: resolvedCreds?.providerName || providerName,
+          model: activeModel,
+        },
       });
 
-      const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
-      const parsed = JSON.parse(cleanJson);
+      const parsed = (resp.parsedJson || {}) as any;
       if (parsed.optimizedHtml) {
         optimizedHtml = parsed.optimizedHtml;
       }

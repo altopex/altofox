@@ -507,6 +507,7 @@ export async function executeAIRequest(request: NormalizedAIRequest): Promise<No
       .filter(Boolean) as SavedProviderProfile[];
 
     for (const fallbackProfile of availableFallbacks) {
+      console.warn("Primary provider failed; fallback provider used.");
       console.log(`[RankLocal AI Engine] Smart Fallback: Switching from ${targetProfile.name} to ${fallbackProfile.name}...`);
       try {
         const fallbackModel = fallbackProfile.model;

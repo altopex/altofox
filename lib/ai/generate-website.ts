@@ -1,5 +1,6 @@
 import { BRAND } from "@/config/brand";
-import { executeAIRequest, testProviderCapabilities } from "./ai-engine";
+import { testProviderCapabilities } from "./ai-engine";
+import { gatewayRequest } from "./provider-gateway";
 
 export interface GenerateWebsiteParams {
   provider: "openai" | "gemini" | "openrouter" | "custom" | string;
@@ -70,7 +71,7 @@ export async function generateWebsite(params: GenerateWebsiteParams): Promise<st
     throw new Error(`API key is required for ${providerName}.`);
   }
 
-  const response = await executeAIRequest({
+  const response = await gatewayRequest({
     prompt,
     systemPrompt,
     model,

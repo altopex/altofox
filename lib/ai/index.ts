@@ -8,6 +8,7 @@ export * from "./generate-website";
 export * from "./keys";
 export * from "./provider-manager";
 export * from "./ai-engine";
+export * from "./provider-gateway";
 
 export interface ProviderGenerateOptions {
   model?: string;
@@ -24,10 +25,10 @@ export interface ProviderGenerateOptions {
 export function getProvider(providerType: ProviderType = "gemini") {
   return {
     async generate(options: ProviderGenerateOptions): Promise<{ text: string; content: string }> {
-      const apiKey = options.apiKey || (providerType === "gemini" ? process.env.GEMINI_API_KEY : process.env.OPENAI_API_KEY) || "";
+      const apiKey = options.apiKey || "";
       const text = await generateWebsite({
         provider: providerType,
-        apiKey: apiKey || "dummy-key-for-test",
+        apiKey,
         model: options.model || (providerType === "gemini" ? "gemini-1.5-pro" : providerType === "custom" ? "llama3" : "gpt-4o-mini"),
         prompt: options.prompt,
         systemPrompt: options.systemPrompt,
