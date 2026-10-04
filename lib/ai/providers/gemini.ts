@@ -18,11 +18,11 @@ export class GeminiProvider implements IAIProvider {
   }
 
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const rawModel = options.model || "gemini-2.0-flash";
+    const rawModel = options.model || "gemini-3.8-flash";
     let model = rawModel.startsWith("models/") ? rawModel.replace("models/", "") : rawModel;
-    if (model === "gemini-2.0-flash-exp") model = "gemini-2.0-flash";
-    if (model === "gemini-2.0-pro-exp") model = "gemini-2.0-pro";
-    if (model === "gemini-2.0-flash-thinking-exp") model = "gemini-2.0-flash-thinking-exp-01-21";
+    if (model === "gemini-2.0-flash-exp") model = "gemini-3.8-flash";
+    if (model === "gemini-2.0-pro-exp") model = "gemini-3.8-pro";
+    if (model === "gemini-2.0-flash-thinking-exp") model = "gemini-3.8-flash";
 
     const contents = options.messages.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
@@ -70,7 +70,12 @@ export class GeminiProvider implements IAIProvider {
         errorMsg.includes("not found for API version") ||
         errorMsg.includes("not supported for generateContent")
       ) {
-        const fallbackModel = model !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
+        const fallbackModel =
+          model !== "gemini-3.8-flash" && model !== "gemini-2.0-flash"
+            ? "gemini-3.8-flash"
+            : model === "gemini-3.8-flash"
+            ? "gemini-2.0-flash"
+            : "gemini-1.5-flash";
         console.warn(`[GeminiProvider] Model "${model}" failed with 404/unsupported. Auto-recovering with "${fallbackModel}"...`);
         const fallbackUrl = `${this.baseUrl}/models/${fallbackModel}:generateContent?key=${this.apiKey}`;
         res = await fetch(fallbackUrl, {
@@ -107,10 +112,10 @@ export class GeminiProvider implements IAIProvider {
   async testConnection(model?: string): Promise<TestConnectionResult> {
     const start = Date.now();
     try {
-      const testModel = model || "gemini-2.0-flash";
+      const testModel = model || "gemini-3.8-flash";
       let cleanedModel = testModel.startsWith("models/") ? testModel.replace("models/", "") : testModel;
-      if (cleanedModel === "gemini-2.0-flash-exp") cleanedModel = "gemini-2.0-flash";
-      if (cleanedModel === "gemini-2.0-pro-exp") cleanedModel = "gemini-2.0-pro";
+      if (cleanedModel === "gemini-2.0-flash-exp") cleanedModel = "gemini-3.8-flash";
+      if (cleanedModel === "gemini-2.0-pro-exp") cleanedModel = "gemini-3.8-pro";
 
       const url = `${this.baseUrl}/models/${cleanedModel}:generateContent?key=${this.apiKey}`;
 
@@ -139,7 +144,12 @@ export class GeminiProvider implements IAIProvider {
           errorMsg.includes("not found for API version") ||
           errorMsg.includes("not supported for generateContent")
         ) {
-          const fallbackModel = cleanedModel !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
+          const fallbackModel =
+            cleanedModel !== "gemini-3.8-flash" && cleanedModel !== "gemini-2.0-flash"
+              ? "gemini-3.8-flash"
+              : cleanedModel === "gemini-3.8-flash"
+              ? "gemini-2.0-flash"
+              : "gemini-1.5-flash";
           const retryRes = await fetch(`${this.baseUrl}/models/${fallbackModel}:generateContent?key=${this.apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -174,7 +184,7 @@ export class GeminiProvider implements IAIProvider {
             .filter((name: string) => !name.endsWith("-exp"));
 
           if (availableModels && availableModels.length > 0) {
-            if (!availableModels.includes("gemini-2.0-flash")) availableModels.unshift("gemini-2.0-flash");
+            if (!availableModels.includes("gemini-3.8-flash")) availableModels.unshift("gemini-3.8-flash");
           }
         }
       } catch {
@@ -199,7 +209,7 @@ export class GeminiProvider implements IAIProvider {
   async listModels(): Promise<string[]> {
     try {
       const res = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
-      if (!res.ok) return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
+      if (!res.ok) return ["gemini-3.8-flash", "gemini-3.8-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
       const data = await res.json();
       const list = (data.models || [])
         .filter((m: any) => {
@@ -209,10 +219,10 @@ export class GeminiProvider implements IAIProvider {
         .map((m: { name: string }) => m.name.replace("models/", ""))
         .filter((name: string) => !name.endsWith("-exp"));
 
-      if (!list.includes("gemini-2.0-flash")) list.unshift("gemini-2.0-flash");
+      if (!list.includes("gemini-3.8-flash")) list.unshift("gemini-3.8-flash");
       return list;
     } catch {
-      return ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
+      return ["gemini-3.8-flash", "gemini-3.8-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
   }
 }

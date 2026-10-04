@@ -31,6 +31,7 @@ import {
   Cloud,
 } from "lucide-react";
 import { ProviderType } from "@/lib/ai/types";
+import { normalizeModelForProvider } from "@/lib/ai/provider-models";
 
 export interface SettingsPanelProps {
   isOpen: boolean;
@@ -62,14 +63,15 @@ const PROVIDERS: ProviderConfig[] = [
         <Sparkles className="w-4 h-4" />
       </div>
     ),
-    defaultModel: "gemini-2.0-flash",
+    defaultModel: "gemini-3.8-flash",
     popularModels: [
-      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (Recommended - Ultra Fast)" },
-      { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash-Lite" },
-      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Fast & Reliable)" },
-      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (High Reasoning)" },
+      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (Recommended - Workhorse)" },
+      { id: "gemini-3.8-flash-cyber", label: "Gemini 3.8 Flash Cyber (Defense & Audit)" },
+      { id: "gemini-3.8-pro", label: "Gemini 3.8 Pro (Frontier Multimodal & Thinking)" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-      { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+      { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+      { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Fast)" },
+      { id: "gemini-1.5-pro", label: "Gemini 1.5 Pro (2M Context)" },
     ],
     placeholderKey: "AIzaSy...",
     docsUrl: "https://aistudio.google.com/app/apikey",
@@ -83,14 +85,15 @@ const PROVIDERS: ProviderConfig[] = [
         OA
       </div>
     ),
-    defaultModel: "gpt-4o",
+    defaultModel: "gpt-6-astra",
     popularModels: [
-      { id: "gpt-4o", label: "GPT-4o (Recommended - Best Quality)" },
-      { id: "gpt-4o-mini", label: "GPT-4o Mini (Affordable & Fast)" },
-      { id: "gpt-4.5-preview", label: "GPT-4.5 Preview" },
+      { id: "gpt-6-astra", label: "GPT-6 Astra (Recommended - Frontier Reasoning)" },
+      { id: "gpt-6-sol", label: "GPT-6 Sol (Agentic & Fast)" },
+      { id: "gpt-6-luna", label: "GPT-6 Luna (High Volume)" },
+      { id: "gpt-4o", label: "GPT-4o (Flagship Omnimodal)" },
+      { id: "gpt-4o-mini", label: "GPT-4o Mini (Affordable)" },
       { id: "o3-mini", label: "o3-mini (High Reasoning)" },
       { id: "o1", label: "o1 (Deep Reasoning)" },
-      { id: "gpt-4-turbo", label: "GPT-4 Turbo" },
     ],
     placeholderKey: "sk-proj-...",
     docsUrl: "https://platform.openai.com/api-keys",
@@ -104,12 +107,14 @@ const PROVIDERS: ProviderConfig[] = [
         CL
       </div>
     ),
-    defaultModel: "claude-3-5-sonnet-20241022",
+    defaultModel: "claude-sonnet-5-5",
     popularModels: [
+      { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (Recommended - 30% Faster)" },
+      { id: "claude-opus-5-5", label: "Claude Opus 5.5 (1M Context)" },
+      { id: "claude-fable-5-1", label: "Claude Fable 5.1 (Autonomous Agents)" },
       { id: "claude-3-7-sonnet-20250219", label: "Claude 3.7 Sonnet (Hybrid Reasoning)" },
-      { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet (Recommended)" },
+      { id: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
       { id: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku" },
-      { id: "claude-3-opus-20240229", label: "Claude 3 Opus" },
     ],
     placeholderKey: "sk-ant-...",
     docsUrl: "https://console.anthropic.com/settings/keys",
@@ -123,8 +128,9 @@ const PROVIDERS: ProviderConfig[] = [
         DS
       </div>
     ),
-    defaultModel: "deepseek-chat",
+    defaultModel: "deepseek-v4.1-flash",
     popularModels: [
+      { id: "deepseek-v4.1-flash", label: "DeepSeek V4.1-Flash (Recommended - MoE)" },
       { id: "deepseek-chat", label: "DeepSeek-V3" },
       { id: "deepseek-reasoner", label: "DeepSeek-R1" },
     ],
@@ -159,14 +165,14 @@ const PROVIDERS: ProviderConfig[] = [
         <Globe className="w-4 h-4" />
       </div>
     ),
-    defaultModel: "anthropic/claude-3.5-sonnet",
+    defaultModel: "google/gemini-3.8-flash",
     popularModels: [
-      { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet (Top Quality)" },
-      { id: "google/gemini-2.0-flash-001", label: "Gemini 2.0 Flash" },
-      { id: "deepseek/deepseek-chat", label: "DeepSeek-V3" },
-      { id: "deepseek/deepseek-r1", label: "DeepSeek-R1" },
-      { id: "openai/gpt-4o", label: "GPT-4o (OpenAI via OpenRouter)" },
-      { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B (Meta)" },
+      { id: "google/gemini-3.8-flash", label: "Gemini 3.8 Flash via OpenRouter (Recommended)" },
+      { id: "openai/gpt-6-astra", label: "GPT-6 Astra via OpenRouter" },
+      { id: "anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5 via OpenRouter" },
+      { id: "deepseek/deepseek-v4.1-flash", label: "DeepSeek V4.1-Flash via OpenRouter" },
+      { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet" },
+      { id: "openai/gpt-4o", label: "GPT-4o via OpenRouter" },
     ],
     placeholderKey: "sk-or-v1-...",
     docsUrl: "https://openrouter.ai/keys",
@@ -233,7 +239,7 @@ export function SettingsPanel({
 
   // Default AI Provider & Model
   const [defaultProvider, setDefaultProvider] = useState<ProviderType>("gemini");
-  const [defaultModel, setDefaultModel] = useState<string>("gemini-2.0-flash");
+  const [defaultModel, setDefaultModel] = useState<string>("gemini-3.8-flash");
 
   // Provider states
   const [savedKeys, setSavedKeys] = useState<Record<string, string>>({});
@@ -465,14 +471,16 @@ export function SettingsPanel({
       setProviderTypeMode("custom");
     }
 
-    const storedActiveModel =
+    const rawActiveModel =
       localStorage.getItem("altofox_active_model") ||
       localStorage.getItem("ranklocal_active_model") ||
       (storedActiveProvider === "custom"
         ? storedCustomModel
         : keys[storedActiveProvider]
-        ? localStorage.getItem(`altofox_model_${storedActiveProvider}`) || "gemini-1.5-pro"
-        : "gemini-1.5-pro");
+        ? localStorage.getItem(`altofox_model_${storedActiveProvider}`) || "gemini-3.8-flash"
+        : "gemini-3.8-flash");
+
+    const storedActiveModel = normalizeModelForProvider(storedActiveProvider, rawActiveModel);
 
     setDefaultProvider(storedActiveProvider);
     setDefaultModel(storedActiveModel);

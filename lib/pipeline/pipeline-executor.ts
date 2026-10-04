@@ -364,7 +364,7 @@ export async function executeGenerationPipeline(
   const providerType = provider as ProviderType;
   let targetModel = normalizeModelForProvider(
     providerType || "gemini",
-    model || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-2.0-flash"
+    model || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-3.8-flash"
   );
 
   const verifiedFacts = {
@@ -495,7 +495,7 @@ export async function executeGenerationPipeline(
       };
     }
 
-    const rawTargetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-2.0-flash";
+    const rawTargetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-3.8-flash";
     targetModel = normalizeModelForProvider(
       ((resolvedProvider || providerType) as ProviderType) || "gemini",
       rawTargetModel

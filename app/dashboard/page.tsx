@@ -407,7 +407,7 @@ export default function DashboardPage() {
 
   // Active Provider & Model
   const [activeProvider, setActiveProvider] = useState<ProviderType>("gemini");
-  const [activeModel, setActiveModel] = useState<string>("gemini-2.0-flash");
+  const [activeModel, setActiveModel] = useState<string>("gemini-3.8-flash");
   const [hasKey, setHasKey] = useState(false);
 
   // Form Fields State

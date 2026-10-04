@@ -207,7 +207,7 @@ async function callProviderProfile(
 
   // 1. Google Gemini Provider
   if (profile.apiType === "gemini") {
-    const rawModel = targetModel || "gemini-2.0-flash";
+    const rawModel = targetModel || "gemini-3.8-flash";
     const cleanedModel = normalizeModelForProvider("gemini", rawModel);
     const base = normalizeBaseUrl(profile.baseUrl || "https://generativelanguage.googleapis.com/v1beta");
     const url = `${base}/models/${cleanedModel}:generateContent`;
@@ -250,8 +250,13 @@ async function callProviderProfile(
         errorMsg.includes("not found for API version") ||
         errorMsg.includes("not supported for generateContent")
       ) {
-        const fallbackTarget = cleanedModel !== "gemini-2.0-flash" ? "gemini-2.0-flash" : "gemini-1.5-flash";
-        console.warn(`[Gemini Provider] Model "${cleanedModel}" returned 404/unsupported in v1beta. Auto-retrying with active GA model "${fallbackTarget}"...`);
+        const fallbackTarget =
+          cleanedModel !== "gemini-3.8-flash" && cleanedModel !== "gemini-2.0-flash"
+            ? "gemini-3.8-flash"
+            : cleanedModel === "gemini-3.8-flash"
+            ? "gemini-2.0-flash"
+            : "gemini-1.5-flash";
+        console.warn(`[Gemini Provider] Model "${cleanedModel}" returned 404/unsupported in v1beta. Auto-retrying with fallback model "${fallbackTarget}"...`);
         const fallbackUrl = `${base}/models/${fallbackTarget}:generateContent`;
         res = await fetch(fallbackUrl, {
           method: "POST",
@@ -287,7 +292,7 @@ async function callProviderProfile(
 
   // 2. Anthropic Claude Provider
   if (profile.apiType === "anthropic" || (profile.baseUrl && profile.baseUrl.includes("anthropic.com"))) {
-    const rawModel = targetModel || "claude-3-5-sonnet-20241022";
+    const rawModel = targetModel || "claude-sonnet-5-5";
     const base = normalizeBaseUrl(profile.baseUrl || "https://api.anthropic.com/v1");
     const url = base.endsWith("/messages") ? base : `${base}/messages`;
 

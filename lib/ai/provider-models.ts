@@ -13,15 +13,30 @@ export interface ModelOption {
 export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
   gemini: [
     {
-      id: "gemini-2.0-flash",
-      label: "Gemini 2.0 Flash (Recommended)",
-      description: "Next-gen flagship with sub-second latency and exceptional HTML/CSS accuracy",
+      id: "gemini-3.8-flash",
+      label: "Gemini 3.8 Flash (Recommended)",
+      description: "Flagship workhorse for software engineering and agentic workflows",
       isRecommended: true,
     },
     {
-      id: "gemini-2.0-flash-lite",
-      label: "Gemini 2.0 Flash-Lite",
-      description: "Ultra-fast, lowest latency model for rapid content drafting",
+      id: "gemini-3.8-flash-cyber",
+      label: "Gemini 3.8 Flash Cyber",
+      description: "Specialized for vulnerability detection, security auditing, and code hardening",
+    },
+    {
+      id: "gemini-3.8-pro",
+      label: "Gemini 3.8 Pro",
+      description: "Frontier multimodal reasoning with extended thinking capabilities",
+    },
+    {
+      id: "gemini-2.5-flash",
+      label: "Gemini 2.5 Flash",
+      description: "Advanced hybrid reasoning & next-generation architecture",
+    },
+    {
+      id: "gemini-2.0-flash",
+      label: "Gemini 2.0 Flash",
+      description: "Sub-second latency and high-volume generation",
     },
     {
       id: "gemini-1.5-flash",
@@ -33,33 +48,33 @@ export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
       label: "Gemini 1.5 Pro",
       description: "Deep reasoning with 2M token context window",
     },
-    {
-      id: "gemini-2.5-flash",
-      label: "Gemini 2.5 Flash",
-      description: "Advanced hybrid reasoning & next-generation architecture",
-    },
-    {
-      id: "gemini-2.5-pro",
-      label: "Gemini 2.5 Pro",
-      description: "Frontier multimodal reasoning & thinking model",
-    },
   ],
   openai: [
     {
-      id: "gpt-4o",
-      label: "GPT-4o (Recommended)",
-      description: "High-intelligence flagship model with excellent structured output",
+      id: "gpt-6-astra",
+      label: "GPT-6 Astra (Recommended)",
+      description: "Frontier flagship model for advanced reasoning, coding, and architecture",
       isRecommended: true,
+    },
+    {
+      id: "gpt-6-sol",
+      label: "GPT-6 Sol",
+      description: "High-performance coding and agentic workflows",
+    },
+    {
+      id: "gpt-6-luna",
+      label: "GPT-6 Luna",
+      description: "Cost-sensitive, high-volume AI generation",
+    },
+    {
+      id: "gpt-4o",
+      label: "GPT-4o",
+      description: "High-intelligence flagship model with excellent structured output",
     },
     {
       id: "gpt-4o-mini",
       label: "GPT-4o Mini",
       description: "Affordable, rapid generation tailored for multi-page static sites",
-    },
-    {
-      id: "gpt-4.5-preview",
-      label: "GPT-4.5 Preview",
-      description: "Next-gen frontier reasoning & advanced nuance",
     },
     {
       id: "o3-mini",
@@ -71,42 +86,51 @@ export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
       label: "o1",
       description: "Full reasoning & deep problem solving",
     },
-    {
-      id: "gpt-4-turbo",
-      label: "GPT-4 Turbo",
-      description: "Reliable production model",
-    },
   ],
   anthropic: [
+    {
+      id: "claude-sonnet-5-5",
+      label: "Claude Sonnet 5.5 (Recommended)",
+      description: "30% faster frontier professional coding, HTML synthesis, and copy",
+      isRecommended: true,
+    },
+    {
+      id: "claude-opus-5-5",
+      label: "Claude Opus 5.5",
+      description: "1M-token frontier deep reasoning & complex system architecture",
+    },
+    {
+      id: "claude-fable-5-1",
+      label: "Claude Fable 5.1",
+      description: "Demanding reasoning and long-running autonomous agents",
+    },
     {
       id: "claude-3-7-sonnet-20250219",
       label: "Claude 3.7 Sonnet (Hybrid Reasoning)",
       description: "State-of-the-art coding, design tokens, and HTML generation",
-      isRecommended: true,
     },
     {
       id: "claude-3-5-sonnet-20241022",
       label: "Claude 3.5 Sonnet",
-      description: "Exceptional coding & design capabilities",
-      isRecommended: true,
+      description: "Production workhorse",
     },
     {
       id: "claude-3-5-haiku-20241022",
       label: "Claude 3.5 Haiku",
       description: "Sub-second generation and responsive copy",
     },
-    {
-      id: "claude-3-opus-20240229",
-      label: "Claude 3 Opus",
-      description: "High reasoning capacity",
-    },
   ],
   deepseek: [
+    {
+      id: "deepseek-v4.1-flash",
+      label: "DeepSeek V4.1-Flash (Recommended)",
+      description: "Multimodal mixture-of-experts model with Causal Encoder-Decoder architecture",
+      isRecommended: true,
+    },
     {
       id: "deepseek-chat",
       label: "DeepSeek-V3",
       description: "671B MoE model delivering outstanding code & web generation",
-      isRecommended: true,
     },
     {
       id: "deepseek-reasoner",
@@ -117,7 +141,7 @@ export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
   groq: [
     {
       id: "llama-3.3-70b-versatile",
-      label: "Llama 3.3 70B Versatile",
+      label: "Llama 3.3 70B Versatile (Recommended)",
       description: "Top-tier open model running near-instant on Groq LPUs (300+ tok/s)",
       isRecommended: true,
     },
@@ -139,35 +163,35 @@ export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
   ],
   openrouter: [
     {
-      id: "anthropic/claude-3.5-sonnet",
-      label: "Claude 3.5 Sonnet via OpenRouter",
-      description: "Top-tier web design & code quality",
+      id: "google/gemini-3.8-flash",
+      label: "Gemini 3.8 Flash via OpenRouter (Recommended)",
+      description: "Flagship agentic and coding performance",
       isRecommended: true,
     },
     {
-      id: "google/gemini-2.0-flash-001",
-      label: "Gemini 2.0 Flash via OpenRouter",
-      description: "Lightning-fast and affordable",
+      id: "openai/gpt-6-astra",
+      label: "GPT-6 Astra via OpenRouter",
+      description: "Frontier reasoning and professional synthesis",
     },
     {
-      id: "deepseek/deepseek-chat",
-      label: "DeepSeek-V3 via OpenRouter",
-      description: "High-quality open weights",
+      id: "anthropic/claude-sonnet-5.5",
+      label: "Claude Sonnet 5.5 via OpenRouter",
+      description: "Fast frontier coding and design",
     },
     {
-      id: "deepseek/deepseek-r1",
-      label: "DeepSeek-R1 via OpenRouter",
-      description: "Advanced chain-of-thought reasoning",
+      id: "deepseek/deepseek-v4.1-flash",
+      label: "DeepSeek V4.1-Flash via OpenRouter",
+      description: "Next-gen multimodal MoE",
+    },
+    {
+      id: "anthropic/claude-3.5-sonnet",
+      label: "Claude 3.5 Sonnet via OpenRouter",
+      description: "Top-tier web design & code quality",
     },
     {
       id: "openai/gpt-4o",
       label: "GPT-4o via OpenRouter",
       description: "OpenAI flagship",
-    },
-    {
-      id: "meta-llama/llama-3.3-70b-instruct",
-      label: "Llama 3.3 70B Instruct",
-      description: "Open source leader",
     },
   ],
   custom: [
@@ -183,11 +207,12 @@ export const CURATED_PROVIDER_MODELS: Record<ProviderType, ModelOption[]> = {
  */
 export function normalizeModelForProvider(provider: string, model: string): string {
   if (!model || model === "default" || model.trim() === "") {
-    if (provider.includes("gemini")) return "gemini-2.0-flash";
-    if (provider.includes("openai")) return "gpt-4o";
-    if (provider.includes("anthropic")) return "claude-3-5-sonnet-20241022";
-    if (provider.includes("deepseek")) return "deepseek-chat";
+    if (provider.includes("gemini")) return "gemini-3.8-flash";
+    if (provider.includes("openai")) return "gpt-6-astra";
+    if (provider.includes("anthropic")) return "claude-sonnet-5-5";
+    if (provider.includes("deepseek")) return "deepseek-v4.1-flash";
     if (provider.includes("groq")) return "llama-3.3-70b-versatile";
+    if (provider.includes("openrouter")) return "google/gemini-3.8-flash";
     return "default";
   }
 
@@ -197,13 +222,13 @@ export function normalizeModelForProvider(provider: string, model: string): stri
     const cleaned = raw.replace(/^models\//, "");
     // Deprecated experimental aliases remapping
     if (cleaned === "gemini-2.0-flash-exp") {
-      return "gemini-2.0-flash";
+      return "gemini-3.8-flash";
     }
     if (cleaned === "gemini-2.0-pro-exp") {
-      return "gemini-2.0-pro";
+      return "gemini-3.8-pro";
     }
     if (cleaned === "gemini-2.0-flash-thinking-exp") {
-      return "gemini-2.0-flash-thinking-exp-01-21";
+      return "gemini-3.8-flash";
     }
     return cleaned;
   }

@@ -7,7 +7,7 @@ export class DeepSeekProvider extends BaseOpenAICompatibleProvider {
       "deepseek",
       config,
       "https://api.deepseek.com",
-      "deepseek-chat"
+      "deepseek-v4.1-flash"
     );
   }
 }

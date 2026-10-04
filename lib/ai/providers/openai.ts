@@ -18,7 +18,7 @@ export class OpenAIProvider implements IAIProvider {
   }
 
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const model = options.model || "gpt-4o";
+    let model = options.model || "gpt-6-astra";
     const messages = [];
 
     if (options.system) {
@@ -36,7 +36,7 @@ export class OpenAIProvider implements IAIProvider {
       max_tokens: options.maxTokens ?? 8192,
     };
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    let res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -44,6 +44,22 @@ export class OpenAIProvider implements IAIProvider {
       },
       body: JSON.stringify(payload),
     });
+
+    // Auto-fallback if the flagship model is not enabled on this specific key
+    if (!res.ok && res.status === 404 && model === "gpt-6-astra") {
+      const fallbackPayload = { ...payload, model: "gpt-4o" };
+      const fallbackRes = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify(fallbackPayload),
+      });
+      if (fallbackRes.ok) {
+        res = fallbackRes;
+      }
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -75,8 +91,8 @@ export class OpenAIProvider implements IAIProvider {
   async testConnection(model?: string): Promise<TestConnectionResult> {
     const start = Date.now();
     try {
-      const testModel = model || "gpt-4o-mini";
-      const res = await fetch(`${this.baseUrl}/chat/completions`, {
+      let testModel = model || "gpt-6-luna";
+      let res = await fetch(`${this.baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -88,6 +104,26 @@ export class OpenAIProvider implements IAIProvider {
           max_tokens: 5,
         }),
       });
+
+      // If testModel returns 404, fallback to gpt-4o-mini
+      if (!res.ok && res.status === 404) {
+        const fallbackRes = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [{ role: "user", content: "Reply with the single word 'OK'" }],
+            max_tokens: 5,
+          }),
+        });
+        if (fallbackRes.ok) {
+          testModel = "gpt-4o-mini";
+          res = fallbackRes;
+        }
+      }
 
       const latencyMs = Date.now() - start;
 

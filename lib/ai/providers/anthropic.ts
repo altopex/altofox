@@ -18,7 +18,7 @@ export class AnthropicProvider implements IAIProvider {
   }
 
   async generate(options: GenerateOptions): Promise<GenerateResult> {
-    const model = options.model || "claude-3-5-sonnet-20241022";
+    let model = options.model || "claude-sonnet-5-5";
 
     // Anthropic requires alternating user/assistant messages, and system as top-level parameter
     const messages = options.messages
@@ -43,7 +43,7 @@ export class AnthropicProvider implements IAIProvider {
       payload.system = options.system;
     }
 
-    const res = await fetch(`${this.baseUrl}/messages`, {
+    let res = await fetch(`${this.baseUrl}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -52,6 +52,23 @@ export class AnthropicProvider implements IAIProvider {
       },
       body: JSON.stringify(payload),
     });
+
+    // Auto-fallback if the flagship model is not enabled on this specific key
+    if (!res.ok && res.status === 404 && model === "claude-sonnet-5-5") {
+      const fallbackPayload = { ...payload, model: "claude-3-5-sonnet-20241022" };
+      const fallbackRes = await fetch(`${this.baseUrl}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": this.apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(fallbackPayload),
+      });
+      if (fallbackRes.ok) {
+        res = fallbackRes;
+      }
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -86,8 +103,8 @@ export class AnthropicProvider implements IAIProvider {
   async testConnection(model?: string): Promise<TestConnectionResult> {
     const start = Date.now();
     try {
-      const testModel = model || "claude-3-5-haiku-20241022";
-      const res = await fetch(`${this.baseUrl}/messages`, {
+      let testModel = model || "claude-sonnet-5-5";
+      let res = await fetch(`${this.baseUrl}/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -100,6 +117,27 @@ export class AnthropicProvider implements IAIProvider {
           messages: [{ role: "user", content: "Reply with the single word 'OK'" }],
         }),
       });
+
+      // If testModel is 404, fallback to claude-3-5-haiku-20241022
+      if (!res.ok && res.status === 404) {
+        const fallbackRes = await fetch(`${this.baseUrl}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": this.apiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-haiku-20241022",
+            max_tokens: 10,
+            messages: [{ role: "user", content: "Reply with the single word 'OK'" }],
+          }),
+        });
+        if (fallbackRes.ok) {
+          testModel = "claude-3-5-haiku-20241022";
+          res = fallbackRes;
+        }
+      }
 
       const latencyMs = Date.now() - start;
 
@@ -124,6 +162,9 @@ export class AnthropicProvider implements IAIProvider {
         message: `Successfully connected to Anthropic (${testModel})`,
         latencyMs,
         availableModels: [
+          "claude-sonnet-5-5",
+          "claude-opus-5-5",
+          "claude-fable-5-1",
           "claude-3-5-sonnet-20241022",
           "claude-3-5-haiku-20241022",
           "claude-3-opus-20240229",

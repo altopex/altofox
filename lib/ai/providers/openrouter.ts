@@ -8,7 +8,7 @@ export class OpenRouterProvider extends BaseOpenAICompatibleProvider {
       "openrouter",
       config,
       "https://openrouter.ai/api/v1",
-      "anthropic/claude-3.5-sonnet",
+      "google/gemini-3.8-flash",
       {
         "HTTP-Referer": BRAND.siteUrl,
         "X-Title": BRAND.name,
