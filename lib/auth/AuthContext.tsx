@@ -110,8 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const profileRef = useRef<Profile | null>(null);
-  profileRef.current = profile;
-  const lastActiveUpdateRef = useRef<number>(0);
+  // Keep ref in sync with state via effect (not during render)
+  useEffect(() => { profileRef.current = profile; }, [profile]);
 
   const loadUserProfile = useCallback(async (userId: string, userEmail?: string, currentToken?: string) => {
     try {
@@ -420,14 +420,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    initAuth();
+    // Listen to Supabase Auth state changes.
+    // IMPORTANT: onAuthStateChange fires INITIAL_SESSION (or SIGNED_IN) immediately
+    // when the Supabase client finds a cached session. This races with initAuth above.
+    // We suppress listener reactions until initAuth completes to avoid duplicate
+    // loadUserProfile calls and state-flip race conditions.
+    let isInitializing = true;
 
-    // Listen to Supabase Auth state changes
     let subscription: any = null;
     try {
       const subRes = supabase.auth.onAuthStateChange(
         async (event, currentSession) => {
           if (!mounted) return;
+
+          // Suppress INITIAL_SESSION and the first SIGNED_IN that Supabase fires
+          // automatically during initialization — initAuth handles that pass.
+          if (isInitializing && (event === "INITIAL_SESSION" || event === "SIGNED_IN")) {
+            return;
+          }
+
           console.log(`[Auth] Auth event: ${event}`);
 
           if (event === "SIGNED_OUT") {
@@ -450,10 +461,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               await loadUserProfile(currentSession.user.id, currentSession.user.email, currentSession.access_token);
             }
           }
+
+          if (event === "TOKEN_REFRESHED" && currentSession?.access_token) {
+            setAuthCookies(currentSession.access_token, profileRef.current?.status || "approved");
+          }
         }
       );
       subscription = subRes.data?.subscription;
     } catch {}
+
+    // Run initAuth and clear the isInitializing flag when it completes,
+    // allowing the listener to react to real post-init events.
+    initAuth().finally(() => {
+      isInitializing = false;
+    });
 
     // Tab wake-up / visibility change listener: silently refresh tokens when user returns to tab
     const handleVisibilityChange = async () => {

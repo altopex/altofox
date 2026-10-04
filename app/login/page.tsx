@@ -102,21 +102,9 @@ function LoginForm() {
           return;
         }
 
-        // On successful sign in, fetch status to route appropriately
-        const cleanEmail = email.trim().toLowerCase();
-        const isOwner =
-          cleanEmail === "russ@altopex.com" ||
-          cleanEmail === "russell@altopex.com" ||
-          cleanEmail === "admin@ranklocal.site" ||
-          cleanEmail === "admin@altopex.com";
-        const statusRes = await fetch("/api/auth/check-status").catch(() => null);
-        const statusData = statusRes ? await statusRes.json().catch(() => null) : null;
-
-        if (isOwner || statusData?.isApproved !== false) {
-          router.replace(redirectTarget);
-        } else {
-          router.replace("/pending");
-        }
+        // Sign-in succeeded. The useEffect above will react to user/isApproved
+        // changes and perform the redirect — no need to call router here.
+        // (Calling router here AND in the effect causes a navigation race condition.)
       } else {
         // Magic link
         const res = await signInWithOtp(email);
