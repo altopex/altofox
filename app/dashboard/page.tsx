@@ -30,6 +30,13 @@ const LivePreview = nextDynamic(
 );
 import { ProviderType } from "@/lib/ai/types";
 import {
+  GenerationStageName,
+  GenerationFailureStage,
+  GENERATION_STAGES,
+  STAGE_CONFIG,
+  PipelineState,
+} from "@/lib/pipeline/generation-pipeline";
+import {
   THEMES,
   getThemeById,
   getRecommendedThemeIds,
@@ -457,9 +464,14 @@ export default function DashboardPage() {
   // Generation & Results State
   const [generating, setGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState<
-    "IDLE" | "VALIDATING" | "CONNECTING" | "GENERATING" | "PROCESSING" | "BUILDING" | "PREVIEW_READY" | "FAILED"
+    "IDLE" | GenerationStageName | GenerationFailureStage | "FAILED" | "PREVIEW_READY"
   >("IDLE");
-  const [generationError, setGenerationError] = useState<{ message: string; canFallback: boolean } | null>(null);
+  const [activePipeline, setActivePipeline] = useState<PipelineState | null>(null);
+  const [generationError, setGenerationError] = useState<{
+    message: string;
+    canFallback: boolean;
+    failedStage?: GenerationFailureStage | string;
+  } | null>(null);
   const [generationProgressText, setGenerationProgressText] = useState("Planning your pages…");
   const [generationPercent, setGenerationPercent] = useState(10);
   const [isGenerationTakingLong, setIsGenerationTakingLong] = useState(false);
@@ -1542,7 +1554,7 @@ export default function DashboardPage() {
     }
 
     setGenerating(true);
-    setGenerationStage("BUILDING");
+    setGenerationStage("BUILDING_PAGES");
     setGenerationError(null);
     setIsGenerationTakingLong(false);
     setGenerationPercent(85);
@@ -1583,13 +1595,14 @@ export default function DashboardPage() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Instant assembly failed");
       }
-      setGenerationStage("PREVIEW_READY");
+      setGenerationStage("READY");
       await handleProcessGeneratedSite(data, targetFormData);
     } catch (err: any) {
-      setGenerationStage("FAILED");
+      setGenerationStage("FAILED_RENDER");
       setGenerationError({
         message: err?.message || "Failed to assemble instant templates.",
         canFallback: false,
+        failedStage: "FAILED_RENDER",
       });
       addToast({
         type: "error",
@@ -1729,12 +1742,13 @@ export default function DashboardPage() {
     } catch {}
 
     setGenerating(true);
-    setGenerationStage("VALIDATING");
+    setGenerationStage("QUEUED");
     setGenerationError(null);
+    setActivePipeline(null);
     setIsGenerationTakingLong(false);
     setGenerationElapsedSeconds(0);
-    setGenerationPercent(15);
-    setGenerationProgressText("Validating business details and SEO settings…");
+    setGenerationPercent(STAGE_CONFIG.QUEUED.defaultPercent);
+    setGenerationProgressText(STAGE_CONFIG.QUEUED.description);
 
     if (generationTimerRef.current) clearInterval(generationTimerRef.current);
     const startTime = Date.now();
@@ -1758,15 +1772,15 @@ export default function DashboardPage() {
     }, 85000);
 
     try {
-      setGenerationStage("CONNECTING");
-      setGenerationPercent(25);
-      setGenerationProgressText(`Connecting to ${activeProvider.toUpperCase()} (${activeModel})…`);
+      setGenerationStage("RESEARCHING");
+      setGenerationPercent(STAGE_CONFIG.RESEARCHING.defaultPercent);
+      setGenerationProgressText(`Analyzing niche and connecting to ${activeProvider.toUpperCase()} (${activeModel})…`);
 
       // Allow UI to paint stage transition
       await new Promise((r) => setTimeout(r, 200));
 
-      setGenerationStage("GENERATING");
-      setGenerationPercent(45);
+      setGenerationStage("GENERATING_CONTENT");
+      setGenerationPercent(STAGE_CONFIG.GENERATING_CONTENT.defaultPercent);
       setGenerationProgressText(`Generating high-converting local trade copy with ${activeProvider.toUpperCase()}…`);
 
       const res = await fetch("/api/generate", {
@@ -1811,44 +1825,54 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setGenerationStage("FAILED");
+        const failedStage: GenerationFailureStage = data.failedStage || "FAILED_PROVIDER";
+        setGenerationStage(failedStage);
         setGenerationError({
           message: data.error || `Server returned HTTP ${res.status}: ${res.statusText}`,
           canFallback: Boolean(data.canFallbackToTemplates),
+          failedStage,
         });
+        if (data.pipeline) {
+          setActivePipeline(data.pipeline);
+        }
         setGenerating(false);
         addToast({
           type: "error",
-          title: "AI Generation Error",
+          title: `Generation Error: ${failedStage.replace("FAILED_", "")}`,
           message: data.error || "Generation could not be completed.",
         });
         return;
       }
 
-      setGenerationStage("PROCESSING");
-      setGenerationPercent(75);
-      setGenerationProgressText("Processing structured copy & LocalBusiness schema…");
+      if (data.pipeline) {
+        setActivePipeline(data.pipeline);
+      }
+
+      setGenerationStage("PACKAGING");
+      setGenerationPercent(STAGE_CONFIG.PACKAGING.defaultPercent);
+      setGenerationProgressText("Packaging zero-build static pages and assets…");
 
       await new Promise((r) => setTimeout(r, 150));
 
-      setGenerationStage("BUILDING");
-      setGenerationPercent(90);
-      setGenerationProgressText("Assembling zero-build static pages & preview…");
+      setGenerationStage("READY");
+      setGenerationPercent(100);
+      setGenerationProgressText("Website generation complete! Preparing preview…");
 
       const success = await handleProcessGeneratedSite(data, formData);
       if (success) {
-        setGenerationStage("PREVIEW_READY");
+        setGenerationStage("READY");
       } else {
-        setGenerationStage("FAILED");
+        setGenerationStage("FAILED_RENDER");
       }
     } catch (err: any) {
       if (err?.name === "AbortError" || abortController.signal.aborted) {
         return;
       }
-      setGenerationStage("FAILED");
+      setGenerationStage("FAILED_PROVIDER");
       setGenerationError({
         message: err instanceof Error ? err.message : "Network error generating website.",
         canFallback: true,
+        failedStage: "FAILED_PROVIDER",
       });
       addToast({
         type: "error",
@@ -2287,10 +2311,10 @@ export default function DashboardPage() {
             </div>
           ) : (
             <main className="flex-1 flex flex-col justify-start py-8 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
-              {generating || generationStage === "FAILED" ? (
-                /* VIEW 2: GENERATION & RECOVERY PIPELINE */
-                <div className="max-w-xl mx-auto w-full my-auto py-16 px-4">
-                  {generationStage === "FAILED" && generationError ? (
+              {generating || generationStage.startsWith("FAILED") ? (
+                /* VIEW 2: CENTRALIZED GENERATION PIPELINE */
+                <div className="max-w-2xl mx-auto w-full my-auto py-12 px-4">
+                  {generationStage.startsWith("FAILED") && generationError ? (
                     /* HONEST FAILURE & RECOVERY SCREEN */
                     <div className="bg-white border border-rose-200 rounded-[16px] p-8 sm:p-10 shadow-lg text-center space-y-6 animate-in fade-in duration-300">
                       <div className="w-16 h-16 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-sm">
@@ -2298,17 +2322,20 @@ export default function DashboardPage() {
                       </div>
 
                       <div>
+                        <div className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 mb-2 uppercase tracking-wide">
+                          Stage Failed: {generationError.failedStage || generationStage}
+                        </div>
                         <h2 className="text-xl font-bold text-slate-900 mb-1.5">
-                          AI Generation Could Not Be Completed
+                          Generation Halted at {String(generationError.failedStage || generationStage).replace("FAILED_", "").replace(/_/g, " ")}
                         </h2>
                         <div className="p-3 bg-rose-50/70 border border-rose-200/80 rounded-xl text-left my-3">
-                          <p className="text-xs font-semibold text-rose-800 mb-0.5">Error details:</p>
+                          <p className="text-xs font-semibold text-rose-800 mb-0.5">Stage Error Details:</p>
                           <p className="text-xs text-rose-700 font-mono break-words leading-relaxed">
                             {generationError.message}
                           </p>
                         </div>
                         <p className="text-xs text-slate-500 max-w-md mx-auto">
-                          All your entered business details and SEO settings were preserved. You can retry with your configured AI provider or immediately assemble the site using our curated trade templates.
+                          All entered business details, SEO keywords, and service area settings were preserved. You can retry with your active AI provider or immediately assemble using curated trade templates.
                         </p>
                       </div>
 
@@ -2319,7 +2346,7 @@ export default function DashboardPage() {
                           className="inline-flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold shadow-sm transition"
                         >
                           <RefreshCw className="w-3.5 h-3.5" />
-                          <span>Retry AI Generation</span>
+                          <span>Retry Pipeline</span>
                         </button>
                         <button
                           type="button"
@@ -2359,6 +2386,10 @@ export default function DashboardPage() {
                       </div>
 
                       <div>
+                        <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 mb-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-pulse" />
+                          <span>Pipeline Stage: {generationStage}</span>
+                        </div>
                         <h2 className="text-xl font-bold text-[#0F172A] mb-1.5">
                           Building Your Static Website
                         </h2>
@@ -2366,7 +2397,7 @@ export default function DashboardPage() {
                           {generationProgressText}
                         </p>
                         <p className="text-xs text-[#64748B] mt-1">
-                          Writing zero-build static HTML, CSS, JavaScript, and Schema.org markup.
+                          Zero-build static HTML, CSS, JavaScript, and Schema.org markup.
                           {generationElapsedSeconds > 0 && (
                             <span className="font-semibold text-slate-500 ml-1.5">
                               ({generationElapsedSeconds}s elapsed)
@@ -2375,43 +2406,54 @@ export default function DashboardPage() {
                         </p>
                       </div>
 
-                      {/* Stage Machine Pipeline Indicators */}
-                      <div className="grid grid-cols-5 gap-1.5 py-2 px-1 text-[11px] font-medium border-y border-slate-100">
-                        {[
-                          { id: "VALIDATING", label: "Validating" },
-                          { id: "CONNECTING", label: "Connecting" },
-                          { id: "GENERATING", label: "Generating" },
-                          { id: "PROCESSING", label: "Processing" },
-                          { id: "BUILDING", label: "Building" },
-                        ].map((stg, idx) => {
-                          const stagesOrder = ["VALIDATING", "CONNECTING", "GENERATING", "PROCESSING", "BUILDING", "PREVIEW_READY"];
-                          const currentIdx = stagesOrder.indexOf(generationStage);
-                          const isPast = currentIdx > idx;
-                          const isCurrent = currentIdx === idx;
-                          return (
-                            <div
-                              key={stg.id}
-                              className={`flex flex-col items-center space-y-1 ${
-                                isCurrent
-                                  ? "text-indigo-600 font-bold"
-                                  : isPast
-                                  ? "text-emerald-600"
-                                  : "text-slate-400"
-                              }`}
-                            >
+                      {/* Stage Machine Pipeline Indicators (Canonical 14 Stages) */}
+                      <div className="py-2 px-1 border-y border-slate-100 overflow-x-auto no-scrollbar">
+                        <div className="flex items-center justify-between min-w-[580px] gap-1 text-[10px] font-medium">
+                          {[
+                            { id: "QUEUED", label: "Queue" },
+                            { id: "RESEARCHING", label: "Research" },
+                            { id: "BLUEPRINT_READY", label: "Blueprint" },
+                            { id: "CONTENT_PLANNING", label: "Plan" },
+                            { id: "GENERATING_CONTENT", label: "Copy" },
+                            { id: "COLLECTING_IMAGES", label: "Images" },
+                            { id: "BUILDING_PAGES", label: "Build" },
+                            { id: "GENERATING_INTERNAL_LINKS", label: "Links" },
+                            { id: "GENERATING_SEO", label: "SEO" },
+                            { id: "RUNNING_AUDIT", label: "Audit" },
+                            { id: "AUTO_FIXING", label: "Fix" },
+                            { id: "FINAL_VALIDATION", label: "Validate" },
+                            { id: "PACKAGING", label: "Package" },
+                            { id: "READY", label: "Ready" },
+                          ].map((stg, idx) => {
+                            const stagesOrder = GENERATION_STAGES;
+                            const currentIdx = stagesOrder.indexOf(generationStage as GenerationStageName);
+                            const isPast = currentIdx > idx;
+                            const isCurrent = currentIdx === idx;
+                            return (
                               <div
-                                className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                key={stg.id}
+                                className={`flex flex-col items-center space-y-1 flex-1 ${
                                   isCurrent
-                                    ? "bg-indigo-600 ring-4 ring-indigo-100 animate-pulse"
+                                    ? "text-indigo-600 font-bold"
                                     : isPast
-                                    ? "bg-emerald-500"
-                                    : "bg-slate-200"
+                                    ? "text-emerald-600"
+                                    : "text-slate-400"
                                 }`}
-                              />
-                              <span className="truncate">{stg.label}</span>
-                            </div>
-                          );
-                        })}
+                              >
+                                <div
+                                  className={`w-2.5 h-2.5 rounded-full transition-all ${
+                                    isCurrent
+                                      ? "bg-indigo-600 ring-4 ring-indigo-100 animate-pulse scale-110"
+                                      : isPast
+                                      ? "bg-emerald-500"
+                                      : "bg-slate-200"
+                                  }`}
+                                />
+                                <span className="truncate max-w-[42px]">{stg.label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* Animated Progress Bar */}

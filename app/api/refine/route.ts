@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { createAIProvider } from "@/lib/ai/factory";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
-import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
+import { ProviderType } from "@/lib/ai/types";
 import { SYSTEM_PROMPT } from "@/lib/generator/prompt";
 import { extractAndParseJSON, validateGeneratedWebsite } from "@/lib/generator/validator";
+import { gatewayRequest, gatewayErrorMessage, GatewayError } from "@/lib/ai/provider-gateway";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let creds;
+    // 2. Resolve credentials server-side (keys never leave server)
+    let creds: any;
     try {
       creds = await getAnyConfiguredProviderCredentials(
         providerType,
@@ -86,17 +87,9 @@ export async function POST(req: NextRequest) {
     }
 
     const finalModel =
-      targetModel || creds.defaultModel || (providerType === "custom" ? "llama3" : PROVIDER_PRESETS[providerType]?.defaultModel);
+      targetModel || creds.defaultModel || (providerType === "custom" ? "llama3" : undefined);
 
-    const ai = createAIProvider(providerType, {
-      apiKey: creds.apiKey,
-      baseUrl: creds.baseUrl,
-      defaultModel: finalModel,
-      organizationId: creds.organizationId,
-      providerName: creds.providerName,
-    });
-
-    // 2. Format existing files for context
+    // 3. Format existing files for context
     const currentFilesSummary = filesToRefine
       .map((f) => `=== FILE: ${f.path} ===\n${f.content}\n=== END FILE ===`)
       .join("\n\n");
@@ -121,22 +114,32 @@ Return the complete updated files strictly in the required JSON format:
 }
 `;
 
-    console.log(`[Refine] Updating static site with: ${instruction.slice(0, 50)}...`);
+    console.log(`[Refine] Updating static site via gateway: ${instruction.slice(0, 50)}...`);
 
-    // 3. Call AI
-    const result = await ai.generate({
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
+    // 4. Call AI via Provider Gateway (single enforced entry point)
+    const gatewayResponse = await gatewayRequest({
+      prompt: userPrompt,
+      systemPrompt: SYSTEM_PROMPT,
+      directCredentials: {
+        provider: providerType,
+        apiKey: creds.apiKey,
+        baseUrl: creds.baseUrl,
+        model: finalModel,
+        organizationId: creds.organizationId,
+        providerName: creds.providerName,
+      },
       model: finalModel,
-      temperature: 0.5,
+      responseFormat: "text",
       maxTokens: 8192,
+      timeoutMs: 90000,
+      feature: "website-generation",
     });
 
-    // 4. Validate output
-    const parsed = extractAndParseJSON(result.text);
+    // 5. Validate output
+    const parsed = extractAndParseJSON(gatewayResponse.text);
     const validated = validateGeneratedWebsite(parsed);
 
-    // 5. Try updating files in Database if available (optional)
+    // 6. Try updating files in Database if available (optional)
     if (projectId) {
       try {
         await db.$transaction(async (tx) => {
@@ -190,6 +193,10 @@ Return the complete updated files strictly in the required JSON format:
       success: true,
       projectId: projectId || "stateless",
       notes: validated.notes,
+      provider: gatewayResponse.providerName,
+      model: gatewayResponse.model,
+      durationMs: gatewayResponse.durationMs,
+      fallbackTriggered: gatewayResponse.fallbackTriggered,
       files: validated.files.map((f) => ({
         path: f.path,
         content: f.content,
@@ -205,12 +212,25 @@ Return the complete updated files strictly in the required JSON format:
     });
   } catch (error) {
     console.error("Refinement error:", error);
+    const isGatewayErr = error instanceof GatewayError;
+    const httpStatus = isGatewayErr && (
+      error.reason === "invalid_api_key" ? 401 :
+      error.reason === "no_provider_configured" ? 401 :
+      error.reason === "rate_limited" ? 429 :
+      500
+    ) || 500;
+
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to update website.",
+        error: isGatewayErr
+          ? gatewayErrorMessage(error)
+          : error instanceof Error
+          ? error.message
+          : "Failed to update website.",
+        reason: isGatewayErr ? error.reason : undefined,
       },
-      { status: 500 }
+      { status: httpStatus as number }
     );
   }
 }

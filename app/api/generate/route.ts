@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType, PROVIDER_PRESETS } from "@/lib/ai/types";
-import { generateWebsite } from "@/lib/ai/generate-website";
 import { getProviderProfile, listProviderProfiles } from "@/lib/ai/provider-manager";
 import { WebsiteFormData, computeTargetPages } from "@/lib/generator/prompt";
 import {
@@ -23,11 +22,19 @@ import {
   formatLocationsForStorage,
 } from "@/lib/keywords/keyword-parser";
 import { tempStorage } from "@/lib/storage/temp-storage";
+import { gatewayRequest } from "@/lib/ai/provider-gateway";
+import {
+  GenerationPipelineTracker,
+  GenerationFailureStage,
+  GenerationStageName,
+} from "@/lib/pipeline/generation-pipeline";
 
 export const maxDuration = 180;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
+  const tracker = new GenerationPipelineTracker();
+
   try {
     const body = await req.json();
     const {
@@ -56,6 +63,11 @@ export async function POST(req: NextRequest) {
       keywords,
       prompt,
     } = body;
+
+    // =========================================================================
+    // STAGE 1: QUEUED
+    // =========================================================================
+    tracker.startStage("QUEUED", "Validating business parameters and generation settings...");
 
     // Consolidate form data with all fields clearly captured
     const websiteData: WebsiteFormData = {
@@ -121,29 +133,40 @@ export async function POST(req: NextRequest) {
 
     // Validation for required fields
     if (!websiteData.businessName) {
+      tracker.failStage("QUEUED", "FAILED_CONTENT", "Business / Website Name is required.", true);
       return NextResponse.json(
-        { success: false, error: "Business / Website Name is required." },
+        { success: false, failedStage: "FAILED_CONTENT", error: "Business / Website Name is required.", pipeline: tracker.getState() },
         { status: 400 }
       );
     }
     if (!websiteData.businessType) {
+      tracker.failStage("QUEUED", "FAILED_CONTENT", "Business Type / Industry is required.", true);
       return NextResponse.json(
-        { success: false, error: "Business Type / Industry is required." },
+        { success: false, failedStage: "FAILED_CONTENT", error: "Business Type / Industry is required.", pipeline: tracker.getState() },
         { status: 400 }
       );
     }
     if (!websiteData.city) {
+      tracker.failStage("QUEUED", "FAILED_CONTENT", "City is required for localized website generation.", true);
       return NextResponse.json(
-        { success: false, error: "City is required for localized website generation." },
+        { success: false, failedStage: "FAILED_CONTENT", error: "City is required for localized website generation.", pipeline: tracker.getState() },
         { status: 400 }
       );
     }
     if (!websiteData.targetKeywords || (websiteData.keywords && websiteData.keywords.length === 0)) {
+      tracker.failStage("QUEUED", "FAILED_CONTENT", "At least one target keyword is required.", true);
       return NextResponse.json(
-        { success: false, error: "At least one target keyword is required." },
+        { success: false, failedStage: "FAILED_CONTENT", error: "At least one target keyword is required.", pipeline: tracker.getState() },
         { status: 400 }
       );
     }
+
+    tracker.completeStage("QUEUED", "Input parameters verified successfully.");
+
+    // =========================================================================
+    // STAGE 2: RESEARCHING
+    // =========================================================================
+    tracker.startStage("RESEARCHING", "Analyzing trade niche, service areas, and local market...");
 
     // Determine target theme
     const activeThemeId = websiteData.theme?.id || "modern-pro";
@@ -162,11 +185,24 @@ export async function POST(req: NextRequest) {
       designNotes: websiteData.theme?.designNotes || baseTheme.designNotes,
     };
 
-    // Compute all target pages
+    tracker.completeStage("RESEARCHING", `Theme "${activeTheme.name}" and trade profile resolved.`);
+
+    // =========================================================================
+    // STAGE 3: BLUEPRINT_READY
+    // =========================================================================
+    tracker.startStage("BLUEPRINT_READY", "Computing page architecture and sitemap blueprints...");
+
     const targetPages = computeTargetPages(websiteData);
     console.log(
-      `[Generate] Assembling ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}" using theme "${activeTheme.name}".`
+      `[Pipeline] Assembling ${targetPages.length} pages for "${websiteData.businessName}" in "${websiteData.city}" using theme "${activeTheme.name}".`
     );
+
+    tracker.completeStage("BLUEPRINT_READY", `Site blueprint ready: ${targetPages.length} pages mapped.`);
+
+    // =========================================================================
+    // STAGE 4: CONTENT_PLANNING
+    // =========================================================================
+    tracker.startStage("CONTENT_PLANNING", "Structuring section schemas and conversion prompts...");
 
     const effectivePexelsKey = (pexelsKey || formData?.pexelsKey || process.env.PEXELS_API_KEY || "").trim();
     const effectivePixabayKey = (pixabayKey || formData?.pixabayKey || process.env.PIXABAY_API_KEY || "").trim();
@@ -189,189 +225,184 @@ export async function POST(req: NextRequest) {
       preferredSource: effectivePrefSource,
       serviceAreaCities: Array.isArray(formData?.serviceAreaCities) ? formData.serviceAreaCities : undefined,
       customContentInstructions: websiteData.customContentInstructions || undefined,
+      onProgress: (stageName: GenerationStageName, progressPct: number, msg: string) => {
+        tracker.startStage(stageName, msg, progressPct);
+        tracker.completeStage(stageName, msg);
+      },
     };
 
-    // If explicit demo requested, immediately assemble using trade template defaults
-    if (demo === true) {
-      const defaultContent = buildDefaultTradeContentJSON(websiteData, targetPages);
-      const assembled = await assembleWebsite(defaultContent, activeTheme, assembleOptions);
+    tracker.completeStage("CONTENT_PLANNING", "Conversion prompts and schemas structured.");
 
-      const projectName = websiteData.businessName || "Static Website";
-      const demoId = `temp-demo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    // =========================================================================
+    // STAGE 5: GENERATING_CONTENT
+    // =========================================================================
+    tracker.startStage("GENERATING_CONTENT", "Generating structured content via AI Provider Gateway...");
 
-      tempStorage.register({
-        id: demoId,
-        name: projectName,
-        files: assembled.files.map((f) => ({
-          path: f.path,
-          content: f.content,
-          mimeType: f.mimeType || "text/plain",
-        })),
-        photos: assembled.photos || [],
-        qualityReport: assembled.qualityReport,
-        notes: `Complete static website assembled from section templates + real photos for ${activeTheme.name}.`,
-        provider: "demo",
-        model: "section-templates",
-        domain: websiteData.websiteDomain,
-        themeName: activeTheme.name,
-        formData,
-      });
-
-      return NextResponse.json({
-        success: true,
-        projectId: demoId,
-        isSaved: false,
-        name: projectName,
-        notes: `Complete static website assembled from section templates + real photos for ${activeTheme.name}.`,
-        provider: "demo",
-        model: "section-templates",
-        createdAt: new Date().toISOString(),
-        files: assembled.files,
-        photos: assembled.photos || [],
-        qualityReport: assembled.qualityReport,
-        downloadUrl: `/api/projects/${demoId}/download`,
-      });
-    }
-
-    const providerType = provider as ProviderType;
-
-    // 1. Get credentials for the provider (support active provider profile & providerId override)
-    let creds: any;
-    let resolvedProvider = provider;
-    try {
-      const targetProviderId = body.providerId;
-      if (targetProviderId) {
-        const prof = await getProviderProfile(targetProviderId);
-        if (prof && prof.apiKey) {
-          creds = {
-            apiKey: prof.apiKey,
-            baseUrl: prof.baseUrl,
-            defaultModel: prof.model,
-            organizationId: prof.organizationId,
-            providerName: prof.name,
-          };
-          resolvedProvider = prof.presetId || prof.apiType || "custom";
-        }
-      }
-
-      if (!creds && !apiKey) {
-        const { profiles, settings } = await listProviderProfiles();
-        const active = profiles.find((p) => p.id === settings.activeProviderId && p.hasKey);
-        if (active) {
-          const fullProf = await getProviderProfile(active.id);
-          if (fullProf?.apiKey) {
-            creds = {
-              apiKey: fullProf.apiKey,
-              baseUrl: fullProf.baseUrl,
-              defaultModel: fullProf.model,
-              organizationId: fullProf.organizationId,
-              providerName: fullProf.name,
-            };
-            resolvedProvider = fullProf.presetId || fullProf.apiType || "custom";
-          }
-        }
-      }
-
-      if (!creds) {
-        creds = await getProviderCredentials(providerType, apiKey, baseUrl, model, organizationId, providerName);
-      }
-
-      if (creds?.apiKey) {
-        assembleOptions.providerCredentials = {
-          apiKey: creds.apiKey,
-          baseUrl: creds.baseUrl,
-          provider: resolvedProvider || providerType,
-          model: model || creds.defaultModel,
-        };
-      }
-    } catch (err: any) {
-      console.warn("Could not resolve credentials for provider:", err);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `No API key configured for provider "${providerType}". Please add your API key in Settings or click "Assemble with Curated Templates".`,
-          canFallbackToTemplates: true,
-          provider: providerType,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!creds?.apiKey) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `No API key configured for provider "${providerType}". Please configure your API key in Settings or click "Assemble with Curated Templates".`,
-          canFallbackToTemplates: true,
-          provider: providerType,
-        },
-        { status: 400 }
-      );
-    }
-
-    // 2. Select target model
-    const targetModel =
-      model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-1.5-pro";
-
-    if (assembleOptions.providerCredentials) {
-      assembleOptions.providerCredentials.model = targetModel;
-    }
-
-    // 3. Ask AI for content JSON with Controlled Retry System
-    const contentPrompt = buildAIContentPrompt(websiteData, targetPages);
     let contentJSON: SiteContentJSON;
     let generationMethod = "ai";
-    let lastError: string | null = null;
+    let qualityReviewApplied = false;
+    const providerType = provider as ProviderType;
+    let targetModel = model || "gemini-1.5-pro";
 
-    try {
-      console.log(`[Generate] Attempt 1: Requesting structured content JSON from ${providerType} (${targetModel})...`);
-      const rawText = await generateWebsite({
-        provider: providerType,
-        apiKey: creds.apiKey,
-        model: targetModel,
-        prompt: contentPrompt,
-        systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
-        maxTokens: 4000,
-        baseUrl: creds.baseUrl,
-        organizationId: creds.organizationId,
-        providerName: creds.providerName,
-        timeoutMs: 30000,
-      });
+    // Fast-path for explicit demo template generation
+    if (demo === true) {
+      contentJSON = buildDefaultTradeContentJSON(websiteData, targetPages);
+      generationMethod = "demo-templates";
+      tracker.completeStage("GENERATING_CONTENT", "Curated template content loaded.");
+    } else {
+      // 1. Resolve Provider Credentials
+      let creds: any;
+      let resolvedProvider = provider;
 
-      const parsed = extractAndParseJSON(rawText);
-      contentJSON = validateContentJSON(parsed);
-    } catch (attempt1Err: any) {
-      console.warn("[Generate] Attempt 1 failed:", attempt1Err?.message || attempt1Err);
-      lastError = attempt1Err?.message || String(attempt1Err);
+      try {
+        const targetProviderId = body.providerId;
+        if (targetProviderId) {
+          const prof = await getProviderProfile(targetProviderId);
+          if (prof && prof.apiKey) {
+            creds = {
+              apiKey: prof.apiKey,
+              baseUrl: prof.baseUrl,
+              defaultModel: prof.model,
+              organizationId: prof.organizationId,
+              providerName: prof.name,
+            };
+            resolvedProvider = prof.presetId || prof.apiType || "custom";
+          }
+        }
 
-      const errLower = (lastError || "").toLowerCase();
-      const isAuthError =
-        errLower.includes("401") ||
-        errLower.includes("unauthorized") ||
-        errLower.includes("invalid api key") ||
-        errLower.includes("403") ||
-        errLower.includes("forbidden");
+        if (!creds && !apiKey) {
+          const { profiles, settings } = await listProviderProfiles();
+          const active = profiles.find((p) => p.id === settings.activeProviderId && p.hasKey);
+          if (active) {
+            const fullProf = await getProviderProfile(active.id);
+            if (fullProf?.apiKey) {
+              creds = {
+                apiKey: fullProf.apiKey,
+                baseUrl: fullProf.baseUrl,
+                defaultModel: fullProf.model,
+                organizationId: fullProf.organizationId,
+                providerName: fullProf.name,
+              };
+              resolvedProvider = fullProf.presetId || fullProf.apiType || "custom";
+            }
+          }
+        }
 
-      // Fast fail: never stall the user by retrying with the exact same unauthorized key!
-      if (isAuthError) {
-        console.warn(`[Generate] Authentication failure for ${providerType}. Skipping Attempt 2.`);
+        if (!creds) {
+          creds = await getProviderCredentials(providerType, apiKey, baseUrl, model, organizationId, providerName);
+        }
+
+        if (creds?.apiKey) {
+          assembleOptions.providerCredentials = {
+            apiKey: creds.apiKey,
+            baseUrl: creds.baseUrl,
+            provider: resolvedProvider || providerType,
+            model: model || creds.defaultModel,
+          };
+        }
+      } catch (err: any) {
+        console.warn("Could not resolve credentials for provider:", err);
+        const errMsg = `No API key configured for provider "${providerType}". Please add your API key in Settings or click "Assemble with Curated Templates".`;
+        tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, true);
         return NextResponse.json(
           {
             success: false,
-            error: `AI generation failed: ${lastError}`,
+            failedStage: "FAILED_PROVIDER",
+            error: errMsg,
             canFallbackToTemplates: true,
-            isAuthError: true,
             provider: providerType,
-            model: targetModel,
+            pipeline: tracker.getState(),
           },
-          { status: 401 }
+          { status: 400 }
         );
       }
 
-      // Attempt 2: Concise repair prompt with context (20s budget)
+      if (!creds?.apiKey) {
+        const errMsg = `No API key configured for provider "${providerType}". Please configure your API key in Settings or click "Assemble with Curated Templates".`;
+        tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, true);
+        return NextResponse.json(
+          {
+            success: false,
+            failedStage: "FAILED_PROVIDER",
+            error: errMsg,
+            canFallbackToTemplates: true,
+            provider: providerType,
+            pipeline: tracker.getState(),
+          },
+          { status: 400 }
+        );
+      }
+
+      targetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-1.5-pro";
+      if (assembleOptions.providerCredentials) {
+        assembleOptions.providerCredentials.model = targetModel;
+      }
+
+      const contentPrompt = buildAIContentPrompt(websiteData, targetPages);
+      let lastError: string | null = null;
+
       try {
-        console.log(`[Generate] Attempt 2: Sending concise JSON repair prompt to ${providerType}...`);
-        const repairPrompt = `The previous response was not valid JSON or was truncated.
+        console.log(`[Pipeline] Attempt 1: Requesting structured content from ${providerType} (${targetModel})...`);
+        const attempt1 = await gatewayRequest({
+          prompt: contentPrompt,
+          systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
+          directCredentials: {
+            provider: resolvedProvider || providerType,
+            apiKey: creds.apiKey,
+            baseUrl: creds.baseUrl,
+            model: targetModel,
+            organizationId: creds.organizationId,
+            providerName: creds.providerName,
+          },
+          model: targetModel,
+          responseFormat: "text",
+          maxTokens: 4000,
+          timeoutMs: 30000,
+          feature: "website-generation",
+        });
+
+        const parsed = extractAndParseJSON(attempt1.text);
+        contentJSON = validateContentJSON(parsed);
+      } catch (attempt1Err: any) {
+        console.warn("[Pipeline] Attempt 1 failed:", attempt1Err?.message || attempt1Err);
+        lastError = attempt1Err?.message || String(attempt1Err);
+
+        const errLower = (lastError || "").toLowerCase();
+        const isAuthError =
+          errLower.includes("401") ||
+          errLower.includes("unauthorized") ||
+          errLower.includes("invalid api key") ||
+          errLower.includes("403") ||
+          errLower.includes("forbidden");
+
+        if (isAuthError) {
+          console.warn(`[Pipeline] Authentication failure for ${providerType}. Skipping Attempt 2.`);
+          const errMsg = `AI generation failed: ${lastError}`;
+          tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, false);
+          return NextResponse.json(
+            {
+              success: false,
+              failedStage: "FAILED_PROVIDER",
+              error: errMsg,
+              canFallbackToTemplates: true,
+              isAuthError: true,
+              provider: providerType,
+              model: targetModel,
+              pipeline: tracker.getState(),
+            },
+            { status: 401 }
+          );
+        }
+
+        // Attempt 2: Concise repair prompt with context (20s budget)
+        try {
+          console.log(`[Pipeline] Attempt 2: Sending concise JSON repair prompt to ${providerType}...`);
+          const pageLabels = (targetPages as any[])
+            .map((p) => (typeof p === "string" ? p : p?.slug || p?.title || ""))
+            .filter(Boolean)
+            .join(", ");
+
+          const repairPrompt = `The previous response was not valid JSON or was truncated.
 CRITICAL INSTRUCTION: Return ONLY a single valid JSON object matching the requested website content schema.
 Do NOT include any preamble, commentary, or markdown text.
 Begin directly with { and end with }.
@@ -382,74 +413,88 @@ Original Request Summary:
 Business: "${websiteData.businessName}"
 Trade: "${websiteData.businessType}"
 City: "${websiteData.city}"
-Pages required: ${targetPages.join(", ")}
+Pages required: ${pageLabels}
 Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "string" ? s : s?.title || "").filter(Boolean).join(", ") || websiteData.servicesOffered || "Standard local trade services"}`;
 
-        const repairRaw = await generateWebsite({
-          provider: providerType,
-          apiKey: creds.apiKey,
-          model: targetModel,
-          prompt: repairPrompt,
-          systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
-          maxTokens: 4000,
-          baseUrl: creds.baseUrl,
-          organizationId: creds.organizationId,
-          providerName: creds.providerName,
-          timeoutMs: 20000,
-        });
-
-        const retryParsed = extractAndParseJSON(repairRaw);
-        contentJSON = validateContentJSON(retryParsed);
-        generationMethod = "ai-repaired";
-      } catch (attempt2Err: any) {
-        console.warn("[Generate] Attempt 2 failed:", attempt2Err?.message || attempt2Err);
-        lastError = attempt2Err?.message || String(attempt2Err);
-
-        // DO NOT silently disguise AI failure as success! Return honest 502 with error details
-        return NextResponse.json(
-          {
-            success: false,
-            error: `AI generation failed: ${lastError}`,
-            canFallbackToTemplates: true,
-            provider: providerType,
+          const attempt2 = await gatewayRequest({
+            prompt: repairPrompt,
+            systemPrompt: AI_CONTENT_SYSTEM_PROMPT,
+            directCredentials: {
+              provider: resolvedProvider || providerType,
+              apiKey: creds.apiKey,
+              baseUrl: creds.baseUrl,
+              model: targetModel,
+              organizationId: creds.organizationId,
+              providerName: creds.providerName,
+            },
             model: targetModel,
-          },
-          { status: 502 }
-        );
+            responseFormat: "text",
+            maxTokens: 4000,
+            timeoutMs: 20000,
+            feature: "repair",
+          });
+
+          const retryParsed = extractAndParseJSON(attempt2.text);
+          contentJSON = validateContentJSON(retryParsed);
+          generationMethod = "ai-repaired";
+        } catch (attempt2Err: any) {
+          console.warn("[Pipeline] Attempt 2 failed:", attempt2Err?.message || attempt2Err);
+          lastError = attempt2Err?.message || String(attempt2Err);
+
+          const errMsg = `AI generation failed: ${lastError}`;
+          tracker.failStage("GENERATING_CONTENT", "FAILED_CONTENT", errMsg, true);
+          return NextResponse.json(
+            {
+              success: false,
+              failedStage: "FAILED_CONTENT",
+              error: errMsg,
+              canFallbackToTemplates: true,
+              provider: providerType,
+              model: targetModel,
+              pipeline: tracker.getState(),
+            },
+            { status: 502 }
+          );
+        }
       }
+
+      // Optional Second AI Pass: "Quality Review"
+      const enableQualityReview = body.qualityReview === true || formData?.qualityReview === true;
+      if (enableQualityReview && creds?.apiKey && generationMethod.startsWith("ai")) {
+        console.log(`[Pipeline] Running optional Pass 2: Quality Review...`);
+        try {
+          const reviewPrompt = buildQualityReviewPrompt(contentJSON, websiteData);
+          const reviewResponse = await gatewayRequest({
+            prompt: reviewPrompt,
+            systemPrompt: QUALITY_REVIEW_SYSTEM_PROMPT,
+            directCredentials: {
+              provider: resolvedProvider || providerType,
+              apiKey: creds.apiKey,
+              baseUrl: creds.baseUrl,
+              model: targetModel,
+              organizationId: creds.organizationId,
+              providerName: creds.providerName,
+            },
+            model: targetModel,
+            responseFormat: "text",
+            maxTokens: 4000,
+            timeoutMs: 20000,
+            feature: "quality-review",
+          });
+          const parsedReview = extractAndParseJSON(reviewResponse.text);
+          contentJSON = validateContentJSON(parsedReview);
+          qualityReviewApplied = true;
+        } catch (reviewErr) {
+          console.warn("[Pipeline] Quality Review pass issue; falling back cleanly to initial pass content:", reviewErr);
+        }
+      }
+
+      tracker.completeStage("GENERATING_CONTENT", "Structured website copy generated and validated.");
     }
 
-    // 3b. Optional Second AI Pass: "Quality Review" (opt-in only to keep baseline generation fast: 4-7s)
-    const enableQualityReview = body.qualityReview === true || formData?.qualityReview === true;
-    let qualityReviewApplied = false;
-
-    if (enableQualityReview && creds?.apiKey && generationMethod.startsWith("ai")) {
-      console.log(`[Generate] Running optional Pass 2: Quality Review (auditing uniqueness, SEO & facts)...`);
-      try {
-        const reviewPrompt = buildQualityReviewPrompt(contentJSON, websiteData);
-        const reviewRaw = await generateWebsite({
-          provider: providerType,
-          apiKey: creds.apiKey,
-          model: targetModel,
-          prompt: reviewPrompt,
-          systemPrompt: QUALITY_REVIEW_SYSTEM_PROMPT,
-          maxTokens: 4000,
-          baseUrl: creds.baseUrl,
-          organizationId: creds.organizationId,
-          providerName: creds.providerName,
-          timeoutMs: 20000,
-        });
-
-        const parsedReview = extractAndParseJSON(reviewRaw);
-        contentJSON = validateContentJSON(parsedReview);
-        qualityReviewApplied = true;
-        console.log(`[Generate] Quality Review pass completed successfully.`);
-      } catch (reviewErr) {
-        console.warn("[Generate] Quality Review pass encountered an issue; falling back cleanly to initial pass content:", reviewErr);
-      }
-    }
-
-    // Enforce Ground-Truth Facts & Sanitize Placeholders
+    // =========================================================================
+    // Ground-Truth Fact Sanitization & Hard Constraints
+    // =========================================================================
     const sanitizationCtx = {
       businessName: websiteData.businessName,
       phone: websiteData.phone,
@@ -468,10 +513,8 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
       realReviews: websiteData.realReviews,
     };
 
-    // Deep sanitize text strings throughout contentJSON
     contentJSON = sanitizeDeep(contentJSON, sanitizationCtx);
 
-    // Merge ground-truth facts from websiteData into contentJSON.site
     contentJSON.site = {
       ...contentJSON.site,
       businessName: websiteData.businessName || contentJSON.site.businessName,
@@ -506,79 +549,129 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
       }
     }
 
-    // 4. Assemble final website from pre-built section templates + design tokens + real photos
-    console.log(`[Generate] Assembling website pages from section template library...`);
-    const assembled = await assembleWebsite(contentJSON, activeTheme, assembleOptions);
+    // =========================================================================
+    // STAGES 6–12: Handled cleanly by Assembler lifecycle hooks
+    // (COLLECTING_IMAGES → BUILDING_PAGES → GENERATING_INTERNAL_LINKS →
+    //  GENERATING_SEO → RUNNING_AUDIT → AUTO_FIXING → FINAL_VALIDATION)
+    // =========================================================================
+    let assembled: any;
+    try {
+      console.log(`[Pipeline] Assembling website pages from section template library...`);
+      assembled = await assembleWebsite(contentJSON, activeTheme, assembleOptions);
+    } catch (assemblerErr: any) {
+      console.error("[Pipeline] Assembler failed:", assemblerErr);
+      const activeStage = tracker.getState().activeStageName;
+      let failureStage: GenerationFailureStage = "FAILED_RENDER";
+
+      if (activeStage === "COLLECTING_IMAGES") failureStage = "FAILED_IMAGE";
+      else if (activeStage === "GENERATING_INTERNAL_LINKS") failureStage = "FAILED_LINKING";
+      else if (activeStage === "GENERATING_SEO") failureStage = "FAILED_SEO";
+      else if (activeStage === "RUNNING_AUDIT" || activeStage === "AUTO_FIXING") failureStage = "FAILED_AUDIT";
+
+      const errMsg = assemblerErr instanceof Error ? assemblerErr.message : "Website assembly failed.";
+      tracker.failStage(activeStage, failureStage, errMsg, false);
+      return NextResponse.json(
+        {
+          success: false,
+          failedStage: failureStage,
+          error: errMsg,
+          pipeline: tracker.getState(),
+        },
+        { status: 500 }
+      );
+    }
+
+    // =========================================================================
+    // STAGE 13: PACKAGING
+    // =========================================================================
+    tracker.startStage("PACKAGING", "Packaging static assets and registering preview bundle...");
 
     const projectName = websiteData.businessName || "Static Website";
-
-    // 5. Ephemeral Temporary Storage Lifecycle (GENERATE -> PREVIEW -> DOWNLOAD -> NOT SAVED PERMANENTLY by default)
     const saveToDb = Boolean(body.saveToDb);
     let projectId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     let isSaved = false;
 
-    // Register in ephemeral temporary in-memory store with 1-hour auto-expiring TTL
-    tempStorage.register({
-      id: projectId,
-      name: projectName,
-      files: assembled.files.map((f) => ({
-        path: f.path,
-        content: f.content,
-        mimeType: f.mimeType || "text/plain",
-      })),
-      photos: assembled.photos || [],
-      qualityReport: assembled.qualityReport,
-      notes: qualityReviewApplied
-        ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
-        : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
-      provider: providerType,
-      model: targetModel,
-      domain: websiteData.websiteDomain,
-      themeName: activeTheme.name,
-      customContentInstructions: websiteData.customContentInstructions || undefined,
-      formData,
-    });
+    try {
+      tempStorage.register({
+        id: projectId,
+        name: projectName,
+        files: assembled.files.map((f: any) => ({
+          path: f.path,
+          content: f.content,
+          mimeType: f.mimeType || "text/plain",
+        })),
+        photos: assembled.photos || [],
+        qualityReport: assembled.qualityReport,
+        notes: qualityReviewApplied
+          ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
+          : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
+        provider: providerType,
+        model: targetModel,
+        domain: websiteData.websiteDomain,
+        themeName: activeTheme.name,
+        customContentInstructions: websiteData.customContentInstructions || undefined,
+        formData,
+      });
 
-    // Only save permanently to database if explicitly chosen by user
-    if (saveToDb) {
-      try {
-        const project = await db.project.create({
-          data: {
-            name: projectName,
-            prompt: `Theme: ${activeTheme.name} | Pages: ${assembled.files.filter((f) => f.path.endsWith(".html")).length} | Biz: ${websiteData.businessName}`,
-            provider: providerType,
-            model: targetModel,
-            status: "saved",
-            notes: JSON.stringify({
-              notes: qualityReviewApplied
-                ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
-                : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
-              businessName: websiteData.businessName,
-              domain: websiteData.websiteDomain,
-              themeName: activeTheme.name,
-              themeId: activeTheme.id,
-              niche: websiteData.businessType,
-              city: websiteData.city,
-              state: websiteData.stateRegion,
-              overallScore: assembled.qualityReport?.overallScore,
-              lastOptimizedAt: Date.now(),
-            }),
-            customInstructions: websiteData.customContentInstructions || null,
-            files: {
-              create: assembled.files.map((f) => ({
-                path: f.path,
-                content: typeof f.content === "string" ? f.content : f.content.toString("base64"),
-                mimeType: f.mimeType || "text/plain",
-              })),
+      if (saveToDb) {
+        try {
+          const project = await db.project.create({
+            data: {
+              name: projectName,
+              prompt: `Theme: ${activeTheme.name} | Pages: ${assembled.files.filter((f: any) => f.path.endsWith(".html")).length} | Biz: ${websiteData.businessName}`,
+              provider: providerType,
+              model: targetModel,
+              status: "saved",
+              notes: JSON.stringify({
+                notes: qualityReviewApplied
+                  ? `Assembled static website (${assembled.files.length} files) with two-pass Quality Review audit + real photos.`
+                  : `Assembled static website (${assembled.files.length} files) from section template library + AI content + real trade photos.`,
+                businessName: websiteData.businessName,
+                domain: websiteData.websiteDomain,
+                themeName: activeTheme.name,
+                themeId: activeTheme.id,
+                niche: websiteData.businessType,
+                city: websiteData.city,
+                state: websiteData.stateRegion,
+                overallScore: assembled.qualityReport?.overallScore,
+                lastOptimizedAt: Date.now(),
+              }),
+              customInstructions: websiteData.customContentInstructions || null,
+              files: {
+                create: assembled.files.map((f: any) => ({
+                  path: f.path,
+                  content: typeof f.content === "string" ? f.content : f.content.toString("base64"),
+                  mimeType: f.mimeType || "text/plain",
+                })),
+              },
             },
-          },
-        });
-        projectId = project.id;
-        isSaved = true;
-      } catch (dbErr) {
-        console.warn("Database storage skipped (stateless execution):", dbErr);
+          });
+          projectId = project.id;
+          isSaved = true;
+        } catch (dbErr) {
+          console.warn("Database storage skipped (stateless execution):", dbErr);
+        }
       }
+
+      tracker.completeStage("PACKAGING", "Package registered in storage.");
+    } catch (packErr: any) {
+      const errMsg = packErr instanceof Error ? packErr.message : "Failed to package generated website.";
+      tracker.failStage("PACKAGING", "FAILED_PACKAGE", errMsg, false);
+      return NextResponse.json(
+        {
+          success: false,
+          failedStage: "FAILED_PACKAGE",
+          error: errMsg,
+          pipeline: tracker.getState(),
+        },
+        { status: 500 }
+      );
     }
+
+    // =========================================================================
+    // STAGE 14: READY
+    // =========================================================================
+    tracker.completePipeline();
 
     return NextResponse.json({
       success: true,
@@ -596,14 +689,21 @@ Services: ${((websiteData.services || []) as any[]).map((s) => typeof s === "str
       files: assembled.files,
       photos: assembled.photos || [],
       qualityReport: assembled.qualityReport,
+      pipeline: tracker.getState(),
       downloadUrl: `/api/projects/${projectId}/download`,
     });
   } catch (error) {
-    console.error("Website generation failed:", error);
+    console.error("[Pipeline] Website generation failed:", error);
+    const activeStage = tracker.getState().activeStageName;
+    const errMsg = error instanceof Error ? error.message : "Failed to generate website.";
+    tracker.failStage(activeStage, "FAILED_RENDER", errMsg, false);
+
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to generate website.",
+        failedStage: "FAILED_RENDER",
+        error: errMsg,
+        pipeline: tracker.getState(),
       },
       { status: 500 }
     );

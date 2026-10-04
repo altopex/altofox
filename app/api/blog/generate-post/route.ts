@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProvider } from "@/lib/ai";
 import { ProviderType } from "@/lib/ai/types";
+import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
+import { gatewayRequest, gatewayErrorMessage, GatewayError } from "@/lib/ai/provider-gateway";
 import { renderBlogPostHtml, buildBlogPostSchema, BlogPostData } from "@/lib/blog/blog-engine";
 import { THEMES } from "@/lib/themes";
 import { SiteInfoJSON } from "@/lib/generator/content-schema";
@@ -69,23 +70,44 @@ Confirmed Facts: License ${businessInfo.licenseNumber || "State Licensed"}, ${bu
     let imageAlt = `${topic.primaryKeyword} maintenance guide`;
 
     try {
-      const aiProvider = getProvider((provider as ProviderType) || "gemini");
-      const resp = await aiProvider.generate({
-        model: model || "gemini-1.5-pro",
+      // Resolve credentials server-side (keys never exposed to client)
+      const providerType = (provider as ProviderType) || "gemini";
+      const creds = await getAnyConfiguredProviderCredentials(
+        providerType,
+        apiKey,          // client may pass a key it already has (server-to-server calls)
+        undefined,
+        model,
+        undefined,
+        undefined
+      );
+
+      const gatewayResponse = await gatewayRequest({
         prompt: userPrompt,
         systemPrompt,
-        apiKey: apiKey || process.env.GEMINI_API_KEY,
-        jsonMode: true,
+        directCredentials: {
+          provider: creds.provider,
+          apiKey: creds.apiKey,
+          baseUrl: creds.baseUrl,
+          model: creds.defaultModel || model,
+          organizationId: creds.organizationId,
+          providerName: creds.providerName,
+        },
+        model: creds.defaultModel || model,
+        responseFormat: "json",
+        maxTokens: 4000,
+        timeoutMs: 30000,
+        feature: "blog",
       });
 
-      const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
-      const parsed = JSON.parse(cleanJson);
-      contentHtml = parsed.contentHtml || "";
-      metaDescription = parsed.metaDescription || metaDescription;
-      faqs = parsed.faqs || [];
-      imageAlt = parsed.imageAlt || imageAlt;
-    } catch {
-      // Fallback 1200+ word structured article
+      const parsed = gatewayResponse.parsedJson as any;
+      contentHtml = parsed?.contentHtml || "";
+      metaDescription = parsed?.metaDescription || metaDescription;
+      faqs = parsed?.faqs || [];
+      imageAlt = parsed?.imageAlt || imageAlt;
+    } catch (aiErr) {
+      // Log and use static fallback — blog generation is non-critical
+      const msg = aiErr instanceof GatewayError ? gatewayErrorMessage(aiErr) : String(aiErr);
+      console.warn(`[Blog Gen API] AI generation skipped, using static fallback: ${msg}`);
       contentHtml = `
 <p class="lead text-lg font-medium text-slate-800">Dealing with home maintenance issues can feel daunting. If you've been noticing unusual behavior or suspect a malfunction, understanding the underlying mechanics can help you protect your investment, maintain safety, and avoid expensive emergency repairs.</p>
 

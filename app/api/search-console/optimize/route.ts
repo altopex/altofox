@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProvider, ProviderType } from "@/lib/ai";
+import { ProviderType } from "@/lib/ai/types";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
+import { gatewayRequest } from "@/lib/ai/provider-gateway";
 import { optimizePageWithGscData } from "@/lib/search-console/search-console-optimizer";
 import { GSCQueryRow } from "@/lib/search-console/search-console-analyzer";
 
@@ -66,11 +67,7 @@ export async function POST(req: NextRequest) {
         providerName
       );
 
-      const activeProviderType = resolvedCreds?.provider || (provider as ProviderType) || "custom";
-      const activeKey = resolvedCreds?.apiKey || apiKey || process.env.CUSTOM_AI_API_KEY || process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
-
-      if (activeKey) {
-        const aiProvider = getProvider(activeProviderType);
+      if (resolvedCreds?.apiKey) {
         const systemPrompt = `You are a surgical technical SEO analyst optimizing an existing local service web page based on Google Search Console data.
 Your job is to provide 3 concise, specific bullet points summarizing how ranking for "${query}" (Position ${position}, ${impressions} impressions) was strengthened.
 ${customContentInstructions ? `Ensure suggestions respect the project's custom brand voice & content directives: "${customContentInstructions.slice(0, 200)}"` : ""}
@@ -79,20 +76,26 @@ Do NOT rewrite the whole page. Respond with valid JSON:
   "suggestions": ["Refined title and meta description to target '${query}'.", "Added an FAQ answering customer intent around '${query}'.", "Preserved all contact numbers and navigation."]
 }`;
 
-        const resp = await aiProvider.generate({
-          model: resolvedCreds?.defaultModel || model || (activeProviderType === "custom" ? "llama3" : "gpt-4o-mini"),
+        const resp = await gatewayRequest({
           prompt: `Page: ${pagePath}, Query: ${query}`,
           systemPrompt,
-          apiKey: activeKey,
-          baseUrl: resolvedCreds?.baseUrl || baseUrl,
-          organizationId: resolvedCreds?.organizationId || organizationId,
-          providerName: resolvedCreds?.providerName || providerName,
-          jsonMode: true,
+          directCredentials: {
+            provider: resolvedCreds.provider,
+            apiKey: resolvedCreds.apiKey,
+            baseUrl: resolvedCreds.baseUrl,
+            model: resolvedCreds.defaultModel || model,
+            organizationId: resolvedCreds.organizationId,
+            providerName: resolvedCreds.providerName,
+          },
+          model: resolvedCreds.defaultModel || model,
+          responseFormat: "json",
+          maxTokens: 500,
+          timeoutMs: 15000,
+          feature: "seo",
         });
 
-        const cleanJson = resp.content.replace(/```json|```/gi, "").trim();
-        const parsed = JSON.parse(cleanJson);
-        if (Array.isArray(parsed.suggestions) && parsed.suggestions.length > 0) {
+        const parsed = resp.parsedJson as any;
+        if (Array.isArray(parsed?.suggestions) && parsed.suggestions.length > 0) {
           suggestions = parsed.suggestions;
         }
       }

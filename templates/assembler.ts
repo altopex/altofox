@@ -44,6 +44,7 @@ import {
   buildBlogPostSchema,
   renderBlogIndexHtml,
 } from "../lib/blog/blog-engine";
+import { GenerationStageName } from "../lib/pipeline/generation-pipeline";
 
 export interface AssembleOptions {
   domain?: string;
@@ -77,6 +78,7 @@ export interface AssembleOptions {
   };
   validateNetwork?: boolean;
   fastOfflinePreview?: boolean;
+  onProgress?: (stage: GenerationStageName, progress: number, message: string) => void;
 }
 
 export interface AssembledWebsite {
@@ -316,6 +318,8 @@ export async function assembleWebsite(
   // 2. Create Image Plan & Bundle Images into files (with pre-validation and guaranteed local SVG fallbacks)
   const deduplicationTracker = new ImageDeduplicationTracker();
 
+  options?.onProgress?.("COLLECTING_IMAGES", 52, "Resolving and deduplicating trade photography...");
+
   const initialPlan = createImagePlan(
     data.pages.map((p) => ({
       slug: p.slug,
@@ -356,6 +360,8 @@ export async function assembleWebsite(
     mainTrade,
     city: data.site.address?.city || "Local",
   });
+
+  options?.onProgress?.("BUILDING_PAGES", 65, "Rendering semantic HTML pages and theme tokens...");
 
   // Read base.css and base.js
   let baseCss = "";
@@ -1066,6 +1072,7 @@ ${mobileCallBarHtml}
 
   // 4.5 Master Internal Linking & Connectivity Pass
   // Guarantees zero orphans, natural contextual linking, intra-cluster connections, and crawl accessibility
+  options?.onProgress?.("GENERATING_INTERNAL_LINKS", 78, "Connecting internal linking graph & service silos...");
   const connectivityRes = enrichWebsiteConnectivity(files, {
     businessName: data.site.businessName,
     primaryTrade: data.schema?.type || data.site.tagline || "Local Services",
@@ -1075,6 +1082,7 @@ ${mobileCallBarHtml}
   files = connectivityRes.files;
 
   // 5. Generate sitemap.xml including ALL generated HTML pages
+  options?.onProgress?.("GENERATING_SEO", 85, "Generating sitemap.xml, robots.txt, and structured schemas...");
   const allHtmlFiles = files.filter((f) => f.path.endsWith(".html"));
   const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -1109,7 +1117,8 @@ ${allHtmlFiles
     mimeType: "text/plain",
   });
 
-  // 8. Run Quality Checks
+  // 8. Run Quality Checks & Auto-Fixing
+  options?.onProgress?.("RUNNING_AUDIT", 90, "Auditing website quality, headings, and mobile readiness...");
   const qualityResult = runQualityChecksAndAutoFix(files, {
     businessName: data.site.businessName,
     phone: data.site.phone,
@@ -1123,6 +1132,12 @@ ${allHtmlFiles
     allowedClaims: data.site.allowedClaims,
     trade: data.schema?.type || data.site.businessName,
   });
+
+  if ((qualityResult.report?.autoFixes?.length || 0) > 0) {
+    options?.onProgress?.("AUTO_FIXING", 94, "Applied automated quality fixes to thin content and missing tags.");
+  }
+
+  options?.onProgress?.("FINAL_VALIDATION", 97, "Validating final static file package integrity...");
 
   return {
     files: qualityResult.files,
