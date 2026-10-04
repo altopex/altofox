@@ -82,7 +82,7 @@ export async function GET(
     const tempProject = tempStorage.get(projectId);
     if (tempProject && tempProject.files && tempProject.files.length > 0) {
       console.log(`[ZIP Export API] Serving temp website "${tempProject.name}" (${tempProject.files.length} files)`);
-      const { stream, safeFilename, stats } = await bundleProjectToZipStream({
+      const { stream, safeFilename, stats, auditReport } = await bundleProjectToZipStream({
         projectId: tempProject.id,
         projectName: tempProject.name,
         files: tempProject.files,
@@ -100,6 +100,8 @@ export async function GET(
           "Content-Disposition": `attachment; filename="${safeFilename}"`,
           "X-Total-Files": String(stats.totalFiles),
           "X-Storage-Type": "ephemeral-temp",
+          "X-Audit-Score": String(auditReport?.score ?? 100),
+          "X-Audit-Passed": auditReport?.passed ? "true" : "false",
           "Cache-Control": "no-store, no-cache, must-revalidate",
         },
       });
@@ -167,7 +169,7 @@ export async function GET(
       );
     }
 
-    const { stream, safeFilename, stats } = await bundleProjectToZipStream({
+    const { stream, safeFilename, stats, auditReport } = await bundleProjectToZipStream({
       projectId: project.id,
       projectName: project.name,
       files: targetFiles,
@@ -176,7 +178,7 @@ export async function GET(
       createdAt: project.createdAt,
     });
 
-    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files)`);
+    console.log(`[ZIP Export API] Streaming "${safeFilename}" (${stats.totalFiles} files, audit score: ${auditReport?.score ?? 100}/100)`);
 
     return new Response(stream, {
       status: 200,
@@ -186,6 +188,8 @@ export async function GET(
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
+        "X-Audit-Score": String(auditReport?.score ?? 100),
+        "X-Audit-Passed": auditReport?.passed ? "true" : "false",
         ...(optimizationScore !== undefined ? { "X-Quality-Score": String(optimizationScore) } : {}),
       },
     });
@@ -228,7 +232,7 @@ export async function POST(
       );
     }
 
-    const { stream, safeFilename, stats } = await bundleProjectToZipStream({
+    const { stream, safeFilename, stats, auditReport } = await bundleProjectToZipStream({
       projectId,
       projectName: name || "website",
       files,
@@ -240,7 +244,7 @@ export async function POST(
       formData,
     });
 
-    console.log(`[ZIP Export API] Streaming client payload "${safeFilename}" (${stats.totalFiles} files)`);
+    console.log(`[ZIP Export API] Streaming client payload "${safeFilename}" (${stats.totalFiles} files, audit score: ${auditReport?.score ?? 100}/100)`);
 
     return new Response(stream, {
       status: 200,
@@ -250,6 +254,8 @@ export async function POST(
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
+        "X-Audit-Score": String(auditReport?.score ?? 100),
+        "X-Audit-Passed": auditReport?.passed ? "true" : "false",
         ...(typeof qualityScore === "number" ? { "X-Quality-Score": String(qualityScore) } : {}),
       },
     });

@@ -22,7 +22,7 @@ export function renderCtaBanner(
     "Professional Service";
 
   // Variant: Location Map (Compact Final CTA + Map immediately above footer)
-  if (variant === "locationMap" || (site && mapEmbed && variant !== "photo" && variant !== "gradient")) {
+  if (variant === "locationMap" || (site && mapEmbed && variant !== "photo" && variant !== "gradient" && variant !== "split-phone")) {
     const defaultHeadline = `Need ${trade}?`;
     const headline =
       !content.headline || content.headline.startsWith("Ready for Reliable")
@@ -112,6 +112,42 @@ export function renderCtaBanner(
     bgPhoto?.url ||
     "https://images.pexels.com/photos/1216589/pexels-photo-1216589.jpeg?auto=compress&cs=tinysrgb&w=1200";
   const remoteUrl = bgPhoto?.url || bgUrl;
+
+  // Variant: Split Phone Urgent Dispatch Box
+  if (variant === "split-phone") {
+    return `
+  <!-- CTA Banner: Split Phone Variant -->
+  <section class="section cta-banner variant-split-phone" id="final-cta">
+    <div class="container reveal">
+      <div class="cta-split-card">
+        <div class="cta-split-grid">
+          <div class="cta-split-left">
+            <span class="badge badge-emergency">⚡ Priority Dispatch</span>
+            <h2>${headline}</h2>
+            <p>${text}</p>
+            <div class="cta-perks-row">
+              <span class="cta-perk-item">✓ Fast Local Response</span>
+              <span class="cta-perk-item">✓ Upfront Flat Pricing</span>
+              <span class="cta-perk-item">✓ 100% Guaranteed</span>
+            </div>
+          </div>
+          <div class="cta-split-right">
+            <div class="cta-direct-phone-box">
+              <span class="cta-phone-label">Need Immediate Service? Call Now:</span>
+              <a href="tel:${cleanPhone}" class="cta-giant-phone" aria-label="Call ${phone}">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                <span>${phone}</span>
+              </a>
+              <a href="contact.html" class="btn btn-outline btn-mobile-full" style="margin-top: 1rem; width: 100%;">
+                ${secondaryBtnText} →
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+  }
 
   // Variant 1: Photo Background
   if (variant === "photo") {

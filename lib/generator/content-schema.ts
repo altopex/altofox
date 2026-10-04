@@ -84,6 +84,7 @@ export interface SiteContentJSON {
   site: SiteInfoJSON;
   pages: PageContentJSON[];
   schema?: SchemaOrgInfoJSON;
+  contentSimilarityAudit?: any;
 }
 
 export const ImageSlotSchema = z.object({
@@ -177,6 +178,7 @@ export const SiteContentJSONSchema = z.object({
   site: SiteInfoSchema,
   pages: z.array(PageContentSchema).min(1),
   schema: SchemaOrgInfoSchema.optional().default({ type: "LocalBusiness", priceRange: "$$" }),
+  contentSimilarityAudit: z.any().optional(),
 });
 
 /**
@@ -203,6 +205,7 @@ export function validateContentJSON(data: unknown): SiteContentJSON {
             },
           ],
       schema: SchemaOrgInfoSchema.parse(raw.schema || {}),
+      contentSimilarityAudit: raw.contentSimilarityAudit,
     } as SiteContentJSON;
   }
 

@@ -4,8 +4,29 @@ import { generateTradeSvgDataUri, generateTradeSvg } from "./trade-svg-fallback"
 import { tryGenerateAiImage, buildZeroConfigAiImageUrl } from "./ai-image-service";
 import { buildBingImageUrl, searchPexels, searchPixabay } from "./stock-service";
 import { searchGoogleImages, buildGoogleImageQuery } from "./google-image-service";
+import {
+  ImageEngine,
+  computeImageHash,
+  normalizeImageMode,
+  SupportedImageMode,
+  ImageEngineOptions,
+  ImageSlotContext,
+  ResolvedEngineImage,
+} from "./image-engine";
 
-export type ImageProviderType = "google" | "bing" | "pexels" | "pixabay" | "ai";
+export {
+  ImageEngine,
+  computeImageHash,
+  normalizeImageMode,
+};
+export type {
+  SupportedImageMode,
+  ImageEngineOptions,
+  ImageSlotContext,
+  ResolvedEngineImage,
+};
+
+export type ImageProviderType = "google" | "bing" | "none" | "pexels" | "pixabay" | "ai";
 
 export interface ImageContext {
   pageTitle?: string;
@@ -1210,8 +1231,12 @@ export function renderStaticImageTag(options: {
   const resolvedSvg = localSvg || localSvgFallback || "";
   const safeLocalSvg = resolvedSvg.replace(/"/g, "&quot;");
   const safeAlt = (alt || "Service illustration").replace(/"/g, "&quot;");
+  const effectiveSrc = src || (safeLocalSvg ? safeLocalSvg : "");
+  if (!effectiveSrc) {
+    return `<div class="img-placeholder ${className}"${styleAttr} aria-hidden="true"></div>`;
+  }
 
-  return `<img src="${src}" data-remote-src="${src}" data-fallbacks="${safeFallbacks}" data-local-svg="${safeLocalSvg}" alt="${safeAlt}" width="${width}" height="${height}" loading="${loading}"${fetchPriorityAttr}${styleAttr} class="${className}" onerror="handleImageFallback(this)">`;
+  return `<img src="${effectiveSrc}" data-remote-src="${src}" data-fallbacks="${safeFallbacks}" data-local-svg="${safeLocalSvg}" alt="${safeAlt}" width="${width}" height="${height}" loading="${loading}"${fetchPriorityAttr}${styleAttr} class="${className}" onerror="handleImageFallback(this)">`;
 }
 
 /**

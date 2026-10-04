@@ -47,10 +47,53 @@ export async function GET(
     }
 
     const { searchParams } = new URL(req.url);
-    const targetPage = searchParams.get("page") || "index.html";
+    const targetPage = searchParams.get("page") || searchParams.get("path") || searchParams.get("file") || "index.html";
+    const norm = targetPage.toLowerCase();
+
+    // Check if non-HTML asset was requested
+    const isHtml = norm.endsWith(".html") || norm.endsWith(".htm") || !norm.includes(".");
+    if (!isHtml) {
+      const matchedFile = targetFiles.find(
+        (f) =>
+          f.path.toLowerCase() === norm ||
+          f.path.toLowerCase().replace(/^\/+/, "") === norm ||
+          f.path.toLowerCase().endsWith("/" + norm)
+      );
+
+      if (matchedFile && matchedFile.content !== undefined) {
+        const ext = norm.split(".").pop() || "";
+        const mimeTypes: Record<string, string> = {
+          css: "text/css; charset=utf-8",
+          js: "application/javascript; charset=utf-8",
+          json: "application/json; charset=utf-8",
+          xml: "application/xml; charset=utf-8",
+          txt: "text/plain; charset=utf-8",
+          svg: "image/svg+xml; charset=utf-8",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          png: "image/png",
+          webp: "image/webp",
+        };
+        const contentType = matchedFile.mimeType || mimeTypes[ext] || "text/plain; charset=utf-8";
+        const body = Buffer.isBuffer(matchedFile.content)
+          ? matchedFile.content
+          : typeof matchedFile.content === "string"
+          ? matchedFile.content
+          : String(matchedFile.content);
+
+        return new Response(body, {
+          status: 200,
+          headers: {
+            "Content-Type": contentType,
+            "X-Frame-Options": "SAMEORIGIN",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        });
+      }
+    }
 
     const renderedHtml = preparePreviewHtml({
-      pagePath: targetPage,
+      pagePath: isHtml && !norm.endsWith(".html") && !norm.endsWith(".htm") ? `${targetPage}.html` : targetPage,
       files: targetFiles,
       photos: targetPhotos,
       businessDetails: {

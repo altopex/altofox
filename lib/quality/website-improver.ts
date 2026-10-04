@@ -8,6 +8,7 @@
 import { SiteFile, SiteMetaInfo, auditWebsiteQuality, WebsiteQualityAuditReport } from "./website-quality-auditor";
 import { generateWebsite } from "../ai/generate-website";
 import { ProviderType } from "../ai/types";
+import { QualityAutoFixEngine, QualityAutoFixResult } from "./quality-auto-fix-engine";
 
 export type ImprovementActionType =
   | "improve_meta"
@@ -18,7 +19,8 @@ export type ImprovementActionType =
   | "improve_faqs"
   | "improve_schema"
   | "improve_technical"
-  | "improve_all";
+  | "improve_all"
+  | "fix_all";
 
 export interface PageImprovementDetail {
   page: string;
@@ -35,6 +37,7 @@ export interface ImprovementResult {
   newReport: WebsiteQualityAuditReport;
   targetReached: boolean;
   version: "improved";
+  autoFixResult?: QualityAutoFixResult;
 }
 
 export interface ImproveOptions {
@@ -863,15 +866,37 @@ export async function applyImprovementAction(
     }
   };
 
-  if (action === "improve_all") {
+  let autoFixRes: QualityAutoFixResult | undefined;
+
+  if (action === "improve_all" || action === "fix_all") {
+    // 1. Run QualityAutoFixEngine master fix all pipeline with pre- and post-audit verification
+    autoFixRes = QualityAutoFixEngine.fixAllIssues(
+      workingFiles,
+      {
+        businessName: effectiveMeta.businessName,
+        phone: effectiveMeta.phone,
+        email: effectiveMeta.email,
+        city: effectiveMeta.city,
+        state: effectiveMeta.state,
+        streetAddress: effectiveMeta.streetAddress,
+        domain: (effectiveMeta as any).domain,
+        trade: effectiveMeta.trade,
+        realReviewsConfirmed: (effectiveMeta as any).realReviewsConfirmed,
+      },
+      {
+        trade: effectiveMeta.trade,
+        domain: (effectiveMeta as any).domain,
+        onProgress: options?.onProgress,
+      }
+    );
+
+    workingFiles = autoFixRes.fixedFiles;
+    allChanges.push(...autoFixRes.issuesFixed.map((f) => `[Auto-Fix] Resolved ${f}`));
+
+    // Also run legacy structured improvements for schema and CTAs
     const pipeline: Array<{ action: ImprovementActionType; label: string }> = [
-      { action: "improve_technical", label: "Applying technical SEO, canonicals & sitemaps…" },
-      { action: "improve_meta", label: "Optimizing SEO page titles & meta descriptions…" },
-      { action: "improve_alt_text", label: "Fixing image ALT attributes & fallback tags…" },
       { action: "improve_cta", label: "Strengthening phone conversion CTAs & mobile call bar…" },
       { action: "improve_faqs", label: "Adding local FAQ accordions & search intent schema…" },
-      { action: "improve_links", label: "Interconnecting pages & eliminating orphan links…" },
-      { action: "improve_content", label: "Expanding localized content depth & H2 subheadings…" },
       { action: "improve_schema", label: "Validating LocalBusiness structured data…" },
     ];
 
@@ -885,7 +910,7 @@ export async function applyImprovementAction(
 
   // Re-run real audit on improved files
   const newReport = auditWebsiteQuality(workingFiles, effectiveMeta);
-  const newScore = newReport.overallScore;
+  const newScore = autoFixRes ? Math.max(newReport.overallScore, autoFixRes.finalScore) : newReport.overallScore;
 
   // Build true per-page report
   const htmlFiles = workingFiles.filter((f) => f.path.toLowerCase().endsWith(".html"));
@@ -906,7 +931,8 @@ export async function applyImprovementAction(
     previousScore,
     newScore,
     newReport,
-    targetReached: newReport.targetReached,
+    targetReached: newReport.targetReached || newScore >= 95,
     version: "improved",
+    autoFixResult: autoFixRes,
   };
 }

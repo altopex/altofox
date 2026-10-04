@@ -7,7 +7,8 @@ export function renderFooter(
   site: SiteContentJSON["site"],
   registry?: PageRegistry,
   currentPage?: RegistryPage,
-  linkStyle: LinkStyle = "web"
+  linkStyle: LinkStyle = "web",
+  variant: "multi-column" | "simple-compact" | "editorial-contact" = "multi-column"
 ): string {
   if (registry && currentPage) {
     return renderFooterFromRegistry({
@@ -15,6 +16,7 @@ export function renderFooter(
       currentPage,
       site,
       linkStyle,
+      variant,
     });
   }
 
@@ -55,7 +57,7 @@ export function renderFooter(
 
         <!-- Col 2: Navigation Links -->
         <div class="footer-col">
-          <h4>Quick Links</h4>
+          <h3>Quick Links</h3>
           <ul class="footer-links">
             <li><a href="index.html">Home</a></li>
             <li><a href="services.html">Services</a></li>
@@ -67,7 +69,7 @@ export function renderFooter(
 
         <!-- Col 3: Service Areas Covered -->
         <div class="footer-col">
-          <h4>Service Areas</h4>
+          <h3>Service Areas</h3>
           <p style="color: #94A3B8; font-size: 0.85rem; margin-bottom: 0.75rem;">Serving ${address.city || "local communities"} and surrounding areas.</p>
           <ul class="footer-links">
             <li><a href="service-areas.html" style="color: var(--color-accent); font-weight: 700;">View Service Areas Hub →</a></li>
@@ -77,7 +79,7 @@ export function renderFooter(
 
         <!-- Col 4: Contact & Hours -->
         <div class="footer-col">
-          <h4>Dispatch & Contact</h4>
+          <h3>Dispatch & Contact</h3>
           <p>${addressDisplay}</p>
           ${email ? `<p style="margin-top: 0.5rem;"><a href="mailto:${email}" style="color: #CBD5E1;">${email}</a></p>` : ""}
           <p style="margin-top: 0.75rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>

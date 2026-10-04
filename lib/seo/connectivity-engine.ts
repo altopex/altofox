@@ -15,6 +15,21 @@
  */
 
 import { SearchIntentType } from "./opportunity-engine";
+import {
+  InternalLinkEngine,
+  InternalLinkAuditReport,
+  PlannedInternalLink,
+  PageUrlEntry,
+  InternalRelationshipType,
+} from "./internal-link-engine";
+
+export {
+  InternalLinkEngine,
+  type InternalLinkAuditReport,
+  type PlannedInternalLink,
+  type PageUrlEntry,
+  type InternalRelationshipType,
+};
 
 export type PageType =
   | "homepage"
@@ -236,7 +251,9 @@ export function resolveHref(fromFilePath: string, href: string): string | null {
   }
 
   let finalPath = resolvedParts.join("/");
-  if (finalPath.endsWith("/")) {
+  if (!finalPath || finalPath === "." || finalPath === "./") {
+    finalPath = "index.html";
+  } else if (finalPath.endsWith("/")) {
     finalPath = `${finalPath}index.html`;
   } else if (!finalPath.includes(".")) {
     finalPath = `${finalPath}.html`;
@@ -1344,278 +1361,30 @@ export function enrichWebsiteConnectivity(
   files: { path: string; content: string | Buffer; mimeType?: string | null }[];
   auditReport: ConnectivityAuditReport;
   crawlValidation: CrawlValidationReport;
+  linkEngineReport?: InternalLinkAuditReport;
 } {
   const domain = (siteData.domain || "example.com").replace(/^https?:\/\//i, "").replace(/\/+$/, "");
 
-  // Clone files map
-  const fileMap = new Map<string, { path: string; content: string | Buffer; mimeType?: string | null }>();
-  for (const f of files) {
-    fileMap.set(normalizeFilePath(f.path), { ...f, path: normalizeFilePath(f.path) });
-  }
+  // 1. Build Internal Link Graph BEFORE inserting links using InternalLinkEngine
+  const linkEngine = new InternalLinkEngine({
+    businessName: siteData.businessName,
+    primaryTrade: siteData.primaryTrade,
+    domain,
+    serviceAreaCities: siteData.serviceAreaCities,
+  });
 
-  // Initial audit
-  let engine = buildConnectivityGraphFromHtmlFiles(Array.from(fileMap.values()), siteData);
-  let audit = engine.evaluateConnectivityHealth();
+  const { files: updatedFiles, auditReport: linkEngineReport } = linkEngine.execute(files);
 
-  // 1. Resolve any orphan pages by linking from their most relevant parent/hub
-  if (audit.orphanNodes.length > 0) {
-    for (const orphan of audit.orphanNodes) {
-      let candidateParent: PageRelationshipNode | undefined = undefined;
-
-      if (orphan.pageType === "service_page" || orphan.pageType === "service_location_page") {
-        candidateParent =
-          engine.getNode("services-hub") ||
-          engine.getNodeByPath("services.html") ||
-          engine.getNode("home") ||
-          engine.getNodeByPath("index.html");
-      } else if (orphan.pageType === "location_page") {
-        candidateParent =
-          engine.getNode("areas-hub") ||
-          engine.getNodeByPath("service-areas.html") ||
-          engine.getNode("home") ||
-          engine.getNodeByPath("index.html");
-      } else if (orphan.pageType === "blog_post" || orphan.pageType === "blog_page") {
-        candidateParent =
-          engine.getNode("blog-hub") ||
-          engine.getNodeByPath("blog.html") ||
-          engine.getNode("services-hub") ||
-          engine.getNode("home") ||
-          engine.getNodeByPath("index.html");
-      } else {
-        candidateParent = engine.getNode("home") || engine.getNodeByPath("index.html");
-      }
-
-      if (candidateParent) {
-        const parentFile = fileMap.get(candidateParent.filePath);
-        if (parentFile) {
-          const parentHtml = typeof parentFile.content === "string" ? parentFile.content : parentFile.content.toString("utf-8");
-          const anchors = generateNaturalAnchors(orphan);
-          const anchorText = anchors[0] || orphan.title;
-          const contextNote = `Full local inspection, repairs, and professional service solutions.`;
-
-          const { updatedHtml, injected } = injectContextualInternalLink(
-            parentHtml,
-            orphan.filePath,
-            candidateParent.filePath,
-            anchorText,
-            contextNote
-          );
-
-          if (injected) {
-            fileMap.set(candidateParent.filePath, {
-              ...parentFile,
-              content: updatedHtml,
-            });
-          }
-        }
-      }
-    }
-
-    // Re-index engine after orphan injection
-    engine = buildConnectivityGraphFromHtmlFiles(Array.from(fileMap.values()), siteData);
-    audit = engine.evaluateConnectivityHealth();
-  }
-
-  // 2. Intra-cluster linking for service + location pages in the same city
-  // (e.g. Dallas Drain Cleaning <-> Dallas Pipe Repair)
-  const cityClusters = new Map<string, PageRelationshipNode[]>();
-  for (const node of engine.getAllNodes()) {
-    if (node.location?.city && (node.pageType === "service_location_page" || node.pageType === "location_page")) {
-      const c = node.location.city.toLowerCase();
-      const list = cityClusters.get(c) || [];
-      list.push(node);
-      cityClusters.set(c, list);
-    }
-  }
-
-  for (const [city, clusterNodes] of cityClusters.entries()) {
-    if (clusterNodes.length >= 2) {
-      for (let i = 0; i < clusterNodes.length; i++) {
-        const current = clusterNodes[i];
-        const next = clusterNodes[(i + 1) % clusterNodes.length];
-
-        // Check if current links to next
-        const hasLink = current.outgoingLinks.some((l) => l.targetPageId === next.pageId);
-        if (!hasLink) {
-          const currentFile = fileMap.get(current.filePath);
-          if (currentFile) {
-            const currentHtml = typeof currentFile.content === "string" ? currentFile.content : currentFile.content.toString("utf-8");
-            const anchor = next.service ? `${next.service} in ${city.charAt(0).toUpperCase() + city.slice(1)}` : next.title;
-            const { updatedHtml, injected } = injectContextualInternalLink(
-              currentHtml,
-              next.filePath,
-              current.filePath,
-              anchor,
-              `Explore complementary local care provided by our certified specialists.`
-            );
-            if (injected) {
-              fileMap.set(current.filePath, { ...currentFile, content: updatedHtml });
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // 2.5 Blog Architecture & Internal Linking Enrichment
-  const blogNodes = engine.getAllNodes().filter(
-    (n) => n.pageType === "blog_post" || n.pageType === "blog_page" || n.filePath.startsWith("blog/")
-  );
-  const blogHubNode = engine.getAllNodes().find(
-    (n) => n.pageType === "blog_hub" || n.filePath === "blog.html" || n.filePath === "blog/index.html"
-  );
-  const serviceNodes = engine.getAllNodes().filter(
-    (n) => n.pageType === "service_page" || n.pageType === "service_hub"
-  );
-
-  // A. Guarantee Hub <-> Blog Post bidirectional connections
-  if (blogHubNode && blogNodes.length > 0) {
-    const hubFile = fileMap.get(blogHubNode.filePath);
-    if (hubFile) {
-      let hubHtml = typeof hubFile.content === "string" ? hubFile.content : hubFile.content.toString("utf-8");
-      let hubModified = false;
-
-      for (const bNode of blogNodes) {
-        const relativeToPost = calculateRelativeHref(blogHubNode.filePath, bNode.filePath);
-        if (!hubHtml.includes(relativeToPost)) {
-          const { updatedHtml, injected } = injectContextualInternalLink(
-            hubHtml,
-            bNode.filePath,
-            blogHubNode.filePath,
-            bNode.title.split("|")[0].trim(),
-            `Comprehensive homeowner troubleshooting guide and preventative tips.`
-          );
-          if (injected) {
-            hubHtml = updatedHtml;
-            hubModified = true;
-          }
-        }
-      }
-
-      if (hubModified) {
-        fileMap.set(blogHubNode.filePath, { ...hubFile, content: hubHtml });
-      }
-    }
-
-    // Ensure index.html links to blog.html if present
-    const homeNode = engine.getNode("home") || engine.getNodeByPath("index.html");
-    if (homeNode) {
-      const homeFile = fileMap.get(homeNode.filePath);
-      if (homeFile) {
-        const homeHtml = typeof homeFile.content === "string" ? homeFile.content : homeFile.content.toString("utf-8");
-        const relToHub = calculateRelativeHref(homeNode.filePath, blogHubNode.filePath);
-        if (!homeHtml.includes(relToHub)) {
-          const { updatedHtml, injected } = injectContextualInternalLink(
-            homeHtml,
-            blogHubNode.filePath,
-            homeNode.filePath,
-            "Helpful Homeowner Guides & Tips",
-            "Explore expert diagnostic advice and preventative maintenance strategies."
-          );
-          if (injected) {
-            fileMap.set(homeNode.filePath, { ...homeFile, content: updatedHtml });
-          }
-        }
-      }
-    }
-  }
-
-  // B. Semantic Blog Post <-> Service Page Cross-Linking
-  for (const bNode of blogNodes) {
-    const bFile = fileMap.get(bNode.filePath);
-    if (!bFile) continue;
-    let bHtml = typeof bFile.content === "string" ? bFile.content : bFile.content.toString("utf-8");
-    let bModified = false;
-
-    // Find best matching service page based on relevance
-    let bestService: PageRelationshipNode | undefined;
-    let highestRel = 0;
-    for (const sNode of serviceNodes) {
-      const rel = engine.calculateRelevance(bNode, sNode);
-      if (rel.score > highestRel) {
-        highestRel = rel.score;
-        bestService = sNode;
-      }
-    }
-
-    if (!bestService && serviceNodes.length > 0) {
-      bestService = serviceNodes[0];
-    }
-
-    if (bestService) {
-      const relHref = calculateRelativeHref(bNode.filePath, bestService.filePath);
-      if (!bHtml.includes(relHref)) {
-        const srvAnchor = bestService.service || bestService.title.split("|")[0].trim();
-        const { updatedHtml, injected } = injectContextualInternalLink(
-          bHtml,
-          bestService.filePath,
-          bNode.filePath,
-          `professional ${srvAnchor.toLowerCase()} services`,
-          `If troubleshooting indicates complex utility wear, schedule licensed service immediately.`
-        );
-        if (injected) {
-          bHtml = updatedHtml;
-          bModified = true;
-        }
-      }
-
-      // Also ensure the service page links to this supporting guide
-      const sFile = fileMap.get(bestService.filePath);
-      if (sFile) {
-        const sHtml = typeof sFile.content === "string" ? sFile.content : sFile.content.toString("utf-8");
-        const relBack = calculateRelativeHref(bestService.filePath, bNode.filePath);
-        if (!sHtml.includes(relBack)) {
-          const guideAnchor = bNode.title.split("|")[0].trim();
-          const { updatedHtml: updatedSHtml, injected: sInjected } = injectContextualInternalLink(
-            sHtml,
-            bNode.filePath,
-            bestService.filePath,
-            `Read our guide: ${guideAnchor}`,
-            `Learn step-by-step diagnostic tips and common maintenance warning signs.`
-          );
-          if (sInjected) {
-            fileMap.set(bestService.filePath, { ...sFile, content: updatedSHtml });
-          }
-        }
-      }
-    }
-
-    // C. Sibling Blog Cross-Links (Link to another blog post if 2+ exist)
-    if (blogNodes.length >= 2) {
-      const sibling = blogNodes.find((other) => other.pageId !== bNode.pageId);
-      if (sibling) {
-        const siblingHref = calculateRelativeHref(bNode.filePath, sibling.filePath);
-        if (!bHtml.includes(siblingHref)) {
-          const { updatedHtml, injected } = injectContextualInternalLink(
-            bHtml,
-            sibling.filePath,
-            bNode.filePath,
-            sibling.title.split("|")[0].trim(),
-            `Related reading: Essential homeowner tips and cost prevention guide.`
-          );
-          if (injected) {
-            bHtml = updatedHtml;
-            bModified = true;
-          }
-        }
-      }
-    }
-
-    if (bModified) {
-      fileMap.set(bNode.filePath, { ...bFile, content: bHtml });
-    }
-  }
-
-  // 3. Final re-crawl & validation
-  const finalFiles = Array.from(fileMap.values());
-  const finalEngine = buildConnectivityGraphFromHtmlFiles(finalFiles, siteData);
+  // 2. Structural crawl validation and diagnostic evaluation
+  const finalEngine = buildConnectivityGraphFromHtmlFiles(updatedFiles, siteData);
   const finalAudit = finalEngine.evaluateConnectivityHealth();
-  const crawlValidation = validateWebsiteCrawlAccessibility(finalFiles, domain);
+  const crawlValidation = validateWebsiteCrawlAccessibility(updatedFiles, domain);
 
   return {
-    files: finalFiles,
+    files: updatedFiles,
     auditReport: finalAudit,
     crawlValidation,
+    linkEngineReport,
   };
 }
 

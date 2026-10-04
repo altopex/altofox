@@ -116,6 +116,8 @@ export function HostingPublishingPanel({
   const [deployError, setDeployError] = useState<string | null>(null);
   const [deploySuccess, setDeploySuccess] = useState(false);
   const [liveUrl, setLiveUrl] = useState<string>("");
+  const [deploymentId, setDeploymentId] = useState<string | null>(null);
+  const [deploymentStatus, setDeploymentStatus] = useState<string>("published");
   const [deploymentDuration, setDeploymentDuration] = useState<number | null>(null);
   const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
 
@@ -276,9 +278,21 @@ export function HostingPublishingPanel({
         throw new Error(data.error || `Deployment to ${selectedProvider} failed.`);
       }
 
-      setDeployStep("Deployment verified live!");
+      const confirmedUrl = data.deploymentUrl || data.liveUrl || data.publishedUrl || "";
+      const confirmedId = data.deploymentId || null;
+      const confirmedStatus = data.status || "published";
+
+      if (!confirmedUrl && confirmedStatus !== "building" && confirmedStatus !== "queued") {
+        throw new Error(`Provider ${selectedProvider} did not return a confirmed deployment URL.`);
+      }
+
+      const isBuilding = confirmedStatus === "building" || confirmedStatus === "queued";
+      setDeployStep(isBuilding ? `Deployment building on ${selectedProvider} (processing)...` : "Deployment verified live!");
       setDeploySuccess(true);
-      setLiveUrl(data.publishedUrl || "");
+      setLiveUrl(confirmedUrl);
+      setDeploymentId(confirmedId);
+      setDeploymentStatus(confirmedStatus);
+
       if (data.deploymentDurationMs) {
         setDeploymentDuration(data.deploymentDurationMs);
       }
@@ -286,8 +300,8 @@ export function HostingPublishingPanel({
         setDeploymentLogs(data.logs);
       }
 
-      if (onPublished && data.publishedUrl) {
-        onPublished({ provider: selectedProvider, liveUrl: data.publishedUrl });
+      if (onPublished && confirmedUrl) {
+        onPublished({ provider: selectedProvider, liveUrl: confirmedUrl });
       }
 
       // Auto-connect custom domain if provided
@@ -622,12 +636,20 @@ export function HostingPublishingPanel({
       {deploySuccess && liveUrl && (
         <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-4 animate-in fade-in zoom-in-95 duration-200">
           <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-100 font-bold text-sm">
+            <div className="flex items-center gap-2 text-emerald-900 dark:text-emerald-100 font-bold text-sm flex-wrap">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              <span>Website is Live!</span>
+              <span>{deploymentStatus === "building" ? "Deployment In Progress" : "Website is Live!"}</span>
+              <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-emerald-200/60 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200">
+                {selectedProvider}
+              </span>
+              {deploymentId && (
+                <span className="font-mono text-[10px] font-normal px-2 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300" title={deploymentId}>
+                  ID: {deploymentId.length > 14 ? `${deploymentId.slice(0, 12)}…` : deploymentId}
+                </span>
+              )}
             </div>
             {deploymentDuration && (
-              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1 shrink-0">
                 <Clock className="w-3 h-3" />
                 <span>Deployed in {(deploymentDuration / 1000).toFixed(1)}s</span>
               </span>

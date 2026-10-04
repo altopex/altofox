@@ -2,6 +2,7 @@ import { SectionJSON } from "../../lib/generator/content-schema";
 
 export function renderFaq(section: SectionJSON): string {
   const content = section.content || {};
+  const variant = section.variant || "accordion";
   const eyebrow = content.eyebrow || "Help & Clarity";
   const headline = content.headline || "Frequently Asked Questions";
   const subheadline = content.subheadline || "Quick answers to the questions local home and business owners ask us most.";
@@ -28,6 +29,38 @@ export function renderFaq(section: SectionJSON): string {
     },
   ];
 
+  // VARIANT B: CARDS-GRID (Editorial & High-Scannability Layouts)
+  if (variant === "cards-grid") {
+    return `
+  <!-- FAQ Section: Cards Grid Variant -->
+  <section class="section section-faq-cards section-alt" id="faq">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="badge">${eyebrow}</span>
+        <h2>${headline}</h2>
+        <p>${subheadline}</p>
+      </div>
+      <div class="faq-cards-grid reveal">
+        ${items
+          .map(
+            (item) => `
+        <div class="card faq-card">
+          <div class="faq-card-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div class="faq-card-body">
+            <h3>${item.question}</h3>
+            <p>${item.answer}</p>
+          </div>
+        </div>`
+          )
+          .join("\n        ")}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // VARIANT A: ACCORDION (Default / Conversion Direct)
   return `
   <!-- FAQ Accordion Section -->
   <section class="section section-alt" id="faq">

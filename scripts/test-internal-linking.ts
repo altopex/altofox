@@ -1,587 +1,351 @@
 /**
- * Comprehensive Test Suite for RankLocal Internal Linking & Page Connectivity Engine
- * 
- * Tests:
- * 1. Weighted Relevance Scoring Model (+30 same service, +20 same loc, -50 unrelated service, -30 unrelated loc)
- * 2. Required Test Project Setup (Dallas, Irving, Garland plumbing & service-location cluster)
- * 3. Topological Hierarchy & BFS Click Depth (Depth 0 Home -> Hubs -> Services -> Cities -> Service+Loc)
- * 4. Cluster Integrity (Dallas connects within Dallas; no cross-city combinatorial link spam)
- * 5. Crawl Accessibility & Link Validation (100% hrefs resolve, sitemap consistency, zero 404s)
- * 6. New Page Automatic Integration (Emergency Plumbing Dallas: parent linking, sitemap, orphan removal)
- * 7. Deleted Page Link Cleanup (Removes dead links across all other HTML files)
- * 8. Preview & ZIP Link Parity
+ * RankLocal 2.0: Internal Linking System Verification Test Suite
+ *
+ * Verifies:
+ * 1. Complete URL map creation before link generation
+ * 2. Target existence verification (NEVER links to nonexistent pages)
+ * 3. Link graph construction BEFORE inserting links
+ * 4. All 8 relationship types:
+ *    - Homepage → Services
+ *    - Homepage → Locations
+ *    - Service → Related Services
+ *    - Service → Locations
+ *    - Location → Services
+ *    - Location → Related Locations
+ *    - Blog → Services
+ *    - Blog → Locations
+ * 5. Elimination and resolution of orphan pages
+ * 6. Detection and diversification of excessive repeated anchor text
+ * 7. HTML link insertion with accurate relative URL resolution
+ * 8. Zero broken internal links
+ * 9. Full internal-link audit reporting:
+ *    - Total pages
+ *    - Internal links
+ *    - Broken links
+ *    - Orphan pages
  */
 
-import assert from "assert";
 import {
-  PageConnectivityEngine,
-  DEFAULT_RELEVANCE_WEIGHTS,
-  buildConnectivityGraphFromHtmlFiles,
-  validateWebsiteCrawlAccessibility,
-  integrateNewPageIntoProject,
-  deletePageFromProject,
-  resolveHref,
-  calculateRelativeHref,
-  enrichWebsiteConnectivity,
-  PageRelationshipNode,
-} from "../lib/seo/connectivity-engine";
+  InternalLinkEngine,
+  InternalLinkAuditReport,
+} from "../lib/seo/internal-link-engine";
+import { executeGenerationPipeline } from "../lib/pipeline/pipeline-executor";
 
-function pass(testName: string) {
-  console.log(`  ✅ PASS: ${testName}`);
+function assert(condition: boolean, message: string) {
+  if (!condition) {
+    console.error(`❌ FAILED: ${message}`);
+    throw new Error(`Assertion failed: ${message}`);
+  }
+  console.log(`✅ PASSED: ${message}`);
 }
 
-async function main() {
-  console.log("==================================================");
-  console.log("RUNNING MASTER INTERNAL LINKING ENGINE AUDIT");
-  console.log("==================================================\n");
+async function runInternalLinkingTests() {
+  console.log("===============================================================================");
+  console.log("   RANKLOCAL 2.0: INTERNAL LINKING SYSTEM ARCHITECTURE VERIFICATION TEST");
+  console.log("===============================================================================\n");
 
-  let totalTests = 0;
-
-  // ==============================================================
-  // 1. Relevance Scoring Model Tests
-  // ==============================================================
-  console.log("[SECTION 1: Weighted Relevance Scoring Model]");
-
-  const engine = new PageConnectivityEngine();
-
-  const nodeDrainDallas: PageRelationshipNode = {
-    pageId: "srv-loc-drain-dallas",
-    url: "/drain-cleaning-dallas.html",
-    slug: "drain-cleaning-dallas",
-    filePath: "drain-cleaning-dallas.html",
-    title: "Drain Cleaning in Dallas, TX | Lone Star Plumbing",
-    pageType: "service_location_page",
-    primaryKeyword: "drain cleaning dallas",
-    secondaryKeywords: ["clogged drain repair", "rooter dallas"],
-    service: "Drain Cleaning",
-    serviceCategory: "Plumbing",
-    location: { city: "Dallas", state: "TX" },
-    searchIntent: "transactional",
-    parentPageId: "loc-dallas",
-    relatedServices: ["Pipe Repair", "Water Heater Repair"],
-    relatedLocations: ["Irving", "Garland"],
-    incomingLinks: [],
-    outgoingLinks: [],
-    indexable: true,
-    canonicalUrl: "https://example.com/drain-cleaning-dallas.html",
-    clickDepth: 3,
-    authorityFlow: 0.5,
-    importance: 80,
-    connectivityStatus: "connected",
-    statusReasons: [],
-    recommendations: [],
-  };
-
-  const nodePipeDallas: PageRelationshipNode = {
-    pageId: "srv-loc-pipe-dallas",
-    url: "/pipe-repair-dallas.html",
-    slug: "pipe-repair-dallas",
-    filePath: "pipe-repair-dallas.html",
-    title: "Pipe Repair in Dallas, TX | Lone Star Plumbing",
-    pageType: "service_location_page",
-    primaryKeyword: "pipe repair dallas",
-    secondaryKeywords: ["burst pipe repair", "copper repiping"],
-    service: "Pipe Repair",
-    serviceCategory: "Plumbing",
-    location: { city: "Dallas", state: "TX" },
-    searchIntent: "transactional",
-    parentPageId: "loc-dallas",
-    relatedServices: ["Drain Cleaning", "Water Heater Repair"],
-    relatedLocations: ["Irving", "Garland"],
-    incomingLinks: [],
-    outgoingLinks: [],
-    indexable: true,
-    canonicalUrl: "https://example.com/pipe-repair-dallas.html",
-    clickDepth: 3,
-    authorityFlow: 0.5,
-    importance: 80,
-    connectivityStatus: "connected",
-    statusReasons: [],
-    recommendations: [],
-  };
-
-  const nodeRoofingMiami: PageRelationshipNode = {
-    pageId: "srv-loc-roof-miami",
-    url: "/commercial-roofing-miami.html",
-    slug: "commercial-roofing-miami",
-    filePath: "commercial-roofing-miami.html",
-    title: "Commercial Roofing in Miami, FL | Miami Roofing",
-    pageType: "service_location_page",
-    primaryKeyword: "commercial roofing miami",
-    secondaryKeywords: ["flat roof repair"],
-    service: "Commercial Roofing",
-    serviceCategory: "Roofing",
-    location: { city: "Miami", state: "FL" },
-    searchIntent: "transactional",
-    relatedServices: [],
-    relatedLocations: [],
-    incomingLinks: [],
-    outgoingLinks: [],
-    indexable: true,
-    canonicalUrl: "https://example.com/commercial-roofing-miami.html",
-    clickDepth: 3,
-    authorityFlow: 0.5,
-    importance: 70,
-    connectivityStatus: "connected",
-    statusReasons: [],
-    recommendations: [],
-  };
-
-  engine.registerNode(nodeDrainDallas);
-  engine.registerNode(nodePipeDallas);
-  engine.registerNode(nodeRoofingMiami);
-
-  // Score Drain Dallas -> Pipe Dallas (same category Plumbing, same location Dallas)
-  const relDallasSiblings = engine.calculateRelevance(nodeDrainDallas, nodePipeDallas);
-  assert.ok(relDallasSiblings.score >= 40, `Expected score >= 40, got ${relDallasSiblings.score}`);
-  assert.strictEqual(relDallasSiblings.tier, "high");
-  totalTests++;
-  pass(`Drain Cleaning Dallas -> Pipe Repair Dallas scores HIGH relevance (${relDallasSiblings.score})`);
-
-  // Score Drain Dallas -> Roofing Miami (unrelated trade -50, unrelated city -30)
-  const relUnrelated = engine.calculateRelevance(nodeDrainDallas, nodeRoofingMiami);
-  assert.ok(relUnrelated.score < 0, `Expected negative score for unrelated trade & city, got ${relUnrelated.score}`);
-  assert.strictEqual(relUnrelated.tier, "low");
-  totalTests++;
-  pass(`Drain Cleaning Dallas -> Commercial Roofing Miami receives heavy penalties and is rejected (${relUnrelated.score})`);
-
-  // ==============================================================
-  // 2. Setup Required Test Project
-  // ==============================================================
-  console.log("\n[SECTION 2: Required Test Project Architecture]");
-
-  // Construct realistic test project files
-  const domain = "lonestarplumbing.com";
-  const testFiles: { path: string; content: string }[] = [];
-
-  // 1. Homepage
-  testFiles.push({
-    path: "index.html",
-    content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Dallas Plumbing &amp; Drain Cleaning | Lone Star Plumbing</title>
-  <meta name="description" content="Top-rated plumbing services across Dallas, Irving, and Garland.">
-  <link rel="canonical" href="https://${domain}/">
-</head>
-<body>
-  <header>
-    <nav>
-      <a href="index.html" class="nav-link">Home</a>
-      <a href="services.html" class="nav-link">Services</a>
-      <a href="service-areas.html" class="nav-link">Areas</a>
-      <a href="contact.html" class="nav-link">Contact</a>
-    </nav>
-  </header>
-  <main>
-    <h1>Dallas Premier Plumbing Services</h1>
-    <section class="services-overview">
-      <div class="cards">
-        <a href="plumbing.html">General Plumbing</a>
-        <a href="drain-cleaning.html">Drain Cleaning</a>
-        <a href="pipe-repair.html">Pipe Repair</a>
-        <a href="water-heater-repair.html">Water Heater Repair</a>
-      </div>
-    </section>
-    <section class="locations-overview">
-      <div class="links">
-        <a href="plumber-dallas-tx.html">Dallas, TX</a>
-        <a href="plumber-irving-tx.html">Irving, TX</a>
-        <a href="plumber-garland-tx.html">Garland, TX</a>
-      </div>
-    </section>
-  </main>
-  <footer>
-    <a href="services.html">Services</a>
-    <a href="service-areas.html">Service Areas</a>
-  </footer>
-</body>
-</html>`,
+  // =========================================================================
+  // TEST 1: URL Map Creation & Target Existence Verification
+  // =========================================================================
+  console.log("--- TEST 1: URL Map Creation & Target Existence Verification ---");
+  const engine = new InternalLinkEngine({
+    businessName: "Windy City Plumbing",
+    primaryTrade: "Plumber",
+    domain: "windycityplumbing.com",
+    serviceAreaCities: [
+      { city: "Chicago", stateId: "IL" },
+      { city: "Evanston", stateId: "IL" },
+      { city: "Naperville", stateId: "IL" },
+      { city: "Aurora", stateId: "IL" },
+    ],
   });
 
-  // 2. Services Hub
-  testFiles.push({
-    path: "services.html",
-    content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Professional Plumbing Services | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/services.html">
-</head>
-<body>
-  <header><a href="index.html">Home</a></header>
-  <main>
-    <h1>Our Plumbing Services</h1>
-    <div class="cards">
-      <a href="plumbing.html">Full Residential Plumbing</a>
-      <a href="drain-cleaning.html">Drain Cleaning &amp; Rooter</a>
-      <a href="pipe-repair.html">Pipe Repair &amp; Repiping</a>
-      <a href="water-heater-repair.html">Water Heater Repair</a>
-    </div>
-  </main>
-</body>
-</html>`,
-  });
-
-  // 3. Service Pages
-  const services = [
-    { slug: "plumbing.html", name: "Plumbing", h1: "Comprehensive Plumbing Services" },
-    { slug: "drain-cleaning.html", name: "Drain Cleaning", h1: "Drain Cleaning Solutions" },
-    { slug: "pipe-repair.html", name: "Pipe Repair", h1: "Pipe Repair & Leak Fixing" },
-    { slug: "water-heater-repair.html", name: "Water Heater Repair", h1: "Water Heater Services" },
-  ];
-
-  for (const s of services) {
-    testFiles.push({
-      path: s.slug,
-      content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>${s.name} | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/${s.slug}">
-</head>
-<body>
-  <header><a href="index.html">Home</a> <a href="services.html">Services</a></header>
-  <main>
-    <h1>${s.h1}</h1>
-    <p>Professional ${s.name.toLowerCase()} solutions throughout North Texas.</p>
-    <a href="services.html">Back to All Services</a>
-  </main>
-</body>
-</html>`,
-    });
-  }
-
-  // 4. Service Areas Hub
-  testFiles.push({
-    path: "service-areas.html",
-    content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Service Areas | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/service-areas.html">
-</head>
-<body>
-  <header><a href="index.html">Home</a></header>
-  <main>
-    <h1>Communities We Serve</h1>
-    <div class="links">
-      <a href="plumber-dallas-tx.html">Plumber in Dallas, TX</a>
-      <a href="plumber-irving-tx.html">Plumber in Irving, TX</a>
-      <a href="plumber-garland-tx.html">Plumber in Garland, TX</a>
-    </div>
-  </main>
-</body>
-</html>`,
-  });
-
-  // 5. City Location Pages
-  const cities = [
-    { city: "Dallas", state: "TX", slug: "plumber-dallas-tx.html" },
-    { city: "Irving", state: "TX", slug: "plumber-irving-tx.html" },
-    { city: "Garland", state: "TX", slug: "plumber-garland-tx.html" },
-  ];
-
-  for (const c of cities) {
-    testFiles.push({
-      path: c.slug,
-      content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Licensed Plumber in ${c.city}, ${c.state} | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/${c.slug}">
-</head>
-<body>
-  <header><a href="index.html">Home</a> <a href="service-areas.html">Areas</a></header>
-  <main>
-    <h1>Top-Rated Plumber in ${c.city}, ${c.state}</h1>
-    <p>Complete plumbing care in ${c.city}.</p>
-    <div class="city-services">
-      <a href="drain-cleaning-${c.city.toLowerCase()}.html">Drain Cleaning in ${c.city}</a>
-      ${c.city !== "Garland" ? `<a href="pipe-repair-${c.city.toLowerCase()}.html">Pipe Repair in ${c.city}</a>` : ""}
-      ${c.city === "Dallas" ? `<a href="water-heater-repair-dallas.html">Water Heater Repair in Dallas</a>` : ""}
-    </div>
-  </main>
-</body>
-</html>`,
-    });
-  }
-
-  // 6. Service + Location Pages
-  const serviceLocPages = [
-    { service: "Drain Cleaning", city: "Dallas", path: "drain-cleaning-dallas.html" },
-    { service: "Pipe Repair", city: "Dallas", path: "pipe-repair-dallas.html" },
-    { service: "Water Heater Repair", city: "Dallas", path: "water-heater-repair-dallas.html" },
-    { service: "Drain Cleaning", city: "Irving", path: "drain-cleaning-irving.html" },
-    { service: "Pipe Repair", city: "Irving", path: "pipe-repair-irving.html" },
-    { service: "Drain Cleaning", city: "Garland", path: "drain-cleaning-garland.html" },
-  ];
-
-  for (const sl of serviceLocPages) {
-    testFiles.push({
-      path: sl.path,
-      content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>${sl.service} in ${sl.city}, TX | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/${sl.path}">
-</head>
-<body>
-  <header><a href="index.html">Home</a> <a href="services.html">Services</a></header>
-  <nav class="breadcrumbs">
-    <a href="index.html">Home</a> / <a href="services.html">Services</a> / <a href="plumber-${sl.city.toLowerCase()}-tx.html">${sl.city}</a> / <span>${sl.service}</span>
-  </nav>
-  <main>
-    <h1>Expert ${sl.service} in ${sl.city}, TX</h1>
-    <p>Rapid dispatch and guaranteed ${sl.service.toLowerCase()} throughout ${sl.city}.</p>
-    <a href="plumber-${sl.city.toLowerCase()}-tx.html">More ${sl.city} Plumbing Services</a>
-  </main>
-</body>
-</html>`,
-    });
-  }
-
-  // 7. Contact Page
-  testFiles.push({
-    path: "contact.html",
-    content: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>Contact Us | Lone Star Plumbing</title>
-  <link rel="canonical" href="https://${domain}/contact.html">
-</head>
-<body>
-  <header><a href="index.html">Home</a></header>
-  <main><h1>Contact Lone Star Plumbing</h1></main>
-</body>
-</html>`,
-  });
-
-  // Run Master Enrichment pass on the test files
-  const enrichment = enrichWebsiteConnectivity(testFiles, {
-    businessName: "Lone Star Plumbing",
-    primaryTrade: "Plumbing",
-    domain,
-    serviceAreaCities: cities.map((c) => ({ city: c.city, stateId: c.state })),
-  });
-
-  const enrichedFiles = enrichment.files;
-  const initialAudit = enrichment.auditReport;
-
-  // ==============================================================
-  // 3. Topology & BFS Click Depth Verification
-  // ==============================================================
-  console.log("\n[SECTION 3: Topology & BFS Click Depth Analysis]");
-
-  assert.strictEqual(initialAudit.orphanNodes.length, 0, `Expected 0 orphan nodes, found ${initialAudit.orphanNodes.length}`);
-  totalTests++;
-  pass("Initial project contains 0 orphan nodes across all 15 pages");
-
-  // Verify BFS Click Depth
-  const initialEngine = buildConnectivityGraphFromHtmlFiles(enrichedFiles, { domain });
-  initialEngine.computeClickDepths();
-
-  const home = initialEngine.getNodeByPath("index.html")!;
-  assert.strictEqual(home.clickDepth, 0, "Homepage must be click depth 0");
-  totalTests++;
-  pass("Homepage is at Click Depth 0");
-
-  const servicesHub = initialEngine.getNodeByPath("services.html")!;
-  assert.strictEqual(servicesHub.clickDepth, 1, "Services Hub must be at click depth 1");
-  totalTests++;
-  pass("Services Hub is at Click Depth 1");
-
-  const dallasCity = initialEngine.getNodeByPath("plumber-dallas-tx.html")!;
-  assert.strictEqual(dallasCity.clickDepth, 1, "Dallas city page must be at click depth 1");
-  totalTests++;
-  pass("Dallas City Location Page is at Click Depth 1");
-
-  const drainDallas = initialEngine.getNodeByPath("drain-cleaning-dallas.html")!;
-  assert.ok(drainDallas.clickDepth >= 2 && drainDallas.clickDepth <= 3, `Drain Cleaning Dallas must be depth 2 or 3, got ${drainDallas.clickDepth}`);
-  totalTests++;
-  pass(`Drain Cleaning Dallas is reachable at Click Depth ${drainDallas.clickDepth}`);
-
-  // Max depth check
-  assert.ok(initialAudit.maxClickDepth <= 3, `Expected max click depth <= 3, got ${initialAudit.maxClickDepth}`);
-  totalTests++;
-  pass(`Site architecture is compact with max click depth ${initialAudit.maxClickDepth} (Well under depth threshold 4)`);
-
-  // ==============================================================
-  // 4. Cluster Integrity & Anti-Spam Check
-  // ==============================================================
-  console.log("\n[SECTION 4: Cluster Integrity & Anti-Spam Check]");
-
-  // Verify intra-cluster link: Drain Cleaning Dallas should connect to Pipe Repair Dallas
-  const drainDallasHtml = enrichedFiles.find((f) => f.path === "drain-cleaning-dallas.html")?.content as string;
-  assert.ok(
-    drainDallasHtml.includes("pipe-repair-dallas.html"),
-    "Drain Cleaning Dallas must link to sibling Pipe Repair Dallas within same market"
-  );
-  totalTests++;
-  pass("Drain Cleaning Dallas contextually links to sibling Pipe Repair Dallas");
-
-  // Verify anti-spam: Drain Cleaning Dallas should NOT link to Pipe Repair Irving
-  assert.ok(
-    !drainDallasHtml.includes("pipe-repair-irving.html"),
-    "Drain Cleaning Dallas must NOT link to Pipe Repair Irving (No artificial cross-city spam grid)"
-  );
-  totalTests++;
-  pass("No cross-city link spam: Dallas pages do not artificially link to unrelated Irving service pages");
-
-  // ==============================================================
-  // 5. Crawl Accessibility & Zero 404s Check
-  // ==============================================================
-  console.log("\n[SECTION 5: Crawl Accessibility & Link Validation]");
-
-  const crawlReport = validateWebsiteCrawlAccessibility(enrichedFiles, domain);
-  assert.strictEqual(crawlReport.brokenLinksCount, 0, `Expected 0 broken links, found ${crawlReport.brokenLinksCount}`);
-  totalTests++;
-  pass(`Crawl test followed all internal links with ZERO broken URLs (0 broken links across ${crawlReport.crawledPagesCount} pages)`);
-
-  assert.strictEqual(crawlReport.unreachablePages.length, 0, "All pages must be reachable from homepage");
-  totalTests++;
-  pass("100% of generated pages are discoverable starting from index.html");
-
-  assert.strictEqual(crawlReport.sitemapAgreesWithCanonical, true, "Sitemap URLs must agree with canonical tags");
-  totalTests++;
-  pass("Sitemap.xml canonical URLs agree with page <link rel='canonical'> tags");
-
-  // ==============================================================
-  // 6. Test New Page Workflow (Emergency Plumbing Dallas)
-  // ==============================================================
-  console.log("\n[SECTION 6: Test New Page Workflow (Emergency Plumbing Dallas)]");
-
-  const newPageSlug = "emergency-plumbing-dallas.html";
-  const newPageHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <title>24/7 Emergency Plumbing in Dallas, TX | Lone Star Plumbing</title>
-  <meta name="description" content="Immediate 24/7 dispatch for emergency plumbing crises across Dallas, TX.">
-  <link rel="canonical" href="https://${domain}/${newPageSlug}">
-</head>
-<body>
-  <header><a href="index.html">Home</a> <a href="services.html">Services</a></header>
-  <nav class="breadcrumbs">
-    <a href="index.html">Home</a> / <a href="plumber-dallas-tx.html">Dallas</a> / <span>Emergency Plumbing</span>
-  </nav>
-  <main>
-    <h1>24/7 Emergency Plumbing in Dallas, TX</h1>
-    <p>Burst pipes, sewer backups, and urgent plumbing repairs dispatched within 45 minutes in Dallas.</p>
-    <a href="plumber-dallas-tx.html">Back to Dallas Plumbing</a>
-  </main>
-</body>
-</html>`;
-
-  // Integrate new page into the existing project package
-  const integration = integrateNewPageIntoProject(
+  const mockFiles = [
     {
-      newPagePath: newPageSlug,
-      newPageTitle: "24/7 Emergency Plumbing in Dallas, TX",
-      newPageContent: newPageHtml,
-      primaryQuery: "emergency plumbing dallas",
-      serviceName: "Emergency Plumbing",
-      locationCity: "Dallas",
-      locationState: "TX",
-      searchIntent: "transactional",
+      path: "index.html",
+      content: `<!DOCTYPE html><html><head><title>Windy City Plumbing | Chicago, IL</title></head><body><main><h1>Expert Chicago Plumber</h1><p>Welcome to our plumbing company.</p></main></body></html>`,
     },
-    enrichedFiles,
     {
-      businessName: "Lone Star Plumbing",
-      primaryTrade: "Plumbing",
-      domain,
+      path: "services.html",
+      content: `<!DOCTYPE html><html><head><title>Plumbing Services | Windy City Plumbing</title></head><body><main><h1>All Plumbing Services</h1><p>Full suite of plumbing solutions.</p></main></body></html>`,
+    },
+    {
+      path: "water-heater-repair.html",
+      content: `<!DOCTYPE html><html><head><title>Water Heater Repair | Windy City Plumbing</title></head><body><main><h1>Water Heater Repair</h1><p>Emergency hot water heater diagnostics and maintenance.</p></main></body></html>`,
+    },
+    {
+      path: "drain-cleaning.html",
+      content: `<!DOCTYPE html><html><head><title>Drain Cleaning | Windy City Plumbing</title></head><body><main><h1>Drain Cleaning</h1><p>Clearing clogged drains and sewer pipes.</p></main></body></html>`,
+    },
+    {
+      path: "leak-detection.html",
+      content: `<!DOCTYPE html><html><head><title>Leak Detection | Windy City Plumbing</title></head><body><main><h1>Leak Detection</h1><p>Non-invasive pipe leak detection.</p></main></body></html>`,
+    },
+    {
+      path: "service-areas.html",
+      content: `<!DOCTYPE html><html><head><title>Service Areas | Windy City Plumbing</title></head><body><main><h1>Service Areas</h1><p>Coverage across Chicagoland.</p></main></body></html>`,
+    },
+    {
+      path: "plumber-evanston.html",
+      content: `<!DOCTYPE html><html><head><title>Plumber in Evanston | Windy City Plumbing</title></head><body><main><h1>Evanston Plumber</h1><p>Licensed plumbing services in Evanston, IL.</p></main></body></html>`,
+    },
+    {
+      path: "plumber-naperville.html",
+      content: `<!DOCTYPE html><html><head><title>Plumber in Naperville | Windy City Plumbing</title></head><body><main><h1>Naperville Plumber</h1><p>Licensed plumbing services in Naperville, IL.</p></main></body></html>`,
+    },
+    {
+      path: "plumber-aurora.html",
+      content: `<!DOCTYPE html><html><head><title>Plumber in Aurora | Windy City Plumbing</title></head><body><main><h1>Aurora Plumber</h1><p>Licensed plumbing services in Aurora, IL.</p></main></body></html>`,
+    },
+    {
+      path: "blog.html",
+      content: `<!DOCTYPE html><html><head><title>Plumbing Tips & Guides | Windy City Plumbing</title></head><body><main><h1>Homeowner Guides</h1><p>Tips for maintenance.</p></main></body></html>`,
+    },
+    {
+      path: "blog/how-to-prevent-pipe-leaks.html",
+      content: `<!DOCTYPE html><html><head><title>How to Prevent Pipe Leaks | Windy City Plumbing</title></head><body><main><h1>How to Prevent Pipe Leaks</h1><p>Protect your home from water damage with leak detection.</p></main></body></html>`,
+    },
+  ];
+
+  const urlMap = engine.createUrlMap(mockFiles);
+  assert(urlMap.size === mockFiles.length, "URL map contains all 11 pages");
+  assert(engine.verifyTargetExists("index.html"), "index.html exists in URL map");
+  assert(engine.verifyTargetExists("water-heater-repair.html"), "water-heater-repair.html exists in URL map");
+  assert(engine.verifyTargetExists("blog/how-to-prevent-pipe-leaks.html"), "Nested blog post exists in URL map");
+  assert(!engine.verifyTargetExists("non-existent-page.html"), "Non-existent page correctly rejected");
+  assert(!engine.verifyTargetExists("random-service.html"), "Random service correctly rejected");
+
+  const targetCheck = engine.verifyEveryTargetExists();
+  assert(targetCheck.allExist, "verifyEveryTargetExists confirms all mapped targets exist");
+  assert(targetCheck.validTargets.length === mockFiles.length, `All ${mockFiles.length} targets verified`);
+
+  const mixedCheck = engine.verifyEveryTargetExists(["index.html", "fake-page.html"]);
+  assert(!mixedCheck.allExist, "verifyEveryTargetExists catches missing targets");
+  assert(mixedCheck.missingTargets.includes("fake-page.html"), "fake-page.html identified as missing");
+
+  // Rule: Never plan links to non-existent pages
+  const badEdgePlanned = engine.planEdge({
+    sourceFilePath: "index.html",
+    targetFilePath: "ghost-page.html",
+    relationshipType: "homepage_to_services",
+    anchorText: "Ghost Service",
+    priority: 1,
+  });
+  assert(badEdgePlanned === false, "Rule verified: Linking to non-existent target is rejected");
+
+  // =========================================================================
+  // TEST 2: Graph Construction BEFORE Link Insertion
+  // =========================================================================
+  console.log("\n--- TEST 2: Internal Link Graph Construction BEFORE Link Insertion ---");
+  engine.generateLinks(); // Step 3: Generate links (build link graph)
+
+  const preValidation = engine.validateLinks(); // Step 4: Validate links
+  assert(preValidation.valid, "validateLinks confirms zero broken links planned in link graph");
+
+  let totalPlannedEdges = 0;
+  for (const edges of engine.plannedEdges.values()) {
+    totalPlannedEdges += edges.length;
+  }
+  assert(totalPlannedEdges > 0, `Graph constructed with ${totalPlannedEdges} planned edges before HTML modification`);
+
+  const homeEdges = engine.plannedEdges.get("index.html") || [];
+  assert(homeEdges.length > 0, "Homepage has planned outgoing edges");
+
+  // =========================================================================
+  // TEST 3: All 8 Relationship Types
+  // =========================================================================
+  console.log("\n--- TEST 3: Verification of All 8 Relationship Types ---");
+  const relBreakdown: Record<string, number> = {};
+  for (const edges of engine.plannedEdges.values()) {
+    for (const e of edges) {
+      relBreakdown[e.relationshipType] = (relBreakdown[e.relationshipType] || 0) + 1;
     }
-  );
+  }
 
-  assert.strictEqual(integration.orphanResolved, true, "New page must not be an orphan after integration");
-  totalTests++;
-  pass("New page is automatically connected with zero orphan status");
+  // 1. Homepage → Services
+  assert((relBreakdown["homepage_to_services"] || 0) > 0, `1. Homepage → Services verified (${relBreakdown["homepage_to_services"]} edges)`);
 
-  assert.ok(
-    integration.incomingLinksAdded.length >= 1,
-    `Expected at least 1 incoming link added for new page, got ${integration.incomingLinksAdded.length}`
-  );
-  totalTests++;
-  pass(`New page received incoming links from: ${integration.incomingLinksAdded.join(", ")}`);
+  // 2. Homepage → Locations
+  assert((relBreakdown["homepage_to_locations"] || 0) > 0, `2. Homepage → Locations verified (${relBreakdown["homepage_to_locations"]} edges)`);
 
-  // Verify that sitemap.xml was updated to include the new page
-  const updatedSitemap = integration.updatedFiles.find((f) => f.path === "sitemap.xml");
-  assert.ok(updatedSitemap, "sitemap.xml must exist");
-  const sitemapText = typeof updatedSitemap.content === "string" ? updatedSitemap.content : updatedSitemap.content.toString("utf-8");
-  assert.ok(
-    sitemapText.includes(newPageSlug),
-    `sitemap.xml must contain new page ${newPageSlug}`
-  );
-  totalTests++;
-  pass("sitemap.xml was automatically synchronized with the new page URL");
+  // 3. Service → Related Services
+  assert((relBreakdown["service_to_related_services"] || 0) > 0, `3. Service → Related Services verified (${relBreakdown["service_to_related_services"]} edges)`);
 
-  // Re-verify complete crawl on updated project
-  const updatedCrawl = validateWebsiteCrawlAccessibility(integration.updatedFiles, domain);
-  assert.strictEqual(updatedCrawl.brokenLinksCount, 0, "No broken links after new page integration");
-  totalTests++;
-  pass("Crawl validation confirms ZERO broken links after adding Emergency Plumbing Dallas");
+  // 4. Service → Locations
+  assert((relBreakdown["service_to_locations"] || 0) > 0, `4. Service → Locations verified (${relBreakdown["service_to_locations"]} edges)`);
 
-  // ==============================================================
-  // 7. Test Deleted Page Workflow
-  // ==============================================================
-  console.log("\n[SECTION 7: Test Deleted Page Workflow & Dead Link Cleanup]");
+  // 5. Location → Services
+  assert((relBreakdown["location_to_services"] || 0) > 0, `5. Location → Services verified (${relBreakdown["location_to_services"]} edges)`);
 
-  const deleteResult = deletePageFromProject(newPageSlug, integration.updatedFiles, domain);
+  // 6. Location → Related Locations
+  assert((relBreakdown["location_to_related_locations"] || 0) > 0, `6. Location → Related Locations verified (${relBreakdown["location_to_related_locations"]} edges)`);
 
-  assert.ok(!deleteResult.updatedFiles.some((f) => f.path === newPageSlug), "Deleted file must be removed from files");
-  totalTests++;
-  pass("File emergency-plumbing-dallas.html was removed from package");
+  // 7. Blog → Services
+  assert((relBreakdown["blog_to_services"] || 0) > 0, `7. Blog → Services verified (${relBreakdown["blog_to_services"]} edges)`);
 
-  assert.ok(deleteResult.removedDeadLinksCount >= 1, `Expected at least 1 dead link removed, got ${deleteResult.removedDeadLinksCount}`);
-  totalTests++;
-  pass(`Automated dead link cleaner stripped ${deleteResult.removedDeadLinksCount} link(s) across other pages`);
+  // 8. Blog → Locations
+  assert((relBreakdown["blog_to_locations"] || 0) > 0, `8. Blog → Locations verified (${relBreakdown["blog_to_locations"]} edges)`);
 
-  // Verify sitemap removed the deleted page
-  const postDeleteSitemap = deleteResult.updatedFiles.find((f) => f.path === "sitemap.xml");
-  const postDeleteSitemapText = typeof postDeleteSitemap?.content === "string" ? postDeleteSitemap.content : postDeleteSitemap!.content.toString("utf-8");
-  assert.ok(
-    !postDeleteSitemapText.includes(newPageSlug),
-    "sitemap.xml must no longer contain deleted page"
-  );
-  totalTests++;
-  pass("sitemap.xml automatically removed the deleted page URL");
+  // =========================================================================
+  // TEST 4: Orphan Detection and Elimination
+  // =========================================================================
+  console.log("\n--- TEST 4: Orphan Detection & Elimination ---");
+  // Introduce a brand new isolated page in files
+  const isolatedFiles = [
+    ...mockFiles,
+    {
+      path: "emergency-plumbing.html",
+      content: `<!DOCTYPE html><html><head><title>Emergency Plumbing | Windy City Plumbing</title></head><body><main><h1>Emergency 24/7 Plumbing</h1><p>Fast emergency repairs.</p></main></body></html>`,
+    },
+  ];
 
-  // Re-verify complete crawl after deletion
-  const postDeleteCrawl = validateWebsiteCrawlAccessibility(deleteResult.updatedFiles, domain);
-  assert.strictEqual(postDeleteCrawl.brokenLinksCount, 0, "No dead links remaining after page deletion");
-  totalTests++;
-  pass("Zero 404 links remain across the entire website after deletion");
+  const orphanEngine = new InternalLinkEngine({
+    businessName: "Windy City Plumbing",
+    primaryTrade: "Plumber",
+    domain: "windycityplumbing.com",
+  });
+  orphanEngine.createUrlMap(isolatedFiles);
+  orphanEngine.buildLinkGraph();
 
-  // ==============================================================
-  // 8. Relative vs Absolute Link Resolution
-  // ==============================================================
-  console.log("\n[SECTION 8: POSIX Relative vs Absolute Path Resolution]");
+  // Test detect & resolve
+  const resolvedOrphans = orphanEngine.detectAndResolveOrphans();
+  console.log(`Resolved orphan pages count: ${resolvedOrphans.length}`);
 
-  assert.strictEqual(
-    calculateRelativeHref("services/drain-cleaning.html", "index.html"),
-    "../index.html"
-  );
-  assert.strictEqual(
-    calculateRelativeHref("index.html", "services/drain-cleaning.html"),
-    "services/drain-cleaning.html"
-  );
-  assert.strictEqual(
-    resolveHref("services/drain-cleaning.html", "../index.html"),
-    "index.html"
-  );
-  assert.strictEqual(
-    resolveHref("index.html", "services/pipe-repair.html"),
-    "services/pipe-repair.html"
-  );
-  totalTests += 4;
-  pass("POSIX relative and folder-traversal href calculations verified");
+  // Every page (except homepage) must have at least 1 incoming planned edge
+  for (const [path, node] of orphanEngine.urlMap.entries()) {
+    if (path === "index.html") continue;
+    const incoming = orphanEngine.incomingPlannedEdges.get(path) || [];
+    assert(incoming.length >= 1, `Page "${path}" has ${incoming.length} incoming edge(s) (zero orphans)`);
+  }
 
-  console.log("\n==================================================");
-  console.log(`📊 MASTER AUDIT SUMMARY: ALL ${totalTests} TESTS PASSED`);
-  console.log("==================================================");
-  console.log("🎉 INTERNAL LINKING & PAGE CONNECTIVITY ENGINE VERIFIED!\n");
+  // =========================================================================
+  // TEST 5: Detection of Excessive Repeated Anchor Text
+  // =========================================================================
+  console.log("\n--- TEST 5: Anchor Text Diversification & Anti-Repetition ---");
+  const anchorWarnings = orphanEngine.detectAndDiversifyRepeatedAnchors(0.35);
+  console.log(`Detected & diversified repeated anchor warnings: ${anchorWarnings.length}`);
+
+  // Test anchor variants generator
+  const sampleTarget = orphanEngine.urlMap.get("water-heater-repair.html")!;
+  const variants = orphanEngine.generateAnchorVariants(sampleTarget, "service_to_related_services");
+  assert(variants.length >= 4, `Target has ${variants.length} diversified anchor variants: ${variants.join(", ")}`);
+  assert(new Set(variants).size === variants.length, "All generated anchor variants are unique");
+
+  // =========================================================================
+  // TEST 6: Execution Pipeline & HTML Link Insertion
+  // =========================================================================
+  console.log("\n--- TEST 6: HTML Link Insertion with Relative Path Resolution ---");
+  const executionResult = orphanEngine.execute(isolatedFiles);
+  const updatedFiles = executionResult.files;
+  const auditReport = executionResult.auditReport;
+
+  // Verify nested blog post relative link
+  const updatedBlogFile = updatedFiles.find((f) => f.path === "blog/how-to-prevent-pipe-leaks.html")!;
+  const blogHtml = updatedBlogFile.content.toString();
+  assert(blogHtml.includes('href="../'), "Nested blog post properly resolved upward relative paths (../)");
+
+  // Verify homepage updated HTML has links
+  const updatedHome = updatedFiles.find((f) => f.path === "index.html")!;
+  const homeHtml = updatedHome.content.toString();
+  assert(homeHtml.includes("services.html") || homeHtml.includes("water-heater-repair.html"), "Homepage contains injected links");
+
+  // =========================================================================
+  // TEST 7: Link Validation & Audit Report Metrics
+  // =========================================================================
+  console.log("\n--- TEST 7: Link Validation & Internal-Link Audit Report Metrics ---");
+  assert(auditReport.totalPages === isolatedFiles.length, `Total pages match (${auditReport.totalPages})`);
+  assert(auditReport.internalLinks > 0, `Total internal links count: ${auditReport.internalLinks}`);
+  assert(auditReport.brokenLinks === 0, `Rule verified: Broken links count is 0 (got ${auditReport.brokenLinks})`);
+  assert(auditReport.isHealthy === true, "Audit report confirms graph isHealthy");
+  assert(Boolean(auditReport.reportText), "Audit report contains formatted reportText");
+  assert(auditReport.reportText.includes("Total pages:"), "reportText includes Total pages");
+  assert(auditReport.reportText.includes("Internal links:"), "reportText includes Internal links");
+  assert(auditReport.reportText.includes("Broken links:"), "reportText includes Broken links");
+  assert(auditReport.reportText.includes("Orphan pages:"), "reportText includes Orphan pages");
+  assert(Boolean(auditReport.summaryReportText), "Audit report contains summaryReportText");
+
+  // =========================================================================
+  // TEST 8: End-to-End Pipeline Integration with Real Site Generation
+  // =========================================================================
+  console.log("\n--- TEST 8: Full Website Generation Pipeline with Internal Linking ---");
+  const fullResult = await executeGenerationPipeline({
+    businessName: "Midwest Premier Plumbing",
+    businessType: "Plumbing",
+    city: "Chicago",
+    targetLocation: "Chicago, IL",
+    formData: {
+      businessName: "Midwest Premier Plumbing",
+      businessType: "Plumbing",
+      city: "Chicago",
+      stateRegion: "IL",
+      phone: "(312) 555-0199",
+      email: "contact@midwestpremierplumbing.com",
+      streetAddress: "200 E Randolph St",
+      services: [
+        "Water Heater Repair",
+        "Drain Cleaning",
+        "Leak Detection",
+        "Emergency Plumbing",
+        "Pipe Replacement",
+        "Sewer Line Inspection",
+      ],
+      serviceAreas: "Chicago, Evanston, Naperville, Aurora, Joliet",
+      serviceAreaCities: [
+        { city: "Chicago", stateId: "IL" },
+        { city: "Evanston", stateId: "IL" },
+        { city: "Naperville", stateId: "IL" },
+        { city: "Aurora", stateId: "IL" },
+        { city: "Joliet", stateId: "IL" },
+      ],
+      hasBlog: true,
+      keywords: "plumber Chicago, drain cleaning, water heater repair",
+      theme: { id: "forge" },
+      preferredSource: "none",
+    },
+    demo: true,
+  });
+
+  assert(fullResult.success === true, "Website generation pipeline completed successfully");
+  assert(Boolean(fullResult.files), "Files generated");
+
+  const generatedHtmlFiles = fullResult.files?.filter((f) => f.path.endsWith(".html")) || [];
+  console.log(`Generated ${generatedHtmlFiles.length} HTML pages.`);
+  assert(generatedHtmlFiles.length >= 10, `Generated at least 10 pages (got ${generatedHtmlFiles.length})`);
+
+  // Run InternalLinkEngine audit on the generated files
+  const siteLinkEngine = new InternalLinkEngine({
+    businessName: "Midwest Premier Plumbing",
+    primaryTrade: "Plumbing",
+    domain: "midwestpremierplumbing.com",
+    serviceAreaCities: [
+      { city: "Chicago", stateId: "IL" },
+      { city: "Evanston", stateId: "IL" },
+      { city: "Naperville", stateId: "IL" },
+      { city: "Aurora", stateId: "IL" },
+      { city: "Joliet", stateId: "IL" },
+    ],
+  });
+
+  const fullSiteAudit = siteLinkEngine.runInternalLinkAudit(fullResult.files!);
+
+  console.log("\n--- FULL WEBSITE GENERATION INTERNAL-LINK AUDIT ---");
+  console.log(`Total pages:    ${fullSiteAudit.totalPages}`);
+  console.log(`Internal links: ${fullSiteAudit.internalLinks}`);
+  console.log(`Broken links:   ${fullSiteAudit.brokenLinks}`);
+  console.log(`Orphan pages:   ${fullSiteAudit.orphanPages}`);
+
+  assert(fullSiteAudit.totalPages >= 10, "Total pages >= 10 verified");
+  assert(fullSiteAudit.internalLinks > 20, "Rich internal link network (>20 links) verified");
+  assert(fullSiteAudit.brokenLinks === 0, "Zero broken links verified");
+  assert(fullSiteAudit.orphanPages === 0, "Zero orphan pages verified");
+  assert(fullSiteAudit.isHealthy === true, "Full site internal link health verified");
+
+  console.log("\n===============================================================================");
+  console.log("   ALL INTERNAL LINKING TESTS PASSED SUCCESSFULLY!");
+  console.log("===============================================================================\n");
 }
 
-main().catch((err) => {
-  console.error("Test Suite Failed:", err);
+runInternalLinkingTests().catch((err) => {
+  console.error("Test execution failed:", err);
   process.exit(1);
 });

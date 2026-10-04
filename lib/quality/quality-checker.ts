@@ -18,6 +18,12 @@
  * 13. Mobile checks: no horizontal scroll (at 360px, 390px, 768px, 1280px), tap targets >= 44px, text >= 16px
  */
 
+import {
+  auditSiteSimilarity,
+  extractPageTextFromHtml,
+  ContentSimilarityAuditResult,
+} from "./content-similarity-checker";
+
 export interface QualityCheckItem {
   id: string;
   name: string;
@@ -47,6 +53,7 @@ export interface QualityReport {
     textA: string;
     textB: string;
   }>;
+  contentSimilarityAudit?: ContentSimilarityAuditResult;
   mobileAudit: {
     testedBreakpoints: number[];
     hasOverflow: boolean;
@@ -819,6 +826,30 @@ export function runQualityChecksAndAutoFix(
     },
   ];
 
+  // Run Deterministic Content Similarity Checker across all HTML files
+  const htmlPageTexts = htmlFiles.map((h) =>
+    extractPageTextFromHtml(typeof h.content === "string" ? h.content : h.content.toString("utf-8"), h.path)
+  );
+  const similarityAudit = auditSiteSimilarity(htmlPageTexts, {
+    similarityThreshold: 0.35,
+    brandTerms: [siteInfo.businessName || "", siteInfo.city || ""],
+  });
+
+  checkItems.push({
+    id: "content-similarity-differentiation",
+    name: "Cross-Page Content Differentiation (<35% Similarity)",
+    category: "content",
+    score: 5,
+    earned: similarityAudit.finalFlaggedPagesCount === 0 ? 5 : 2,
+    passed: similarityAudit.finalFlaggedPagesCount === 0,
+    description: "Pages maintain unique headings, paragraphs, and phrase structures to eliminate duplicate content risks.",
+    details: similarityAudit.summaryText,
+    warning:
+      similarityAudit.finalFlaggedPagesCount > 0
+        ? `${similarityAudit.finalFlaggedPagesCount} page(s) flagged for high similarity (>35%).`
+        : undefined,
+  });
+
   const totalPossible = checkItems.reduce((acc, item) => acc + item.score, 0);
   const totalEarned = checkItems.reduce((acc, item) => acc + item.earned, 0);
   const overallScore = Math.min(100, Math.round((totalEarned / totalPossible) * 100));
@@ -839,6 +870,7 @@ export function runQualityChecksAndAutoFix(
     warnings,
     autoFixes,
     duplicateParagraphs,
+    contentSimilarityAudit: similarityAudit,
     mobileAudit: {
       testedBreakpoints: [360, 390, 768, 1280],
       hasOverflow: false,

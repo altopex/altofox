@@ -69,6 +69,51 @@ export function renderTestimonials(
   </section>`;
     }
 
+    if (variant === "featured-quote") {
+      const primaryReview = site.realReviews[0];
+      const otherReviews = site.realReviews.slice(1, 3);
+      return `
+  <!-- Testimonials Section: Real Customer Reviews (Featured Quote) -->
+  <section class="section" id="testimonials">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="badge">${eyebrow}</span>
+        <h2>${headline}</h2>
+        <p>${subheadline}</p>
+      </div>
+      <div class="testimonial-featured-grid reveal">
+        <div class="card testimonial-primary-feature">
+          <div class="quote-mark">“</div>
+          ${renderStars(primaryReview.rating)}
+          <blockquote class="featured-quote-text">
+            "${primaryReview.text}"
+          </blockquote>
+          <div class="review-author-name">${primaryReview.author}</div>
+          <div class="review-author-meta">${primaryReview.source || "Google"} • Verified Homeowner</div>
+        </div>
+        <div class="testimonial-secondary-stack">
+          ${otherReviews.length > 0 ? otherReviews.map((r) => `
+          <div class="card testimonial-secondary-card">
+            ${renderStars(r.rating)}
+            <p style="font-style: italic; color: var(--color-text); margin: 0.75rem 0; line-height: 1.5;">"${r.text}"</p>
+            <div class="review-author-name">${r.author}</div>
+            <div class="review-author-meta">${r.source || "Google"} • Verified Customer</div>
+          </div>`).join("\n          ") : `
+          <div class="card testimonial-secondary-card">
+            ${renderStars(5)}
+            <p style="font-style: italic; color: var(--color-text); margin: 0.75rem 0; line-height: 1.5;">"Prompt dispatch and upfront honest pricing. Will always be our first call."</p>
+            <div class="review-author-name">Verified Local Client</div>
+            <div class="review-author-meta">Direct Feedback</div>
+          </div>`}
+        </div>
+      </div>
+      <div style="text-align: center; margin-top: 1.75rem; font-size: 0.85rem; color: var(--color-muted);">
+        Verified real customer reviews.
+      </div>
+    </div>
+  </section>`;
+    }
+
     // Grid Variant (Default)
     return `
   <!-- Testimonials Section: Real Customer Reviews (Grid) -->

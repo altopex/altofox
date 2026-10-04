@@ -211,6 +211,28 @@ export type PipelineEventCallback = (state: PipelineState, event: {
   progress: number;
 }) => void;
 
+export class PipelineStageError extends Error {
+  public stage: GenerationStageName;
+  public failureStage: GenerationFailureStage;
+  public canRetry: boolean;
+  public originalError?: any;
+
+  constructor(
+    message: string,
+    stage: GenerationStageName,
+    failureStage: GenerationFailureStage,
+    canRetry = false,
+    originalError?: any
+  ) {
+    super(message);
+    this.name = "PipelineStageError";
+    this.stage = stage;
+    this.failureStage = failureStage;
+    this.canRetry = canRetry;
+    this.originalError = originalError;
+  }
+}
+
 /**
  * Observable Pipeline Execution Tracker.
  */
@@ -225,6 +247,29 @@ export class GenerationPipelineTracker {
 
   public getState(): PipelineState {
     return { ...this.state };
+  }
+
+  public getStage(name: GenerationStageName): PipelineStageRecord | undefined {
+    return this.state.stages[name];
+  }
+
+  public async executeStage<T>(
+    name: GenerationStageName,
+    failureStage: GenerationFailureStage,
+    fn: () => Promise<T> | T,
+    options?: { message?: string; targetProgress?: number; canRetry?: boolean }
+  ): Promise<T> {
+    this.startStage(name, options?.message, options?.targetProgress);
+    try {
+      const result = await fn();
+      this.completeStage(name);
+      return result;
+    } catch (err: any) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const canRetry = options?.canRetry ?? false;
+      this.failStage(name, failureStage, errorMsg, canRetry);
+      throw new PipelineStageError(errorMsg, name, failureStage, canRetry, err);
+    }
   }
 
   public startStage(name: GenerationStageName, message?: string, targetProgress?: number): void {

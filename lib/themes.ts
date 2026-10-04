@@ -830,6 +830,7 @@ const THEME_ALIASES: Record<string, string> = {
   "warm-friendly":       "clean-sweep",
   "minimal-mono":        "cool-breeze",
   "vibrant-modern":      "iron-grip",
+  "forge":               "pipe-and-wrench",
 };
 
 export function getThemeById(id: string): Theme {

@@ -15,7 +15,7 @@ export function renderHeader(
       registry,
       currentPage,
       site,
-      variant: variant as "standard" | "centered",
+      variant: variant as "standard" | "centered" | "split-phone" | "minimal" | "emergency-bar" | "bold-call",
       linkStyle,
     });
   }

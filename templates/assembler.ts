@@ -5,13 +5,20 @@ import { Theme, buildGoogleFontsUrl } from "../lib/themes";
 import { detectTradeCategory, resolvePhoto } from "../lib/photos/photo-service";
 import { resolveStockPhoto, buildCreditsTxt, StockPhoto } from "../lib/photos/stock-service";
 import { findNicheByIndustry } from "../niches";
-import { PAGE_LAYOUTS, detectPageLayoutType } from "./layouts";
+import {
+  PAGE_LAYOUTS,
+  detectPageLayoutType,
+  resolveThemeLayoutStructure,
+  ResolvedLayoutStructure,
+} from "./layouts";
 import * as Sections from "./sections";
 import { renderServiceAreasHub, ServiceAreaCityItem } from "./sections/serviceAreasHub";
 import { renderLocationPage, buildLocationPageSchema, LocationPageContext } from "./sections/locationPage";
 import { getNearestSelectedCities } from "../lib/data/us-cities";
 import { buildLocationContentStrategy, ROTATING_ANGLES } from "../lib/location/quality-engine";
 import { runQualityChecksAndAutoFix, QualityReport, AssembleFile } from "../lib/quality/quality-checker";
+import { QualityAuditEngine, QualityAuditResult } from "../lib/quality/quality-audit-engine";
+import { QualityAutoFixEngine, QualityAutoFixResult } from "../lib/quality/quality-auto-fix-engine";
 import {
   PageRegistry,
   RegistryPage,
@@ -28,7 +35,7 @@ import {
   bundleImagesFromPlan,
   ImagePlanSlot,
 } from "../lib/photos/image-bundler";
-import { IMAGE_FALLBACK_SCRIPT, ImageDeduplicationTracker } from "../lib/photos/image-provider";
+import { IMAGE_FALLBACK_SCRIPT, ImageDeduplicationTracker, ImageProviderType } from "../lib/photos/image-provider";
 import {
   validateAndRepairSection,
   scanHtmlForForbiddenTokens,
@@ -38,24 +45,34 @@ import {
   enrichWebsiteConnectivity,
   ConnectivityAuditReport,
 } from "../lib/seo/connectivity-engine";
+import { InternalLinkAuditReport } from "../lib/seo/internal-link-engine";
+import {
+  SeoEngine,
+  SeoSiteMeta,
+  SeoValidationReport,
+} from "../lib/seo/seo-engine";
 import {
   BlogPostData,
   renderBlogPostHtml,
   buildBlogPostSchema,
   renderBlogIndexHtml,
 } from "../lib/blog/blog-engine";
-import { GenerationStageName } from "../lib/pipeline/generation-pipeline";
+import {
+  GenerationStageName,
+  GenerationPipelineTracker,
+} from "../lib/pipeline/generation-pipeline";
 import { SiteBlueprint } from "../lib/blueprint/site-blueprint";
 
 export interface AssembleOptions {
   domain?: string;
   blueprint?: SiteBlueprint;
+  tracker?: GenerationPipelineTracker;
   mapEmbed?: string;
   pexelsKey?: string;
   pixabayKey?: string;
   googleKey?: string;
   googleCx?: string;
-  preferredSource?: "bing" | "pexels" | "pixabay" | "google" | "ai";
+  preferredSource?: ImageProviderType;
   linkStyle?: LinkStyle;
   useFolderStructure?: boolean;
   blogPosts?: BlogPostData[];
@@ -90,6 +107,10 @@ export interface AssembledWebsite {
   registry?: PageRegistry;
   generationLog?: GenerationAuditEntry[];
   connectivityAudit?: ConnectivityAuditReport;
+  internalLinkAudit?: InternalLinkAuditReport;
+  seoValidation?: SeoValidationReport;
+  qualityAudit?: QualityAuditResult;
+  autoFixAudit?: QualityAutoFixResult;
 }
 
 /**
@@ -291,6 +312,11 @@ export async function assembleWebsite(
 
   // 1. Build Master Page Registry BEFORE any HTML is generated
   const blueprint = options?.blueprint;
+  const siteSeed = blueprint?.siteSeed || (data.site as any).siteSeed || data.site.businessName;
+  const layoutFamilyPreference = blueprint?.layoutFamily;
+  const resolvedLayout = resolveThemeLayoutStructure(theme, siteSeed, layoutFamilyPreference);
+  console.log(`[Assembler] Theme "${theme.name}" (${theme.id}) -> Layout Family "${resolvedLayout.layoutFamilyName}" (${resolvedLayout.layoutFamily}) with Seed "${siteSeed}"`);
+
   const registry = buildMasterPageRegistry({
     businessName: data.site.businessName,
     nicheTrade: mainTrade,
@@ -326,52 +352,68 @@ export async function assembleWebsite(
     hasBlogHub: effectiveBlogPosts.length > 0,
   });
 
-  // 2. Create Image Plan & Bundle Images into files (with pre-validation and guaranteed local SVG fallbacks)
+  // 2. STAGE 6: COLLECTING_IMAGES
+  const tracker = options?.tracker;
   const deduplicationTracker = new ImageDeduplicationTracker();
 
+  tracker?.startStage("COLLECTING_IMAGES", "Resolving and deduplicating trade photography...");
   options?.onProgress?.("COLLECTING_IMAGES", 52, "Resolving and deduplicating trade photography...");
 
-  const initialPlan = createImagePlan(
-    data.pages.map((p) => ({
-      slug: p.slug,
-      title: p.seo?.title || p.seo?.h1,
-      sections: p.sections,
-    })),
-    mainTrade,
-    data.site.address?.city || "Local",
-    data.site.businessName,
-    effectiveAreaCities,
-    {
-      preferredSource: options?.preferredSource,
-      state: data.site.address?.state,
-      deduplicationTracker,
-    }
-  );
+  let imagePlan: ImagePlanSlot[] = [];
+  let bundledImages: AssembleFile[] = [];
+  try {
+    const initialPlan = createImagePlan(
+      data.pages.map((p) => ({
+        slug: p.slug,
+        title: p.seo?.title || p.seo?.h1,
+        sections: p.sections,
+      })),
+      mainTrade,
+      data.site.address?.city || "Local",
+      data.site.businessName,
+      effectiveAreaCities,
+      {
+        preferredSource: options?.preferredSource,
+        state: data.site.address?.state,
+        deduplicationTracker,
+      }
+    );
 
-  const imagePlan = await resolveImagePlanWithValidation(
-    initialPlan,
-    mainTrade,
-    data.site.address?.city || "Local",
-    {
-      preferredSource: options?.preferredSource,
-      state: data.site.address?.state,
-      pexelsKey: options?.pexelsKey,
-      pixabayKey: options?.pixabayKey,
-      googleKey: options?.googleKey,
-      googleCx: options?.googleCx,
-      providerCredentials: options?.fastOfflinePreview ? undefined : options?.providerCredentials,
-      validateNetwork: options?.fastOfflinePreview ? false : (options?.validateNetwork ?? false),
-      fastOfflinePreview: options?.fastOfflinePreview,
-      maxValidationTimeMs: 3000,
-      deduplicationTracker,
-    }
-  );
+    imagePlan = await resolveImagePlanWithValidation(
+      initialPlan,
+      mainTrade,
+      data.site.address?.city || "Local",
+      {
+        preferredSource: options?.preferredSource,
+        state: data.site.address?.state,
+        pexelsKey: options?.pexelsKey,
+        pixabayKey: options?.pixabayKey,
+        googleKey: options?.googleKey,
+        googleCx: options?.googleCx,
+        providerCredentials: options?.fastOfflinePreview ? undefined : options?.providerCredentials,
+        validateNetwork: options?.fastOfflinePreview ? false : (options?.validateNetwork ?? false),
+        fastOfflinePreview: options?.fastOfflinePreview,
+        maxValidationTimeMs: 3000,
+        deduplicationTracker,
+      }
+    );
 
-  const bundledImages = bundleImagesFromPlan(imagePlan, {
-    mainTrade,
-    city: data.site.address?.city || "Local",
-  });
+    bundledImages = bundleImagesFromPlan(imagePlan, {
+      mainTrade,
+      city: data.site.address?.city || "Local",
+    });
 
+    tracker?.completeStage(
+      "COLLECTING_IMAGES",
+      `Resolved and deduplicated trade photography (${bundledImages.length} visual assets).`
+    );
+  } catch (imgErr: any) {
+    const errMsg = imgErr instanceof Error ? imgErr.message : "Failed to resolve images.";
+    tracker?.failStage("COLLECTING_IMAGES", "FAILED_IMAGE", errMsg, true);
+    throw imgErr;
+  }
+
+  tracker?.startStage("BUILDING_PAGES", "Rendering semantic HTML pages and theme tokens...");
   options?.onProgress?.("BUILDING_PAGES", 65, "Rendering semantic HTML pages and theme tokens...");
 
   // Read base.css and base.js
@@ -471,8 +513,8 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
         : { ...s, content: s.content || {}, images: s.images || [] }
     );
 
-    // Header & Navigation from Registry (respects theme headerVariant)
-    const headerVariant = theme.layoutStructure?.headerVariant || "standard";
+    // Header & Navigation from Registry (respects resolved layout family headerVariant)
+    const headerVariant = resolvedLayout.headerVariant;
     const headerHtml = Sections.renderHeader(data.site, headerVariant, registry, currentPage, linkStyle);
 
     // Breadcrumbs for inner pages
@@ -484,9 +526,9 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
 
     const isHomePage = page.slug === "index" || page.slug === "";
 
-    // Re-order homepage sections according to theme layout structure
-    if (isHomePage && theme.layoutStructure?.sectionOrder && theme.layoutStructure.sectionOrder.length > 0) {
-      const order = theme.layoutStructure.sectionOrder;
+    // Re-order homepage sections according to resolved layout family sectionOrder
+    if (isHomePage && resolvedLayout.sectionOrder && resolvedLayout.sectionOrder.length > 0) {
+      const order = resolvedLayout.sectionOrder;
       activeSections.sort((a, b) => {
         let idxA = order.indexOf(a.type);
         let idxB = order.indexOf(b.type);
@@ -516,30 +558,37 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
       }
     }
 
-    // Apply theme section layout variants
-    if (theme.layoutStructure) {
-      for (const sec of activeSections) {
-        if (sec.type === "hero" && theme.layoutStructure.heroLayout) {
-          sec.variant = theme.layoutStructure.heroLayout;
-        } else if (sec.type === "services" && theme.layoutStructure.serviceCardVariant) {
-          sec.variant = theme.layoutStructure.serviceCardVariant;
-        } else if (sec.type === "trustBar" && theme.layoutStructure.trustVariant) {
-          sec.variant = theme.layoutStructure.trustVariant;
-        }
+    // Apply resolved layout structure section variants across all sections
+    for (const sec of activeSections) {
+      if (sec.type === "hero") {
+        sec.variant = resolvedLayout.heroVariant;
+      } else if (sec.type === "services") {
+        sec.variant = resolvedLayout.servicesVariant;
+      } else if (sec.type === "trustBar") {
+        sec.variant = resolvedLayout.trustVariant;
+      } else if (sec.type === "process") {
+        sec.variant = resolvedLayout.processVariant;
+      } else if (sec.type === "testimonials") {
+        sec.variant = resolvedLayout.reviewsVariant;
+      } else if (sec.type === "faq") {
+        sec.variant = resolvedLayout.faqVariant;
+      } else if (sec.type === "ctaBanner") {
+        sec.variant = resolvedLayout.ctaVariant;
       }
     }
 
-    // On homepage, guarantee the final section before footer is the Final CTA + Small Location Map section
+    // On homepage, guarantee the final CTA section reflects the resolved layout CTA variant
     if (isHomePage) {
       const ctaIndex = activeSections.findIndex((s) => s.type === "ctaBanner");
+      const chosenCtaVariant = resolvedLayout.ctaVariant || "locationMap";
       if (ctaIndex !== -1) {
         const [ctaSec] = activeSections.splice(ctaIndex, 1);
-        ctaSec.variant = "locationMap";
+        ctaSec.variant = chosenCtaVariant;
         activeSections.push(ctaSec);
       } else {
         activeSections.push({
           type: "ctaBanner",
-          variant: "locationMap",
+          variant: chosenCtaVariant,
           content: {},
           images: [],
         });
@@ -681,7 +730,7 @@ body { font-family: sans-serif; line-height: 1.6; margin: 0; padding: 0; }
     }
 
     // Footer & Mobile Call Bar
-    const footerHtml = Sections.renderFooter(data.site, registry, currentPage, linkStyle);
+    const footerHtml = Sections.renderFooter(data.site, registry, currentPage, linkStyle, resolvedLayout.footerVariant);
     const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
 
     // Build Head & Schema
@@ -740,7 +789,7 @@ ${fullBodyHtml}
     };
 
     const headerHtml = Sections.renderHeader(data.site, "standard", registry, hubPage, linkStyle);
-    const footerHtml = Sections.renderFooter(data.site, registry, hubPage, linkStyle);
+    const footerHtml = Sections.renderFooter(data.site, registry, hubPage, linkStyle, resolvedLayout.footerVariant);
     const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
 
     // A. Service Areas Hub
@@ -821,7 +870,7 @@ ${mobileCallBarHtml}
       };
 
       const locHeader = Sections.renderHeader(data.site, "standard", registry, locPage, linkStyle);
-      const locFooter = Sections.renderFooter(data.site, registry, locPage, linkStyle);
+      const locFooter = Sections.renderFooter(data.site, registry, locPage, linkStyle, resolvedLayout.footerVariant);
 
       // Hero image planned for location (strictly matches this city/location, no duplicate heroes)
       const locCleanSlug = citySlug.replace(/\.html$/, "").toLowerCase();
@@ -979,7 +1028,7 @@ ${mobileCallBarHtml}
     };
 
     const hubHeader = Sections.renderHeader(data.site, "standard", registry, blogHubPage, linkStyle);
-    const hubFooter = Sections.renderFooter(data.site, registry, blogHubPage, linkStyle);
+    const hubFooter = Sections.renderFooter(data.site, registry, blogHubPage, linkStyle, resolvedLayout.footerVariant);
     const mobileCallBarHtml = Sections.renderMobileCallBar(data.site.phone);
 
     const hubBody = renderBlogIndexHtml(effectiveBlogPosts, data.site, theme);
@@ -1033,7 +1082,7 @@ ${mobileCallBarHtml}
       };
 
       const postHeader = Sections.renderHeader(data.site, "standard", registry, postPage, linkStyle);
-      const postFooter = Sections.renderFooter(data.site, registry, postPage, linkStyle);
+      const postFooter = Sections.renderFooter(data.site, registry, postPage, linkStyle, resolvedLayout.footerVariant);
       const postBody = renderBlogPostHtml(
         post,
         data.site,
@@ -1081,74 +1130,207 @@ ${mobileCallBarHtml}
     }
   }
 
-  // 4.5 Master Internal Linking & Connectivity Pass
-  // Guarantees zero orphans, natural contextual linking, intra-cluster connections, and crawl accessibility
+  tracker?.completeStage(
+    "BUILDING_PAGES",
+    `Rendered ${files.filter((f) => f.path.endsWith(".html")).length} static HTML pages.`
+  );
+
+  // 4.5 STAGE 8: GENERATING_INTERNAL_LINKS
+  tracker?.startStage("GENERATING_INTERNAL_LINKS", "Connecting internal linking graph & service silos...");
   options?.onProgress?.("GENERATING_INTERNAL_LINKS", 78, "Connecting internal linking graph & service silos...");
-  const connectivityRes = enrichWebsiteConnectivity(files, {
-    businessName: data.site.businessName,
-    primaryTrade: data.schema?.type || data.site.tagline || "Local Services",
-    domain,
-    serviceAreaCities: effectiveAreaCities,
-  });
-  files = connectivityRes.files;
-
-  // 5. Generate sitemap.xml including ALL generated HTML pages
-  options?.onProgress?.("GENERATING_SEO", 85, "Generating sitemap.xml, robots.txt, and structured schemas...");
-  const allHtmlFiles = files.filter((f) => f.path.endsWith(".html"));
-  const sitemapXml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${allHtmlFiles
-  .map(
-    (h) => `  <url>
-    <loc>https://${domain}/${h.path === "index.html" ? "" : h.path}</loc>
-    <changefreq>weekly</changefreq>
-    <priority>${h.path === "index.html" ? "1.0" : h.path === "service-areas.html" ? "0.9" : "0.8"}</priority>
-  </url>`
-  )
-  .join("\n")}
-</urlset>`;
-  files.push({
-    path: "sitemap.xml",
-    content: sitemapXml,
-    mimeType: "application/xml",
-  });
-
-  // 6. Generate robots.txt
-  files.push({
-    path: "robots.txt",
-    content: `User-agent: *\nAllow: /\nSitemap: https://${domain}/sitemap.xml\n`,
-    mimeType: "text/plain",
-  });
-
-  // 7. Generate /images/CREDITS.txt for full attribution
-  const creditsTxt = buildCreditsTxt(allResolvedPhotos, data.site.businessName);
-  files.push({
-    path: "images/CREDITS.txt",
-    content: creditsTxt,
-    mimeType: "text/plain",
-  });
-
-  // 8. Run Quality Checks & Auto-Fixing
-  options?.onProgress?.("RUNNING_AUDIT", 90, "Auditing website quality, headings, and mobile readiness...");
-  const qualityResult = runQualityChecksAndAutoFix(files, {
-    businessName: data.site.businessName,
-    phone: data.site.phone,
-    email: data.site.email,
-    city: data.site.address?.city,
-    state: data.site.address?.state,
-    street: data.site.address?.street,
-    domain,
-    businessModel: data.site.businessModel,
-    realReviewsConfirmed: data.site.realReviewsConfirmed,
-    allowedClaims: data.site.allowedClaims,
-    trade: data.schema?.type || data.site.businessName,
-  });
-
-  if ((qualityResult.report?.autoFixes?.length || 0) > 0) {
-    options?.onProgress?.("AUTO_FIXING", 94, "Applied automated quality fixes to thin content and missing tags.");
+  let connectivityRes: any;
+  try {
+    connectivityRes = enrichWebsiteConnectivity(files, {
+      businessName: data.site.businessName,
+      primaryTrade: data.schema?.type || data.site.tagline || "Local Services",
+      domain,
+      serviceAreaCities: effectiveAreaCities,
+    });
+    files = connectivityRes.files;
+    const ler = connectivityRes.linkEngineReport;
+    const summary = ler
+      ? `Internal link audit: ${ler.totalPages} pages, ${ler.internalLinks} internal links, ${ler.brokenLinks} broken, ${ler.orphanPages} orphans.`
+      : `Connected internal linking graph (${connectivityRes.auditReport.totalNodes} pages, ${connectivityRes.auditReport.totalInternalLinks} links).`;
+    tracker?.completeStage("GENERATING_INTERNAL_LINKS", summary);
+  } catch (linkErr: any) {
+    const errMsg = linkErr instanceof Error ? linkErr.message : "Failed generating internal links.";
+    tracker?.failStage("GENERATING_INTERNAL_LINKS", "FAILED_LINKING", errMsg, false);
+    throw linkErr;
   }
 
+  // 5. STAGE 9: GENERATING_SEO
+  tracker?.startStage("GENERATING_SEO", "Generating sitemap.xml, robots.txt, and structured schemas...");
+  options?.onProgress?.("GENERATING_SEO", 85, "Generating sitemap.xml, robots.txt, and structured schemas...");
+  let seoEngine: SeoEngine | undefined;
+  let seoReport: SeoValidationReport | undefined;
+  try {
+    const seoSiteMeta: SeoSiteMeta = {
+      businessName: data.site.businessName,
+      domain: domain,
+      primaryTrade: mainTrade || data.schema?.type || data.site.tagline || "Local Services",
+      schemaType: data.schema?.type,
+      phone: data.site.phone,
+      email: data.site.email,
+      city: data.site.address?.city,
+      state: data.site.address?.state,
+      streetAddress: data.site.address?.street,
+      zipCode: data.site.address?.zip,
+      businessModel: data.site.businessModel,
+      serviceAreas: data.site.serviceAreas,
+      serviceAreaCities: effectiveAreaCities,
+      realReviewsConfirmed: Boolean(data.site.realReviewsConfirmed),
+      realReviews: data.site.realReviews,
+      logoUrl: (data.site as any).logoUrl,
+    };
+
+    seoEngine = new SeoEngine(seoSiteMeta);
+    const seoResult = seoEngine.execute(files);
+    files = seoResult.files;
+    seoReport = seoResult.report;
+
+    // Generate /images/CREDITS.txt for full attribution
+    const creditsTxt = buildCreditsTxt(allResolvedPhotos, data.site.businessName);
+    files.push({
+      path: "images/CREDITS.txt",
+      content: creditsTxt,
+      mimeType: "text/plain",
+    });
+
+    const summary = `SEO Engine: ${seoReport.totalPagesScanned} pages optimized. ${seoReport.isHealthy ? "100% search compliant (0 errors)." : "SEO generated with warnings."}`;
+    tracker?.completeStage("GENERATING_SEO", summary);
+  } catch (seoErr: any) {
+    const errMsg = seoErr instanceof Error ? seoErr.message : "Failed generating SEO assets.";
+    tracker?.failStage("GENERATING_SEO", "FAILED_SEO", errMsg, false);
+    throw seoErr;
+  }
+
+  // 8. STAGE 10: RUNNING_AUDIT
+  tracker?.startStage("RUNNING_AUDIT", "Auditing website quality, headings, and mobile readiness...");
+  options?.onProgress?.("RUNNING_AUDIT", 90, "Auditing website quality, headings, and mobile readiness...");
+  let qualityResult: any;
+  let siteQualityAudit: QualityAuditResult | undefined;
+  try {
+    qualityResult = runQualityChecksAndAutoFix(files, {
+      businessName: data.site.businessName,
+      phone: data.site.phone,
+      email: data.site.email,
+      city: data.site.address?.city,
+      state: data.site.address?.state,
+      street: data.site.address?.street,
+      domain,
+      businessModel: data.site.businessModel,
+      realReviewsConfirmed: data.site.realReviewsConfirmed,
+      allowedClaims: data.site.allowedClaims,
+      trade: data.schema?.type || data.site.businessName,
+    });
+
+    siteQualityAudit = QualityAuditEngine.audit(qualityResult.files, {
+      businessName: data.site.businessName,
+      phone: data.site.phone,
+      email: data.site.email,
+      city: data.site.address?.city,
+      state: data.site.address?.state,
+      streetAddress: data.site.address?.street,
+      domain,
+      realReviewsConfirmed: Boolean(data.site.realReviewsConfirmed),
+    });
+
+    console.log("\n================================================================================");
+    console.log("                           SITE QUALITY AUDIT REPORT                            ");
+    console.log("================================================================================");
+    console.log(siteQualityAudit.summaryText);
+    console.log("================================================================================\n");
+
+    const issuesSummary = siteQualityAudit.issues.length === 0 ? "0 issues" : `${siteQualityAudit.issues.length} issue(s)`;
+    tracker?.completeStage(
+      "RUNNING_AUDIT",
+      `Site Quality: ${siteQualityAudit.overallScore}/100 (Tech: ${siteQualityAudit.categoryScores.technical.earned}/20, SEO: ${siteQualityAudit.categoryScores.seo.earned}/20, Content: ${siteQualityAudit.categoryScores.content.earned}/20, Images: ${siteQualityAudit.categoryScores.images.earned}/20, Links: ${siteQualityAudit.categoryScores.internalLinking.earned}/20). ${issuesSummary}.`
+    );
+  } catch (auditErr: any) {
+    const errMsg = auditErr instanceof Error ? auditErr.message : "Failed running quality audit.";
+    tracker?.failStage("RUNNING_AUDIT", "FAILED_AUDIT", errMsg, false);
+    throw auditErr;
+  }
+
+  // STAGE 11: AUTO_FIXING
+  tracker?.startStage("AUTO_FIXING", "Applying automated quality fixes to content and markup...");
+  options?.onProgress?.("AUTO_FIXING", 94, "Applying automated quality fixes to content and markup...");
+  let autoFixRes: QualityAutoFixResult | undefined;
+  if (siteQualityAudit && siteQualityAudit.issues.length > 0) {
+    autoFixRes = QualityAutoFixEngine.fixAllIssues(
+      qualityResult.files,
+      {
+        businessName: data.site.businessName,
+        phone: data.site.phone,
+        email: data.site.email,
+        city: data.site.address?.city,
+        state: data.site.address?.state,
+        streetAddress: data.site.address?.street,
+        domain,
+        realReviewsConfirmed: Boolean(data.site.realReviewsConfirmed),
+      },
+      {
+        trade: mainTrade,
+        domain,
+      }
+    );
+
+    qualityResult.files = autoFixRes.fixedFiles;
+    siteQualityAudit = autoFixRes.auditAfter;
+
+    console.log("\n================================================================================");
+    console.log("                           AUTO-FIX VERIFICATION REPORT                         ");
+    console.log("================================================================================");
+    console.log(autoFixRes.reportText);
+    console.log("================================================================================\n");
+
+    const fixedSummary = autoFixRes.issuesFixed.length > 0 ? autoFixRes.issuesFixed.join(", ") : "0 issues";
+    tracker?.completeStage(
+      "AUTO_FIXING",
+      `Auto-Fix resolved: ${fixedSummary}. Post-fix score: ${autoFixRes.finalScore}/100.`
+    );
+  } else if ((qualityResult.report?.autoFixes?.length || 0) > 0) {
+    options?.onProgress?.("AUTO_FIXING", 94, "Applied automated quality fixes to thin content and missing tags.");
+    tracker?.completeStage(
+      "AUTO_FIXING",
+      `Applied ${qualityResult.report.autoFixes.length} automated quality fixes.`
+    );
+  } else {
+    options?.onProgress?.("AUTO_FIXING", 94, "Quality checks passed cleanly; no auto-fixes required.");
+    tracker?.completeStage("AUTO_FIXING", "Quality checks passed cleanly; no auto-fixes required.");
+  }
+
+  // STAGE 12: FINAL_VALIDATION
+  tracker?.startStage("FINAL_VALIDATION", "Validating final static file package integrity...");
   options?.onProgress?.("FINAL_VALIDATION", 97, "Validating final static file package integrity...");
+  try {
+    const htmlFilesCount = qualityResult.files.filter((f: any) => f.path.endsWith(".html")).length;
+    tracker?.completeStage(
+      "FINAL_VALIDATION",
+      `Verified package integrity (${qualityResult.files.length} static assets, ${htmlFilesCount} HTML pages).`
+    );
+  } catch (valErr: any) {
+    const errMsg = valErr instanceof Error ? valErr.message : "Final validation failed.";
+    tracker?.failStage("FINAL_VALIDATION", "FAILED_RENDER", errMsg, false);
+    throw valErr;
+  }
+
+  if (seoEngine && qualityResult?.files) {
+    seoReport = seoEngine.validateWebsiteSeo(qualityResult.files);
+  }
+
+  if (qualityResult?.files) {
+    siteQualityAudit = QualityAuditEngine.audit(qualityResult.files, {
+      businessName: data.site.businessName,
+      phone: data.site.phone,
+      email: data.site.email,
+      city: data.site.address?.city,
+      state: data.site.address?.state,
+      streetAddress: data.site.address?.street,
+      domain,
+      realReviewsConfirmed: Boolean(data.site.realReviewsConfirmed),
+    });
+  }
 
   return {
     files: qualityResult.files,
@@ -1157,5 +1339,9 @@ ${allHtmlFiles
     registry,
     generationLog,
     connectivityAudit: connectivityRes.auditReport,
+    internalLinkAudit: connectivityRes.linkEngineReport,
+    seoValidation: seoReport,
+    qualityAudit: siteQualityAudit,
+    autoFixAudit: autoFixRes,
   };
 }

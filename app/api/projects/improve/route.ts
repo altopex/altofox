@@ -125,6 +125,11 @@ export async function POST(req: NextRequest) {
       perPageResults: result.perPageResults,
       improvedFiles: result.improvedFiles,
       report: result.newReport,
+      issuesBefore: result.autoFixResult?.issuesBefore || [],
+      issuesFixed: result.autoFixResult?.issuesFixed || [],
+      issuesRemaining: result.autoFixResult?.issuesRemaining || [],
+      finalScore: result.autoFixResult?.finalScore ?? result.newScore,
+      autoFixReportText: result.autoFixResult?.reportText || "",
     });
   } catch (error: any) {
     console.error("[Improve API] Error executing website improvements:", error);

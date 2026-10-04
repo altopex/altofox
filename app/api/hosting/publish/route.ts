@@ -79,16 +79,30 @@ export async function POST(req: NextRequest) {
       customOptions,
     });
 
+    const deploymentUrl = result.deploymentUrl || result.liveUrl;
+    const sanitizedResponse = {
+      ...result,
+      status: result.status,
+      provider: result.provider,
+      deploymentUrl,
+      liveUrl: deploymentUrl,
+      publishedUrl: deploymentUrl, // backward compatibility
+      deploymentId: result.deploymentId,
+      error: result.error,
+    };
+
     if (!result.success) {
-      return NextResponse.json(result, { status: 502 });
+      return NextResponse.json(sanitizedResponse, { status: 502 });
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json(sanitizedResponse);
   } catch (error: any) {
     console.error("[Hosting Publish Error]:", error);
     return NextResponse.json(
       {
         success: false,
+        status: "failed",
+        provider: "unknown",
         error: error instanceof Error ? error.message : "Failed to publish website.",
       },
       { status: 500 }

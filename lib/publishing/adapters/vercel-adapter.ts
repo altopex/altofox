@@ -9,6 +9,7 @@ import {
 import { buildCanonicalWebsiteFiles } from "@/lib/export/canonical-files";
 
 import { getStoredHostingCredentials } from "../credential-store";
+import { stripSensitiveTokens } from "../token-sanitizer";
 
 export function sanitizeVercelProjectName(name: string): string {
   let clean = (name || "my-website")
@@ -155,14 +156,30 @@ export class VercelAdapter implements IHostingAdapter {
           projectName: cleanProjectName,
           publishedAt: Date.now(),
           status: "failed",
-          error: err?.error?.message || `Vercel deployment failed (${deployRes.status}): ${deployRes.statusText}`,
+          error: stripSensitiveTokens(err?.error?.message || `Vercel deployment failed (${deployRes.status}): ${deployRes.statusText}`),
         };
       }
 
       const deployData = await deployRes.json();
       const deploymentId = deployData.id;
+
+      if (deployData.readyState === "ERROR") {
+        return {
+          success: false,
+          provider: "vercel",
+          projectName: cleanProjectName,
+          deploymentId,
+          publishedAt: Date.now(),
+          status: "failed",
+          error: stripSensitiveTokens(deployData.error?.message || "Vercel build reported an error state."),
+        };
+      }
+
       const targetSubdomain = `${cleanProjectName}.vercel.app`;
-      const liveUrl = `https://${targetSubdomain}`;
+      const liveUrl = deployData.targets?.production?.url
+        ? `https://${deployData.targets.production.url}`
+        : `https://${targetSubdomain}`;
+      const deploymentUrl = deployData.url ? `https://${deployData.url}` : liveUrl;
 
       // 3. Connect custom domain if specified
       let customDomainStatus: PublishResult["customDomainStatus"] = undefined;
@@ -185,10 +202,11 @@ export class VercelAdapter implements IHostingAdapter {
         provider: "vercel",
         projectName: cleanProjectName,
         deploymentId,
+        deploymentUrl,
         liveUrl,
         subdomain: targetSubdomain,
         publishedAt: Date.now(),
-        status: "published",
+        status: deployData.readyState === "READY" ? "published" : "building",
         customDomainStatus,
       };
     } catch (err: any) {
@@ -198,7 +216,7 @@ export class VercelAdapter implements IHostingAdapter {
         projectName: cleanProjectName,
         publishedAt: Date.now(),
         status: "failed",
-        error: err?.message || "Failed to publish to Vercel.",
+        error: stripSensitiveTokens(err?.message || "Failed to publish to Vercel."),
       };
     }
   }

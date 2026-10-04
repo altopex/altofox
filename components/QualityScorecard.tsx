@@ -24,6 +24,13 @@ import { PageMobileAuditResult } from "../lib/quality/mobile-checker";
 import { WebsiteQualityAuditReport, AuditRecommendation } from "../lib/quality/website-quality-auditor";
 import { ImprovementActionType } from "../lib/quality/website-improver";
 
+export interface AutoFixSummaryData {
+  issuesBefore: string[];
+  issuesFixed: string[];
+  issuesRemaining: string[];
+  finalScore: number;
+}
+
 interface QualityScorecardProps {
   report: QualityReport | WebsiteQualityAuditReport;
   mobileAudit?: PageMobileAuditResult | null;
@@ -37,6 +44,7 @@ interface QualityScorecardProps {
   activeVersion?: "original" | "improved";
   onToggleVersion?: (version: "original" | "improved") => void;
   recentChanges?: string[];
+  autoFixSummary?: AutoFixSummaryData | null;
 }
 
 export function QualityScorecard({
@@ -52,6 +60,7 @@ export function QualityScorecard({
   activeVersion = "improved",
   onToggleVersion,
   recentChanges = [],
+  autoFixSummary = null,
 }: QualityScorecardProps) {
   const [showAllChecks, setShowAllChecks] = useState(false);
   const [showRecentChanges, setShowRecentChanges] = useState(true);
@@ -214,23 +223,73 @@ export function QualityScorecard({
           ) : (
             <button
               type="button"
-              onClick={() => onImproveAction("improve_all")}
+              onClick={() => onImproveAction("fix_all")}
               disabled={isImproving}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
             >
               {isImproving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>{improvingStep || "Improving Website & Resolving Issues…"}</span>
+                  <span>{improvingStep || "Fixing All Issues & Re-running Audit…"}</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-4 h-4" />
-                  <span>Improve Website to 95+ (Fix All Issues)</span>
+                  <span>FIX ALL ISSUES</span>
                 </>
               )}
             </button>
           )}
+        </div>
+      )}
+
+      {/* Auto-Fix Audit Verification Results */}
+      {autoFixSummary && (
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 text-xs space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Auto-Fix Audit Report</span>
+            </span>
+            <span className="font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded text-[11px]">
+              Final Score: {autoFixSummary.finalScore}/100
+            </span>
+          </div>
+
+          <div className="space-y-2 pt-1 border-t border-slate-200">
+            <div>
+              <span className="font-bold text-slate-700 text-[11px] block mb-0.5">Issues Before:</span>
+              <ul className="list-disc pl-4 text-[11px] text-slate-600 space-y-0.5">
+                {autoFixSummary.issuesBefore && autoFixSummary.issuesBefore.length > 0 ? (
+                  autoFixSummary.issuesBefore.map((ib, idx) => <li key={idx}>{ib}</li>)
+                ) : (
+                  <li>None (0 issues detected)</li>
+                )}
+              </ul>
+            </div>
+
+            <div>
+              <span className="font-bold text-emerald-700 text-[11px] block mb-0.5">Issues Fixed:</span>
+              <ul className="list-disc pl-4 text-[11px] text-emerald-800 space-y-0.5 font-medium">
+                {autoFixSummary.issuesFixed && autoFixSummary.issuesFixed.length > 0 ? (
+                  autoFixSummary.issuesFixed.map((ifx, idx) => <li key={idx}>{ifx}</li>)
+                ) : (
+                  <li>None (no issues resolved)</li>
+                )}
+              </ul>
+            </div>
+
+            <div>
+              <span className="font-bold text-amber-700 text-[11px] block mb-0.5">Issues Remaining:</span>
+              <ul className="list-disc pl-4 text-[11px] text-slate-600 space-y-0.5">
+                {autoFixSummary.issuesRemaining && autoFixSummary.issuesRemaining.length > 0 ? (
+                  autoFixSummary.issuesRemaining.map((ir, idx) => <li key={idx}>{ir}</li>)
+                ) : (
+                  <li className="text-emerald-700 font-semibold">None (0 issues remaining)</li>
+                )}
+              </ul>
+            </div>
+          </div>
         </div>
       )}
 

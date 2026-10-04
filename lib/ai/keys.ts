@@ -19,7 +19,8 @@ export async function getProviderCredentials(
   directBaseUrl?: string,
   directModel?: string,
   directOrgId?: string,
-  directProviderName?: string
+  directProviderName?: string,
+  allowFallback = true
 ): Promise<{
   apiKey: string;
   baseUrl?: string;
@@ -89,6 +90,12 @@ export async function getProviderCredentials(
       resolvedProvider: provider,
     };
   }
+
+  if (!allowFallback) {
+    throw new Error(`No API key configured for provider "${provider}". Please configure an API key in Settings.`);
+  }
+
+  console.log(`Primary provider failed; fallback provider used.`);
 
   // 4. Intelligent Cross-Provider Fallback:
   // If the requested provider has no key, check if ANY other provider has a valid key configured in DB or env

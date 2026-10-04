@@ -44,9 +44,14 @@ export interface PreviewRenderOptions {
  * e.g. from "services/drain-cleaning.html" and "pipe-repair.html" -> "services/pipe-repair.html"
  */
 export function resolvePreviewRelativePath(fromPage: string, relativePath: string): string {
-  const cleanRef = relativePath.split("?")[0].split("#")[0].trim();
+  const cleanRef = (relativePath || "").split("?")[0].split("#")[0].trim();
   if (cleanRef.startsWith("/")) {
-    return cleanRef.slice(1).toLowerCase();
+    const stripped = cleanRef.replace(/^\/+/, "").toLowerCase();
+    return stripped || "index.html";
+  }
+
+  if (!cleanRef || cleanRef === "." || cleanRef === "./" || cleanRef === "index" || cleanRef === "home") {
+    return "index.html";
   }
 
   const dirParts = fromPage.includes("/") ? fromPage.split("/").slice(0, -1) : [];
@@ -61,7 +66,8 @@ export function resolvePreviewRelativePath(fromPage: string, relativePath: strin
     }
   }
 
-  return dirParts.join("/").toLowerCase();
+  const resolved = dirParts.join("/").toLowerCase();
+  return resolved || "index.html";
 }
 
 /**
@@ -166,6 +172,8 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
 
   let html = typeof htmlFile.content === "string" ? htmlFile.content : htmlFile.content.toString("utf-8");
 
+
+
   // 2. Build Photo & Local Asset Lookup Maps
   const photoMap = new Map<string, string>();
 
@@ -198,13 +206,27 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
             : f.content;
           photoMap.set(p, srcVal);
           photoMap.set(p.replace(/^images\//, ""), srcVal);
+        } else if (/^[A-Za-z0-9+/=]+$/.test(f.content.trim()) && f.content.trim().length > 100) {
+          const mime = f.mimeType || (p.endsWith(".png") ? "image/png" : p.endsWith(".webp") ? "image/webp" : "image/jpeg");
+          const srcVal = `data:${mime};base64,${f.content.trim()}`;
+          photoMap.set(p, srcVal);
+          photoMap.set(p.replace(/^images\//, ""), srcVal);
         }
+      } else if (Buffer.isBuffer(f.content)) {
+        const mime = f.mimeType || (p.endsWith(".png") ? "image/png" : p.endsWith(".webp") ? "image/webp" : "image/jpeg");
+        const srcVal = `data:${mime};base64,${f.content.toString("base64")}`;
+        photoMap.set(p, srcVal);
+        photoMap.set(p.replace(/^images\//, ""), srcVal);
       }
     }
   }
 
   // Helper to find remote or bundled URL for any image path
   const resolveImageSource = (rawPath: string, altText?: string): string => {
+    if (!rawPath || !rawPath.trim()) {
+      return generateSvgImageFallback(altText || "Photo");
+    }
+
     // If it's already an absolute or data URL, keep it
     if (rawPath.startsWith("http://") || rawPath.startsWith("https://") || rawPath.startsWith("data:")) {
       return rawPath;
@@ -217,34 +239,75 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
     const found = photoMap.get(clean) || photoMap.get(fileName);
     if (found) return found;
 
+    // Check project photos for matching slot or local path
+    const matchingPhoto = photos.find((p) => {
+      const pClean = (p.localPath || "").replace(/^\.?\/+/, "").toLowerCase();
+      return pClean === clean || pClean.replace(/^images\//, "") === fileName;
+    });
+    if (matchingPhoto?.downloadUrl || matchingPhoto?.url) {
+      return matchingPhoto.downloadUrl || matchingPhoto.url;
+    }
+
     // Guaranteed inline SVG fallback placeholder (never broken images)
     return generateSvgImageFallback(altText || fileName);
   };
 
-  // 3. Resolve all <img src="..."> tags (including data-remote-src, ../images, and fallbacks)
-  html = html.replace(
-    /<img([^>]*?)src=["']([^"']+)["']([^>]*?)>/gi,
-    (fullTag, prefix, srcVal, suffix) => {
-      // Check for data-remote-src attribute
-      const remoteMatch = fullTag.match(/data-remote-src=["']([^"']+)["']/i);
-      if (remoteMatch && remoteMatch[1] && (remoteMatch[1].startsWith("http://") || remoteMatch[1].startsWith("https://"))) {
-        return `<img${prefix}src="${remoteMatch[1]}"${suffix}>`;
-      }
+  // 3. Resolve all <img ...> tags (handles any attribute ordering, remote src, local svg, fallbacks)
+  html = html.replace(/<img\b([^>]*?)>/gi, (fullTag, attrs) => {
+    const srcMatch = attrs.match(/\bsrc=["']([^"']*)["']/i);
+    const rawSrc = srcMatch ? srcMatch[1].trim() : "";
 
-      // Check alt text for friendly label
-      const altMatch = fullTag.match(/alt=["']([^"']*)["']/i);
-      const altText = altMatch ? altMatch[1] : "";
+    const remoteMatch = attrs.match(/\bdata-remote-src=["']([^"']+)["']/i);
+    const remoteSrc = remoteMatch ? remoteMatch[1].trim() : "";
 
-      const resolved = resolveImageSource(srcVal, altText);
-      return `<img${prefix}src="${resolved}"${suffix}>`;
+    const svgMatch = attrs.match(/\bdata-local-svg=["']([^"']+)["']/i);
+    const localSvg = svgMatch ? svgMatch[1].trim() : "";
+
+    const altMatch = attrs.match(/\balt=["']([^"']*)["']/i);
+    const altText = altMatch ? altMatch[1] : "";
+
+    let resolvedSrc = "";
+    if (remoteSrc && (remoteSrc.startsWith("http://") || remoteSrc.startsWith("https://"))) {
+      resolvedSrc = remoteSrc;
+    } else if (rawSrc && (rawSrc.startsWith("http://") || rawSrc.startsWith("https://") || rawSrc.startsWith("data:"))) {
+      resolvedSrc = rawSrc;
+    } else if (rawSrc) {
+      resolvedSrc = resolveImageSource(rawSrc, altText);
+    } else if (localSvg) {
+      resolvedSrc = localSvg;
+    } else {
+      resolvedSrc = generateSvgImageFallback(altText || "Photo");
     }
-  );
+
+    // If resolved source still points to an unresolved local path, fall back to local SVG
+    if (
+      resolvedSrc.startsWith("images/") ||
+      resolvedSrc.startsWith("./images/") ||
+      resolvedSrc.startsWith("../images/")
+    ) {
+      resolvedSrc = localSvg || generateSvgImageFallback(altText || "Photo");
+    }
+
+    let updatedAttrs = attrs;
+    if (srcMatch) {
+      updatedAttrs = updatedAttrs.replace(/\bsrc=["'][^"']*["']/i, `src="${resolvedSrc}"`);
+    } else {
+      updatedAttrs = ` src="${resolvedSrc}"${updatedAttrs}`;
+    }
+
+    // Guarantee reliable onerror fallback handler
+    if (!updatedAttrs.includes("onerror=")) {
+      const fallbackSvg = localSvg || generateSvgImageFallback(altText || "Photo");
+      updatedAttrs += ` onerror="window.handleImageFallback ? window.handleImageFallback(this) : (this.src='${fallbackSvg}')"`;
+    }
+
+    return `<img${updatedAttrs}>`;
+  });
 
   // 4. Resolve <source srcset="..."> inside <picture> tags
   html = html.replace(
     /<source([^>]*?)srcset=["']([^"']+)["']([^>]*?)>/gi,
     (fullTag, prefix, srcSetVal, suffix) => {
-      // If srcset contains a local images/ or ../images/ path, resolve it
       if (srcSetVal.includes("images/") || !srcSetVal.startsWith("http")) {
         const resolved = resolveImageSource(srcSetVal);
         return `<source${prefix}srcset="${resolved}"${suffix}>`;
@@ -253,52 +316,85 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
     }
   );
 
-  // 5. Resolve inline CSS background-image: url('...')
+  // 5. Resolve inline CSS background-image: url('...') or background: ... url('...')
   html = html.replace(
-    /style=["']([^"']*?)background-image:\s*url\(['"]?([^'"\)]+)['"]?\);?([^"']*?)["']/gi,
-    (match, pre, imgPath, post) => {
-      // Check if data-bg-remote is on the tag
-      const resolved = resolveImageSource(imgPath);
-      return `style="${pre}background-image: url('${resolved}');${post}"`;
+    /(<[^>]*?style=["'][^"']*?)(background(?:-image)?:\s*[^;"']*?url\(['"]?([^'"\)]+)['"]?\))([^"']*?["'][^>]*?>)/gi,
+    (fullTag, prefix, bgDecl, imgPath, suffix) => {
+      const remoteMatch = fullTag.match(/data-bg-remote=["']([^"']+)["']/i);
+      let resolved = "";
+      if (remoteMatch && remoteMatch[1] && (remoteMatch[1].startsWith("http://") || remoteMatch[1].startsWith("https://"))) {
+        resolved = remoteMatch[1];
+      } else {
+        resolved = resolveImageSource(imgPath);
+      }
+      return `${prefix}background-image: url('${resolved}');${suffix}`;
     }
   );
 
   // 6. Disable external <link rel="stylesheet"> for local stylesheets to prevent 404 network errors in iframe
   html = html.replace(
-    /<link[^>]*?rel=["']stylesheet["'][^>]*?href=["']([^"']*(?:styles|style)\.css)["'][^>]*?>/gi,
-    "<!-- Inlined Local Stylesheet: $1 -->"
+    /<link\b[^>]*?href=["']([^"']+\.css(?:\?[^"']*)?)["'][^>]*?>/gi,
+    (fullTag, hrefVal) => {
+      if (hrefVal.startsWith("http://") || hrefVal.startsWith("https://") || hrefVal.startsWith("//")) {
+        return fullTag; // Preserve external Google Fonts or CDNs
+      }
+      return `<!-- Inlined Local Stylesheet: ${hrefVal} -->`;
+    }
   );
 
-  // 7. Combine & inline all project CSS files into a single master <style> block
+  // 7. Combine & inline all project CSS files into a single master <style> block (deduplicated)
   const cssFiles = files.filter((f) => f.path.toLowerCase().endsWith(".css"));
-  if (cssFiles.length > 0) {
-    const combinedCss = cssFiles
-      .map((f) => {
-        const c = typeof f.content === "string" ? f.content : f.content.toString("utf-8");
-        return `/* Inlined: ${f.path} */\n${c}`;
-      })
-      .join("\n\n");
+  const seenCss = new Set<string>();
+  const combinedCssList: string[] = [];
+  for (const f of cssFiles) {
+    const c = typeof f.content === "string" ? f.content : f.content.toString("utf-8");
+    const trimmed = c.trim();
+    if (trimmed && !seenCss.has(trimmed)) {
+      seenCss.add(trimmed);
+      combinedCssList.push(`/* Inlined: ${f.path} */\n${trimmed}`);
+    }
+  }
 
-    const styleTag = `<style id="ranklocal-inlined-preview-css">\n${combinedCss}\n</style>`;
+  if (combinedCssList.length > 0) {
+    const styleTag = `<style id="ranklocal-inlined-preview-css">\n${combinedCssList.join("\n\n")}\n</style>`;
     html = html.includes("</head>")
       ? html.replace("</head>", `${styleTag}\n</head>`)
       : `${styleTag}\n${html}`;
   }
 
+  // Ensure responsive viewport meta tag is present
+  if (!/<meta\s+[^>]*?name=["']viewport["']/i.test(html)) {
+    const viewportMeta = '<meta name="viewport" content="width=device-width, initial-scale=1.0">';
+    html = html.includes("<head>")
+      ? html.replace("<head>", `<head>\n  ${viewportMeta}`)
+      : `${viewportMeta}\n${html}`;
+  }
+
   // 8. Disable external <script src="..."> for local scripts to prevent 404 network errors in iframe
   html = html.replace(
-    /<script[^>]*?src=["']([^"']*(?:script|main)\.js)["'][^>]*?>\s*<\/script>/gi,
-    "<!-- Inlined Local Script: $1 -->"
+    /<script\b[^>]*?src=["']([^"']+\.js(?:\?[^"']*)?)["'][^>]*?>\s*<\/script>/gi,
+    (fullTag, srcVal) => {
+      if (srcVal.startsWith("http://") || srcVal.startsWith("https://") || srcVal.startsWith("//")) {
+        return fullTag;
+      }
+      return `<!-- Inlined Local Script: ${srcVal} -->`;
+    }
   );
 
   // 9. Combine & inline all project JS files into an execution-safe wrapper that guarantees DOMContentLoaded fires
   const jsFiles = files.filter((f) => f.path.toLowerCase().endsWith(".js"));
-  const combinedJs = jsFiles
-    .map((f) => {
-      const c = typeof f.content === "string" ? f.content : f.content.toString("utf-8");
-      return `// Inlined: ${f.path}\n${c}`;
-    })
-    .join("\n\n");
+  const seenJs = new Set<string>();
+  const combinedJsList: string[] = [];
+  for (const f of jsFiles) {
+    const c = typeof f.content === "string" ? f.content : f.content.toString("utf-8");
+    const trimmed = c.trim();
+    if (trimmed && !seenJs.has(trimmed)) {
+      seenJs.add(trimmed);
+      combinedJsList.push(`// Inlined: ${f.path}\n${trimmed}`);
+    }
+  }
+
+  const combinedJs = combinedJsList.join("\n\n");
 
   const scriptExecutionWrapper = `<script id="ranklocal-inlined-preview-js">
 (function() {
@@ -337,8 +433,9 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
 
   // POSIX resolver inside iframe client
   function resolveHref(fromPage, href) {
-    var clean = href.split("?")[0].split("#")[0].trim();
-    if (clean.startsWith("/")) return clean.slice(1).toLowerCase();
+    var clean = (href || "").split("?")[0].split("#")[0].trim();
+    if (clean.startsWith("/")) clean = clean.replace(/^\\/+/, "");
+    if (!clean || clean === "." || clean === "./" || clean === "index" || clean === "home") return "index.html";
     var dirParts = fromPage.indexOf("/") !== -1 ? fromPage.split("/").slice(0, -1) : [];
     var parts = clean.split("/");
     for (var i = 0; i < parts.length; i++) {
@@ -350,7 +447,8 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
         dirParts.push(p);
       }
     }
-    return dirParts.join("/").toLowerCase();
+    var res = dirParts.join("/").toLowerCase();
+    return res || "index.html";
   }
 
   // Intercept all link clicks inside preview
@@ -370,17 +468,31 @@ export function preparePreviewHtml(options: PreviewRenderOptions): string {
       return;
     }
 
-    // Ignore mailto:, hash anchors, external links
-    if (href.startsWith("mailto:") || href.startsWith("#") || href.startsWith("http://") || href.startsWith("https://")) {
+    // Ignore mailto:, external links, and javascript:
+    if (
+      href.startsWith("mailto:") ||
+      href.startsWith("http://") ||
+      href.startsWith("https://") ||
+      href.startsWith("//") ||
+      href.startsWith("javascript:")
+    ) {
       return;
     }
 
-    // Internal navigation
+    // If pure in-page anchor (#contact, #features), allow browser default anchor jump
+    if (href === "#" || (href.startsWith("#") && !href.includes(".html"))) {
+      return;
+    }
+
+    // Internal navigation between generated pages
     e.preventDefault();
     var resolved = resolveHref(CURRENT_PAGE, href);
+    var hashMatch = href.match(/(#[^?]*)/);
+    var hash = hashMatch ? hashMatch[1] : "";
     window.parent.postMessage({
       type: "PREVIEW_NAVIGATE",
       path: resolved,
+      hash: hash,
       originalHref: href,
       fromPage: CURRENT_PAGE
     }, "*");

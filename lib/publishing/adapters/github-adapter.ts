@@ -8,6 +8,7 @@ import {
 } from "../types";
 import { buildCanonicalWebsiteFiles } from "@/lib/export/canonical-files";
 import { getStoredHostingCredentials } from "../credential-store";
+import { stripSensitiveTokens } from "../token-sanitizer";
 
 export function sanitizeGithubRepoName(name: string): string {
   let clean = (name || "my-website")
@@ -334,6 +335,7 @@ export class GithubAdapter implements IHostingAdapter {
         provider: "github",
         projectName: cleanRepoName,
         deploymentId: commitSha,
+        deploymentUrl: pagesUrl,
         liveUrl: pagesUrl,
         subdomain: `${resolvedOwner.toLowerCase()}.github.io/${cleanRepoName}`,
         commitUrl,
@@ -348,7 +350,7 @@ export class GithubAdapter implements IHostingAdapter {
         projectName: cleanRepoName,
         publishedAt: Date.now(),
         status: "failed",
-        error: err?.message || "Failed to publish to GitHub.",
+        error: stripSensitiveTokens(err?.message || "Failed to publish to GitHub."),
       };
     }
   }

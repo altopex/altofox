@@ -1,5 +1,9 @@
 import { generateProjectSitemapXml, generateProjectRobotsTxt } from "./optimizer";
 import { validateWebsiteFiles, ZipValidationResult } from "./zip-validator";
+import {
+  prepareProductionWebsiteFiles,
+  PreZipAuditReport,
+} from "./zip-production-builder";
 
 export interface CanonicalFileItem {
   path: string;
@@ -15,6 +19,7 @@ export interface CanonicalWebsiteOptions {
   businessName?: string;
   phone?: string;
   city?: string;
+  primaryColor?: string;
 }
 
 /**
@@ -28,53 +33,38 @@ export function buildCanonicalWebsiteFiles(
 ): {
   files: CanonicalFileItem[];
   validation: ZipValidationResult;
+  preZipAudit: PreZipAuditReport;
 } {
-  const fileMap = new Map<string, CanonicalFileItem>();
   const normalizedDomain = (options.domain || `${(options.projectName || "website").toLowerCase().replace(/[^a-z0-9]/g, "")}.com`)
     .replace(/^https?:\/\//i, "")
     .replace(/\/+$/, "");
 
-  // 1. Ingest input files with normalized paths
-  for (const f of inputFiles) {
-    if (!f || !f.path) continue;
-    const normPath = f.path.replace(/^\/+/, "");
-    fileMap.set(normPath, {
-      path: normPath,
-      content: f.content || "",
+  // 1. Prepare production website files (favicons, assets, clean folders, security stripping)
+  const prepared = prepareProductionWebsiteFiles(
+    inputFiles.map((f) => ({
+      path: f.path,
+      content: f.content,
       mimeType: f.mimeType,
-      size: typeof f.content === "string" ? f.content.length : 0,
-      lastModified: f.lastModified || Date.now(),
-    });
-  }
+    })),
+    {
+      projectName: options.projectName,
+      domain: normalizedDomain,
+      businessName: options.businessName || options.projectName,
+      phone: options.phone,
+      city: options.city,
+      primaryColor: options.primaryColor,
+    }
+  );
 
-  // 2. Ensure sitemap.xml exists and indexes all HTML pages
-  if (!fileMap.has("sitemap.xml")) {
-    const htmlFiles = Array.from(fileMap.values()).filter((f) => f.path.endsWith(".html"));
-    const sitemapContent = generateProjectSitemapXml(htmlFiles, normalizedDomain);
-    fileMap.set("sitemap.xml", {
-      path: "sitemap.xml",
-      content: sitemapContent,
-      mimeType: "application/xml",
-      size: sitemapContent.length,
-      lastModified: Date.now(),
-    });
-  }
+  const finalFiles: CanonicalFileItem[] = prepared.files.map((f) => ({
+    path: f.path,
+    content: typeof f.content === "string" ? f.content : f.content.toString("utf-8"),
+    mimeType: f.mimeType,
+    size: typeof f.content === "string" ? f.content.length : (f.content as Buffer).length,
+    lastModified: Date.now(),
+  }));
 
-  // 3. Ensure robots.txt exists and points to sitemap.xml
-  if (!fileMap.has("robots.txt")) {
-    const robotsContent = generateProjectRobotsTxt(normalizedDomain);
-    fileMap.set("robots.txt", {
-      path: "robots.txt",
-      content: robotsContent,
-      mimeType: "text/plain",
-      size: robotsContent.length,
-      lastModified: Date.now(),
-    });
-  }
-
-  const finalFiles = Array.from(fileMap.values());
-
-  // 4. Run automated 18-rule validation against this exact file set
+  // 2. Run automated validation against this exact file set
   const validation = validateWebsiteFiles({
     files: finalFiles,
     expectedPages: finalFiles.filter((f) => f.path.endsWith(".html")).map((f) => f.path),
@@ -85,5 +75,6 @@ export function buildCanonicalWebsiteFiles(
   return {
     files: finalFiles,
     validation,
+    preZipAudit: prepared.auditReport,
   };
 }

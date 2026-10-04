@@ -2,6 +2,7 @@ import { SectionJSON } from "../../lib/generator/content-schema";
 
 export function renderProcess(section: SectionJSON): string {
   const content = section.content || {};
+  const variant = section.variant || "cards";
   const eyebrow = content.eyebrow || "Simple & Transparent";
   const headline = content.headline || "How Our Process Works";
   const subheadline = content.subheadline || "Getting your trade services completed right the first time takes just 3 easy steps.";
@@ -23,8 +24,40 @@ export function renderProcess(section: SectionJSON): string {
     },
   ];
 
+  // VARIANT B: TIMELINE (Craftsmanship Editorial & Contemporary Layouts)
+  if (variant === "timeline") {
+    return `
+  <!-- Process Section: Connected Timeline Variant -->
+  <section class="section section-process-timeline" id="process">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="badge">${eyebrow}</span>
+        <h2>${headline}</h2>
+        <p>${subheadline}</p>
+      </div>
+      <div class="process-timeline reveal">
+        ${steps
+          .map(
+            (step) => `
+        <div class="process-timeline-step">
+          <div class="timeline-step-node">
+            <span class="timeline-step-number">${step.number}</span>
+          </div>
+          <div class="timeline-step-content">
+            <h3>${step.title}</h3>
+            <p>${step.description}</p>
+          </div>
+        </div>`
+          )
+          .join("\n        ")}
+      </div>
+    </div>
+  </section>`;
+  }
+
+  // VARIANT A: CARDS GRID (Default / Conversion Direct)
   return `
-  <!-- Process Section -->
+  <!-- Process Section: Cards Grid Variant -->
   <section class="section" id="process">
     <div class="container">
       <div class="section-header reveal">

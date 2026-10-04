@@ -16,6 +16,7 @@ import {
   PublishFileInput,
 } from "@/lib/cloudflare/cloudflare-service";
 import { buildCanonicalWebsiteFiles } from "@/lib/export/canonical-files";
+import { stripSensitiveTokens } from "../token-sanitizer";
 
 export class CloudflareAdapter implements IHostingAdapter {
   readonly provider = "cloudflare" as const;
@@ -86,46 +87,58 @@ export class CloudflareAdapter implements IHostingAdapter {
       content: f.content,
     }));
 
-    const result = await deployToCloudflarePages({
-      projectName: cleanProjectName,
-      files: deployFiles,
-      branch: request.customOptions?.branch || "main",
-    });
+    try {
+      const result = await deployToCloudflarePages({
+        projectName: cleanProjectName,
+        files: deployFiles,
+        branch: request.customOptions?.branch || "main",
+      });
 
-    if (!result.success) {
+      if (!result.success) {
+        return {
+          success: false,
+          provider: "cloudflare",
+          projectName: cleanProjectName,
+          publishedAt: Date.now(),
+          status: "failed",
+          error: stripSensitiveTokens((result as any).error || (result as any).message || "Cloudflare deployment failed."),
+        };
+      }
+
+      let customDomainStatus: PublishResult["customDomainStatus"] = undefined;
+      if (request.domain) {
+        const domResult = await this.connectDomain(request.domain, cleanProjectName, request.credentials || { provider: "cloudflare" });
+        customDomainStatus = {
+          domain: request.domain,
+          status: domResult.status,
+          cnameTarget: domResult.cnameTarget,
+          dnsRecords: domResult.dnsRecords,
+          message: domResult.message,
+        };
+      }
+
+      return {
+        success: true,
+        provider: "cloudflare",
+        projectName: cleanProjectName,
+        deploymentId: result.deploymentId,
+        deploymentUrl: result.liveUrl,
+        liveUrl: result.liveUrl,
+        subdomain: result.subdomain,
+        publishedAt: result.publishedAt || Date.now(),
+        status: "published",
+        customDomainStatus,
+      };
+    } catch (err: any) {
       return {
         success: false,
         provider: "cloudflare",
         projectName: cleanProjectName,
         publishedAt: Date.now(),
         status: "failed",
-        error: (result as any).error || (result as any).message || "Cloudflare deployment failed.",
+        error: stripSensitiveTokens(err?.message || "Cloudflare deployment failed."),
       };
     }
-
-    let customDomainStatus: PublishResult["customDomainStatus"] = undefined;
-    if (request.domain) {
-      const domResult = await this.connectDomain(request.domain, cleanProjectName, request.credentials || { provider: "cloudflare" });
-      customDomainStatus = {
-        domain: request.domain,
-        status: domResult.status,
-        cnameTarget: domResult.cnameTarget,
-        dnsRecords: domResult.dnsRecords,
-        message: domResult.message,
-      };
-    }
-
-    return {
-      success: true,
-      provider: "cloudflare",
-      projectName: cleanProjectName,
-      deploymentId: result.deploymentId,
-      liveUrl: result.liveUrl,
-      subdomain: result.subdomain,
-      publishedAt: result.publishedAt || Date.now(),
-      status: "published",
-      customDomainStatus,
-    };
   }
 
   async connectDomain(domain: string, projectName: string, credentials: HostingCredentials): Promise<{

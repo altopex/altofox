@@ -9,6 +9,7 @@ import {
 import { buildCanonicalWebsiteFiles } from "@/lib/export/canonical-files";
 import JSZip from "jszip";
 import { getStoredHostingCredentials } from "../credential-store";
+import { stripSensitiveTokens } from "../token-sanitizer";
 
 export function sanitizeNetlifyProjectName(name: string): string {
   let clean = (name || "my-website")
@@ -231,11 +232,23 @@ export class NetlifyAdapter implements IHostingAdapter {
           projectName: cleanProjectName,
           publishedAt: Date.now(),
           status: "failed",
-          error: err?.message || `Netlify upload failed (${deployRes.status}): ${deployRes.statusText}`,
+          error: stripSensitiveTokens(err?.message || `Netlify upload failed (${deployRes.status}): ${deployRes.statusText}`),
         };
       }
 
       const deployData = await deployRes.json();
+      if (deployData.state === "error") {
+        return {
+          success: false,
+          provider: "netlify",
+          projectName: cleanProjectName,
+          deploymentId: deployData.id,
+          publishedAt: Date.now(),
+          status: "failed",
+          error: stripSensitiveTokens(deployData.error_message || "Netlify build reported an error state."),
+        };
+      }
+
       const liveUrl = deployData.ssl_url || deployData.url || siteUrl;
 
       // 5. Connect domain if specified
@@ -260,10 +273,11 @@ export class NetlifyAdapter implements IHostingAdapter {
         provider: "netlify",
         projectName: cleanProjectName,
         deploymentId: deployData.id,
+        deploymentUrl: liveUrl,
         liveUrl,
         subdomain: targetSubdomain,
         publishedAt: Date.now(),
-        status: "published",
+        status: deployData.state === "ready" ? "published" : "building",
         customDomainStatus,
       };
     } catch (err: any) {
@@ -273,7 +287,7 @@ export class NetlifyAdapter implements IHostingAdapter {
         projectName: cleanProjectName,
         publishedAt: Date.now(),
         status: "failed",
-        error: err?.message || "Failed to publish to Netlify.",
+        error: stripSensitiveTokens(err?.message || "Failed to publish to Netlify."),
       };
     }
   }

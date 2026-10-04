@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType } from "@/lib/ai/types";
 import { SavedProject, ProjectVersion, ProjectChangeLogEntry } from "@/lib/storage/project-types";
+import { QualityAuditEngine } from "@/lib/quality/quality-audit-engine";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -263,6 +264,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Run deterministic Website Quality Audit immediately on the updated website
+    const qualityAudit = QualityAuditEngine.audit(mergedFiles, {
+      businessName: project.formData?.businessName || project.name,
+      trade: project.formData?.businessType || pageData.serviceName,
+      city: project.formData?.city || pageData.locationCity,
+      state: project.formData?.stateRegion || pageData.locationState,
+      phone: project.formData?.phone || project.businessDetails?.phone,
+      email: project.formData?.email || project.businessDetails?.email,
+      domain: project.formData?.websiteDomain || project.businessDetails?.websiteDomain,
+    });
+
     return NextResponse.json({
       success: true,
       updatedProject,
@@ -272,7 +284,14 @@ export async function POST(req: NextRequest) {
         outgoingLinksCount: result.outgoingLinksCount,
         linkedFromPages: result.linkedFromPages,
       },
-      message: `Dedicated page "${result.newPageFile.path}" successfully created and linked!`,
+      qualityAudit: {
+        overallScore: qualityAudit.overallScore,
+        categoryScores: qualityAudit.categoryScores,
+        issues: qualityAudit.issues,
+        totalPagesScanned: qualityAudit.totalPagesScanned,
+        summaryText: qualityAudit.summaryText,
+      },
+      message: `Dedicated page "${result.newPageFile.path}" successfully created, linked, and audited! Quality Score: ${qualityAudit.overallScore}/100.`,
     });
   } catch (error: any) {
     console.error("[Page Creation API] Unhandled error:", error);

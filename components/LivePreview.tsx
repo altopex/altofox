@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { BRAND } from "@/config/brand";
 import {
   Download,
@@ -28,13 +28,14 @@ import {
   FileEdit,
   Database,
   UploadCloud,
+  FileText,
 } from "lucide-react";
 import { PublishModal } from "./publishing/PublishModal";
 import { QualityReport, runQualityChecksAndAutoFix } from "../lib/quality/quality-checker";
 import { runClientMobileCheck, PageMobileAuditResult } from "../lib/quality/mobile-checker";
 import { WebsiteQualityAuditReport, auditWebsiteQuality } from "../lib/quality/website-quality-auditor";
 import { ImprovementActionType } from "../lib/quality/website-improver";
-import { QualityScorecard } from "./QualityScorecard";
+import { QualityScorecard, AutoFixSummaryData } from "./QualityScorecard";
 import { validateWebsiteFiles, ZipValidationResult } from "../lib/export/zip-validator";
 import { buildCanonicalWebsiteFiles } from "../lib/export/canonical-files";
 import {
@@ -129,11 +130,13 @@ export function LivePreview({
   const [activeAction, setActiveAction] = useState<string | null>(null);
   const [recentChanges, setRecentChanges] = useState<string[]>([]);
   const [customAuditReport, setCustomAuditReport] = useState<WebsiteQualityAuditReport | null>(null);
+  const [autoFixSummary, setAutoFixSummary] = useState<AutoFixSummaryData | null>(null);
   const [validationResult, setValidationResult] = useState<ZipValidationResult | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [showValidationModal, setShowValidationModal] = useState(false);
 
   const [telClickedNotice, setTelClickedNotice] = useState<string | null>(null);
+  const [navigationNotice, setNavigationNotice] = useState<string | null>(null);
   const [showSchemaModal, setShowSchemaModal] = useState(false);
   const [showPublishModal, setShowPublishModal] = useState(false);
 
@@ -149,6 +152,7 @@ export function LivePreview({
     setActiveVersion("improved");
     setRecentChanges([]);
     setCustomAuditReport(null);
+    setAutoFixSummary(null);
     setValidationResult(null);
   }, [project.projectId, project.files, project.name, project.websiteDomain]);
 
@@ -159,21 +163,70 @@ export function LivePreview({
   const hasSitemap = currentFiles.some((f) => f.path.toLowerCase() === "sitemap.xml");
   const hasRobots = currentFiles.some((f) => f.path.toLowerCase() === "robots.txt");
 
-  // Listen for iframe link clicks to navigate smoothly between pages in preview mode (POSIX resolved)
+  // Helper to extract clean human-readable page titles from files
+  const getPageTitle = useCallback((filePath: string): string => {
+    const norm = filePath.toLowerCase().replace(/^\/+/, "");
+    if (norm === "index.html" || norm === "") return "Homepage";
+    if (norm === "sitemap.xml") return "XML Sitemap";
+    if (norm === "robots.txt") return "Robots Directives";
+
+    const file = currentFiles.find(
+      (f) =>
+        f.path.toLowerCase() === norm ||
+        f.path.toLowerCase().replace(/^\/+/, "") === norm ||
+        f.path.toLowerCase().endsWith("/" + norm)
+    );
+
+    if (file?.content) {
+      const str = typeof file.content === "string" ? file.content : String(file.content || "");
+      const h1Match = str.match(/<h1[^>]*?>([\s\S]*?)<\/h1>/i);
+      if (h1Match && h1Match[1]) {
+        const cleanH1 = h1Match[1].replace(/<[^>]+>/g, "").trim();
+        if (cleanH1.length > 0 && cleanH1.length < 50) return cleanH1;
+      }
+      const titleMatch = str.match(/<title[^>]*?>([\s\S]*?)<\/title>/i);
+      if (titleMatch && titleMatch[1]) {
+        const cleanTitle = titleMatch[1].split("|")[0].split("-")[0].trim();
+        if (cleanTitle.length > 0 && cleanTitle.length < 50) return cleanTitle;
+      }
+    }
+
+    return norm
+      .replace(/\.html$/, "")
+      .replace(/[-_]/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }, [currentFiles]);
+
+  // Active page display name
+  const activePageDisplayName = useMemo(() => {
+    return getPageTitle(activePage);
+  }, [activePage, getPageTitle]);
+
+  // Listen for iframe link clicks to navigate smoothly between all pages in preview mode (POSIX resolved)
   useEffect(() => {
     const handleMsg = (e: MessageEvent) => {
       if (!e.data) return;
       if (e.data.type === "PREVIEW_NAVIGATE" && typeof e.data.path === "string") {
-        const targetPath = e.data.path.toLowerCase();
+        const targetPath = (e.data.path || "").toLowerCase().trim();
+        const normalizedTarget =
+          !targetPath || targetPath === "/" || targetPath === "." || targetPath === "index" || targetPath === "home"
+            ? "index.html"
+            : targetPath.replace(/^\/+/, "");
+
         const found = currentFiles.find(
           (f) =>
-            f.path.toLowerCase() === targetPath ||
-            f.path.toLowerCase().replace(/^\/+/, "") === targetPath ||
-            f.path.toLowerCase() === `${targetPath}.html` ||
-            f.path.toLowerCase().endsWith("/" + targetPath)
+            f.path.toLowerCase() === normalizedTarget ||
+            f.path.toLowerCase() === `${normalizedTarget}.html` ||
+            f.path.toLowerCase().replace(/^\/+/, "") === normalizedTarget ||
+            f.path.toLowerCase().endsWith("/" + normalizedTarget) ||
+            f.path.toLowerCase().replace(/\.html$/, "") === normalizedTarget.replace(/\.html$/, "")
         );
+
         if (found) {
           setActivePage(found.path);
+        } else {
+          setNavigationNotice(`Target page "${e.data.originalHref || normalizedTarget}" is not in the generated website files.`);
+          setTimeout(() => setNavigationNotice(null), 4000);
         }
       } else if (e.data.type === "PREVIEW_TEL_CLICK") {
         setTelClickedNotice(`📞 Click-to-Call Verified: ${e.data.text || e.data.phone} (Working tel: link on mobile & desktop)`);
@@ -316,6 +369,14 @@ export function LivePreview({
         setActiveVersion("improved");
         if (Array.isArray(data.changesApplied)) {
           setRecentChanges((prev) => [...prev, ...data.changesApplied]);
+        }
+        if (data.issuesBefore || data.issuesFixed || data.issuesRemaining) {
+          setAutoFixSummary({
+            issuesBefore: data.issuesBefore || [],
+            issuesFixed: data.issuesFixed || [],
+            issuesRemaining: data.issuesRemaining || [],
+            finalScore: data.finalScore || data.newScore || 0,
+          });
         }
         if (onUpdateProject) {
           onUpdateProject({
@@ -802,135 +863,223 @@ export function LivePreview({
               <button
                 type="button"
                 onClick={() => setTelClickedNotice(null)}
-                className="text-white hover:bg-emerald-700 px-2 py-0.5 rounded text-[11px] font-bold transition ml-3"
+                className="text-white hover:bg-emerald-700 px-2 py-0.5 rounded text-[11px] font-bold transition ml-3 cursor-pointer"
               >
                 Dismiss
               </button>
             </div>
           )}
 
-          {/* Page Tabs & Device Controls */}
-          <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-2 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-            {/* Page selector tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto max-w-full py-0.5">
-              <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider px-2 shrink-0">
-                Pages:
-              </span>
-              {htmlFiles.map((h) => {
-                const isActive = activePage.toLowerCase() === h.path.toLowerCase();
-                return (
-                  <button
-                    key={h.path}
-                    type="button"
-                    onClick={() => setActivePage(h.path)}
-                    className={`px-3 py-1 rounded-[8px] text-xs font-medium transition shrink-0 ${
-                      isActive
-                        ? "bg-[#4F46E5] text-white font-semibold shadow-sm"
-                        : "bg-slate-100 hover:bg-slate-200 text-[#0F172A]"
-                    }`}
-                  >
-                    {h.path}
-                  </button>
-                );
-              })}
-
-              {/* Sitemap.xml quick preview tab */}
-              {hasSitemap && (
-                <button
-                  type="button"
-                  onClick={() => setActivePage("sitemap.xml")}
-                  className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 ${
-                    activePage.toLowerCase() === "sitemap.xml"
-                      ? "bg-sky-600 text-white font-semibold shadow-sm"
-                      : "bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
-                  }`}
-                  title="Inspect canonical sitemap.xml generated with project"
-                >
-                  sitemap.xml
-                </button>
-              )}
-
-              {/* Robots.txt quick preview tab */}
-              {hasRobots && (
-                <button
-                  type="button"
-                  onClick={() => setActivePage("robots.txt")}
-                  className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 ${
-                    activePage.toLowerCase() === "robots.txt"
-                      ? "bg-slate-700 text-white font-semibold shadow-sm"
-                      : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
-                  }`}
-                  title="Inspect canonical robots.txt generated with project"
-                >
-                  robots.txt
-                </button>
-              )}
-
-              {/* Schema Inspector Tab */}
+          {/* Navigation Missing Page Notice */}
+          {navigationNotice && (
+            <div className="bg-amber-600 text-white text-xs font-semibold px-4 py-2.5 rounded-[12px] flex items-center justify-between shadow-md animate-in fade-in slide-in-from-top duration-200">
+              <div className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-white shrink-0" />
+                <span>⚠️ {navigationNotice}</span>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowSchemaModal(true)}
-                className="px-2.5 py-1 rounded-[8px] text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shrink-0 flex items-center gap-1"
-                title="Inspect Schema.org JSON-LD structured data on this page"
+                onClick={() => setNavigationNotice(null)}
+                className="text-white hover:bg-amber-700 px-2 py-0.5 rounded text-[11px] font-bold transition ml-3 cursor-pointer"
               >
-                <span>Schema</span>
-                <span className="bg-emerald-200 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
-                  {currentSchemas.length}
-                </span>
+                Dismiss
               </button>
             </div>
+          )}
 
-            {/* Viewport device toggles */}
+          {/* Preview Meta & Status Bar: Page Name, URL, Generation Status, Audit Status */}
+          <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3 px-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+            {/* Left: Active Page Name & Relative URL */}
+            <div className="flex items-center space-x-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-bold text-[#0F172A] truncate">
+                    {activePageDisplayName}
+                  </span>
+                  <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                    /{activePage}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#64748B] flex items-center gap-1.5 truncate mt-0.5">
+                  <Globe className="w-3 h-3 text-emerald-500 shrink-0" />
+                  <span className="truncate">https://{displayDomain}/{activePage === "index.html" ? "" : activePage}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Generation Status & Audit Status */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {/* Generation Status Badge */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Generation: <strong>Ready (Single Source of Truth)</strong></span>
+              </div>
+
+              {/* Audit Status Badge */}
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-semibold ${
+                (qualityReport?.overallScore ?? 0) >= 90
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                  : "bg-amber-50 border-amber-200 text-amber-800"
+              }`}>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Audit: <strong>{qualityReport?.overallScore ?? 0}/100</strong> ({(qualityReport?.detectedIssuesCount ?? 0) === 0 ? "Clean" : `${qualityReport.detectedIssuesCount} Issues`})</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Page Tabs, Dropdown & Device Controls */}
+          <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-2 flex flex-wrap items-center justify-between gap-2 shadow-sm">
+            {/* Page navigation controls: Selector Dropdown + Quick Pills */}
+            <div className="flex items-center gap-2 overflow-x-auto max-w-full py-0.5">
+              <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider px-1 shrink-0">
+                Page:
+              </span>
+
+              {/* Fast Dropdown for quick access to ANY of all generated pages */}
+              <select
+                value={activePage}
+                onChange={(e) => setActivePage(e.target.value)}
+                className="bg-slate-50 border border-[#E2E8F0] text-xs font-semibold text-[#0F172A] rounded-[8px] px-2.5 py-1 focus:ring-1 focus:ring-[#4F46E5] shrink-0 outline-hidden cursor-pointer"
+                title="Switch between all generated pages"
+              >
+                <optgroup label="HTML Pages">
+                  {htmlFiles.map((h) => (
+                    <option key={h.path} value={h.path}>
+                      {getPageTitle(h.path)} ({h.path})
+                    </option>
+                  ))}
+                </optgroup>
+                {(hasSitemap || hasRobots) && (
+                  <optgroup label="SEO Files">
+                    {hasSitemap && <option value="sitemap.xml">sitemap.xml (XML Sitemap)</option>}
+                    {hasRobots && <option value="robots.txt">robots.txt (Robots Directives)</option>}
+                  </optgroup>
+                )}
+              </select>
+
+              {/* Quick page pills */}
+              <div className="flex items-center gap-1 shrink-0">
+                {htmlFiles.slice(0, 5).map((h) => {
+                  const isActive = activePage.toLowerCase() === h.path.toLowerCase();
+                  return (
+                    <button
+                      key={h.path}
+                      type="button"
+                      onClick={() => setActivePage(h.path)}
+                      className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 cursor-pointer ${
+                        isActive
+                          ? "bg-[#4F46E5] text-white font-semibold shadow-sm"
+                          : "bg-slate-100 hover:bg-slate-200 text-[#0F172A]"
+                      }`}
+                    >
+                      {h.path}
+                    </button>
+                  );
+                })}
+
+                {/* Sitemap.xml quick preview tab */}
+                {hasSitemap && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePage("sitemap.xml")}
+                    className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 cursor-pointer ${
+                      activePage.toLowerCase() === "sitemap.xml"
+                        ? "bg-sky-600 text-white font-semibold shadow-sm"
+                        : "bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200"
+                    }`}
+                    title="Inspect canonical sitemap.xml generated with project"
+                  >
+                    sitemap.xml
+                  </button>
+                )}
+
+                {/* Robots.txt quick preview tab */}
+                {hasRobots && (
+                  <button
+                    type="button"
+                    onClick={() => setActivePage("robots.txt")}
+                    className={`px-2.5 py-1 rounded-[8px] text-xs font-medium transition shrink-0 cursor-pointer ${
+                      activePage.toLowerCase() === "robots.txt"
+                        ? "bg-slate-700 text-white font-semibold shadow-sm"
+                        : "bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200"
+                    }`}
+                    title="Inspect canonical robots.txt generated with project"
+                  >
+                    robots.txt
+                  </button>
+                )}
+
+                {/* Schema Inspector Tab */}
+                <button
+                  type="button"
+                  onClick={() => setShowSchemaModal(true)}
+                  className="px-2.5 py-1 rounded-[8px] text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition shrink-0 flex items-center gap-1 cursor-pointer"
+                  title="Inspect Schema.org JSON-LD structured data on this page"
+                >
+                  <span>Schema</span>
+                  <span className="bg-emerald-200 text-emerald-800 text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+                    {currentSchemas.length}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* Viewport device toggles: Desktop, Tablet, Mobile */}
             <div className="flex items-center space-x-1 shrink-0 ml-auto">
               <div className="bg-slate-100 p-0.5 rounded-[8px] flex items-center space-x-0.5 border border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setViewMode("split")}
-                  title="Dual Preview (Desktop + Mobile side-by-side)"
-                  className={`px-2.5 py-1 rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition ${
-                    viewMode === "split"
+                  onClick={() => setViewMode("desktop")}
+                  title="Desktop View (1280px fluid responsive)"
+                  className={`px-2.5 py-1 rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                    viewMode === "desktop"
                       ? "bg-white text-[#4F46E5] shadow-xs"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
                 >
-                  <Columns className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Desktop + Mobile</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("desktop")}
-                  title="Desktop View (1280px)"
-                  className={`p-1.5 rounded-[6px] transition ${
-                    viewMode === "desktop"
-                      ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
-                      : "text-[#64748B] hover:text-[#0F172A]"
-                  }`}
-                >
                   <Monitor className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Desktop</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("tablet")}
-                  title="Tablet View (768px)"
-                  className={`p-1.5 rounded-[6px] transition ${
+                  title="Tablet View (768px iPad)"
+                  className={`px-2.5 py-1 rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                     viewMode === "tablet"
-                      ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
+                      ? "bg-white text-[#4F46E5] shadow-xs"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
                 >
                   <Tablet className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Tablet</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setViewMode("mobile")}
-                  title="Mobile View (375px)"
-                  className={`p-1.5 rounded-[6px] transition ${
+                  title="Mobile View (375px iPhone)"
+                  className={`px-2.5 py-1 rounded-[6px] text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                     viewMode === "mobile"
-                      ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
+                      ? "bg-white text-[#4F46E5] shadow-xs"
                       : "text-[#64748B] hover:text-[#0F172A]"
                   }`}
                 >
                   <Smartphone className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Mobile</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("split")}
+                  title="Dual Preview (Desktop + Mobile side-by-side)"
+                  className={`p-1.5 rounded-[6px] transition cursor-pointer ${
+                    viewMode === "split"
+                      ? "bg-white text-[#4F46E5] shadow-xs font-semibold"
+                      : "text-[#64748B] hover:text-[#0F172A]"
+                  }`}
+                >
+                  <Columns className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -938,7 +1087,7 @@ export function LivePreview({
                 type="button"
                 onClick={() => setRefreshKey((k) => k + 1)}
                 title="Reload Preview"
-                className="p-1.5 rounded-[8px] border border-[#E2E8F0] hover:bg-slate-50 text-[#64748B] hover:text-[#0F172A] transition"
+                className="p-1.5 rounded-[8px] border border-[#E2E8F0] hover:bg-slate-50 text-[#64748B] hover:text-[#0F172A] transition cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
               </button>
@@ -1039,14 +1188,23 @@ export function LivePreview({
             ) : (
               <div className="bg-slate-100 min-h-[580px] h-[calc(100vh-21rem)] flex items-center justify-center p-2 sm:p-4 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 rounded-[10px] overflow-hidden border border-[#E2E8F0] shadow-md bg-white ${
+                  className={`h-full transition-all duration-300 overflow-hidden shadow-md bg-white flex flex-col ${
                     viewMode === "desktop"
-                      ? "w-full"
+                      ? "w-full rounded-[10px] border border-[#E2E8F0]"
                       : viewMode === "tablet"
-                      ? "w-[768px] max-w-full"
-                      : "w-[375px] max-w-full rounded-[24px] border-4 border-slate-800 flex flex-col"
+                      ? "w-[768px] max-w-full rounded-[18px] border-4 border-slate-700 shadow-xl"
+                      : "w-[375px] max-w-full rounded-[24px] border-4 border-slate-800 shadow-xl"
                   }`}
                 >
+                  {viewMode === "tablet" && (
+                    <div className="bg-slate-800 text-slate-200 px-4 py-1.5 flex items-center justify-between text-[11px] select-none border-b border-slate-700">
+                      <div className="flex items-center gap-1.5 font-semibold text-[10px]">
+                        <Tablet className="w-3 h-3 text-indigo-400" />
+                        <span>Tablet Viewport (768px • Portrait)</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono">Fluid Responsive</span>
+                    </div>
+                  )}
                   {viewMode === "mobile" && (
                     <div className="bg-slate-800 text-white px-4 py-1.5 flex items-center justify-between text-[11px] select-none">
                       <span className="font-semibold text-[10px]">9:41</span>
@@ -1060,7 +1218,7 @@ export function LivePreview({
                     key={refreshKey}
                     srcDoc={inlinedPreviewHtml}
                     title="Generated Static Website Live Preview"
-                    className="w-full h-full border-0 bg-white"
+                    className="w-full h-full border-0 bg-white flex-1"
                     sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
                   />
                 </div>
@@ -1085,6 +1243,7 @@ export function LivePreview({
             activeVersion={activeVersion}
             onToggleVersion={handleToggleVersion}
             recentChanges={recentChanges}
+            autoFixSummary={autoFixSummary}
           />
 
           {/* Quick Optimization & Content Tools */}

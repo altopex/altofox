@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { stream, safeFilename, stats } = await bundleProjectToZipStream({
+    const { stream, safeFilename, stats, auditReport } = await bundleProjectToZipStream({
       projectName: name || "website",
       files,
       photos,
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       formData,
     });
 
-    console.log(`[ZIP Export Service] Successfully initiated stream for "${safeFilename}" (${stats.totalFiles} files)`);
+    console.log(`[ZIP Export Service] Successfully initiated stream for "${safeFilename}" (${stats.totalFiles} files, audit score: ${auditReport?.score ?? 100}/100)`);
 
     return new Response(stream, {
       status: 200,
@@ -41,6 +41,8 @@ export async function POST(req: NextRequest) {
         "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-store, must-revalidate",
         "X-Content-Type-Options": "nosniff",
+        "X-Audit-Score": String(auditReport?.score ?? 100),
+        "X-Audit-Passed": auditReport?.passed ? "true" : "false",
       },
     });
   } catch (error: any) {

@@ -103,6 +103,19 @@ ${breadcrumbsHtml}
         .join("\n      ")}
     </div>
   </div>
+<!-- Regional Dispatch & Standards Overview -->
+<section class="section" style="background: var(--color-background); border-top: 1px solid var(--color-border); padding: 3rem 0;">
+  <div class="container" style="max-width: 900px; margin: 0 auto; text-align: left;">
+    <h2 style="font-size: 1.5rem; font-weight: 700; margin-bottom: 1rem; color: var(--color-secondary);">
+      Rapid Service Dispatch Across ${mainCity} and Surrounding Municipalities
+    </h2>
+    <p style="font-size: 1rem; line-height: 1.6; color: var(--color-muted); margin-bottom: 1.25rem;">
+      Our strategically stationed service vehicles ensure responsive coverage across all listed communities in ${state}. Each mobile technician is fully licensed, insured, and equipped with precision diagnostic instrumentation to resolve urgent repairs and routine maintenance without unnecessary delays.
+    </p>
+    <p style="font-size: 0.9375rem; line-height: 1.6; color: var(--color-muted);">
+      Whether you manage a residential historic home, modern suburban estate, or commercial facility, our certified specialists adhere strictly to regional municipal codes and upfront flat-rate pricing. Contact our regional dispatch center at <a href="tel:${cleanPhone}" style="color: var(--color-primary); font-weight: 700; text-decoration: underline;">${phone}</a> for priority scheduling.
+    </p>
+  </div>
 </section>
 
 <!-- Attribution -->

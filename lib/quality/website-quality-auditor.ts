@@ -4,6 +4,13 @@
  * Target Quality Score: 95 / 100.
  */
 
+export {
+  QualityAuditEngine,
+  type QualityAuditResult,
+  type QualityCategoryScore,
+  type QualityAuditIssueItem,
+} from "./quality-audit-engine";
+
 export interface QualityCheckCriterion {
   id: string;
   name: string;
@@ -95,6 +102,7 @@ export interface SiteMetaInfo {
   city?: string;
   state?: string;
   street?: string;
+  streetAddress?: string;
   trade?: string;
   targetKeywords?: string;
   domain?: string;

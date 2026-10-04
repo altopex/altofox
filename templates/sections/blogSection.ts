@@ -1,5 +1,6 @@
 import { SectionJSON, SiteContentJSON } from "../../lib/generator/content-schema";
 import { BlogPostData } from "../../lib/blog/blog-engine";
+import { renderStaticImageTag } from "../../lib/photos/image-provider";
 
 export interface BlogSectionOptions {
   blogHubHref?: string;
@@ -106,14 +107,14 @@ export function renderBlogSection(
             const imgHtml = post.imageUrl
               ? `
             <div class="blog-card-image-wrap">
-              <img
-                src="${post.imageUrl}"
-                alt="${post.imageAlt || post.title}"
-                class="img-card img-blog"
-                width="800"
-                height="533"
-                loading="lazy"
-              />
+              ${renderStaticImageTag({
+                src: post.imageUrl,
+                alt: post.imageAlt || post.title,
+                className: "img-card img-blog",
+                width: 800,
+                height: 533,
+                loading: "lazy",
+              })}
             </div>`
               : "";
 

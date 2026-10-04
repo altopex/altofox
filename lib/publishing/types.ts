@@ -55,10 +55,11 @@ export interface PublishResult {
   provider: HostingProviderType;
   projectName: string;
   deploymentId?: string;
+  deploymentUrl?: string;
   liveUrl?: string;
   subdomain?: string;
   publishedAt: number;
-  status: "published" | "building" | "queued" | "failed";
+  status: "published" | "building" | "queued" | "failed" | "success";
   commitUrl?: string;
   customDomainStatus?: {
     domain: string;

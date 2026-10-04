@@ -243,6 +243,42 @@ export function SearchConsoleHub({
         )}
       </div>
 
+      {/* Google Search Console Continuous Optimization Lifecycle */}
+      <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-xl text-white shadow-xs border border-slate-800">
+        <div className="flex items-center justify-between mb-2">
+          <span className="font-bold text-indigo-300 tracking-wide uppercase text-[10px] flex items-center gap-1.5">
+            <Target className="w-3.5 h-3.5 text-indigo-400" />
+            RankLocal Continuous Optimization Engine
+          </span>
+          <span className="text-[10px] text-slate-400 font-medium">Deterministic SEO Growth Loop</span>
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] font-medium text-slate-300">
+          <span className="bg-indigo-600 text-white px-2 py-0.5 rounded-md shrink-0">Search Console</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-md shrink-0">Search Queries</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-md shrink-0">Impressions</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-md shrink-0">Clicks</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-md shrink-0">CTR</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-slate-800 text-slate-200 px-2 py-0.5 rounded-md shrink-0">Avg Position</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-amber-600 text-white px-2 py-0.5 rounded-md shrink-0">Keyword Opportunities</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-purple-600 text-white px-2 py-0.5 rounded-md shrink-0">AI Recommendations</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-indigo-500 text-white px-2 py-0.5 rounded-md shrink-0">User Approval</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-blue-600 text-white px-2 py-0.5 rounded-md shrink-0">New Page</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-emerald-700 text-white px-2 py-0.5 rounded-md shrink-0">Audit</span>
+          <span className="text-slate-500">→</span>
+          <span className="bg-emerald-400 text-slate-950 font-bold px-2 py-0.5 rounded-md shrink-0">Publish</span>
+        </div>
+      </div>
+
       {/* Upload Box */}
       <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
         <div className="flex items-center justify-between">

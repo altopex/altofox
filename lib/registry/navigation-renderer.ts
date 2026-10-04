@@ -215,13 +215,14 @@ export interface FooterRenderOptions {
   currentPage: RegistryPage;
   site: SiteInfoJSON;
   linkStyle?: LinkStyle;
+  variant?: "multi-column" | "simple-compact" | "editorial-contact";
 }
 
 /**
- * Renders the 4-Column Footer strictly from the Master Page Registry
+ * Renders the Footer strictly from the Master Page Registry
  */
 export function renderFooterFromRegistry(options: FooterRenderOptions): string {
-  const { registry, currentPage, site, linkStyle = "web" } = options;
+  const { registry, currentPage, site, linkStyle = "web", variant = "multi-column" } = options;
   const bizName = site.businessName || "Local Services";
   const tagline = site.tagline || "Professional, licensed, and guaranteed local services.";
   const phone = site.phone || "(555) 123-4567";
@@ -262,6 +263,114 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
   // Areas Links
   const displayedAreas = locationPages.slice(0, 5);
 
+  // VARIANT: SIMPLE-COMPACT (3-Column Streamlined)
+  if (variant === "simple-compact") {
+    return `
+  <!-- Site Footer: Simple Compact Layout -->
+  <footer class="site-footer footer-simple-compact" id="site-footer">
+    <div class="container">
+      <div class="footer-grid footer-grid-compact" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 2.5rem;">
+        <!-- Col 1: Brand & Direct Phone -->
+        <div class="footer-col">
+          ${renderBrandLogo({
+            businessName: bizName,
+            trade: (site as any).trade || (site as any).industry || (site as any).primaryService,
+            logoUrl: (site as any).logoUrl || (site as any).logo,
+            isFooter: true,
+            href: null,
+          })}
+          <p>${tagline}</p>
+          <div style="margin-top: 1.25rem;">
+            <a href="tel:${cleanPhone}" style="color: var(--color-accent); font-weight: 800; font-size: 1.2rem;">⚡ ${phone}</a>
+          </div>
+        </div>
+
+        <!-- Col 2: Navigation & Services -->
+        <div class="footer-col">
+          <h3>Explore</h3>
+          <ul class="footer-links">
+            ${quickLinks.slice(0, 4).map((q) => `<li><a href="${q.href}">${q.label}</a></li>`).join("\n            ")}
+            ${displayedServices.slice(0, 2).map((s) => `<li><a href="${linkTo(currentPage, s, linkStyle)}">${s.navLabel}</a></li>`).join("\n            ")}
+          </ul>
+        </div>
+
+        <!-- Col 3: Coverage & Dispatch -->
+        <div class="footer-col">
+          <h3>Service &amp; Hours</h3>
+          <p>${addressDisplay}</p>
+          <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>
+          ${email ? `<p style="margin-top: 0.5rem;"><a href="mailto:${email}" style="color: #CBD5E1;">${email}</a></p>` : ""}
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>`;
+  }
+
+  // VARIANT: EDITORIAL-CONTACT (Editorial Craftsmanship)
+  if (variant === "editorial-contact") {
+    return `
+  <!-- Site Footer: Editorial Contact Layout -->
+  <footer class="site-footer footer-editorial-contact" id="site-footer">
+    <div class="container">
+      <div class="footer-editorial-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.12); padding-bottom: 2rem; margin-bottom: 2rem; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1.5rem;">
+        <div>
+          ${renderBrandLogo({
+            businessName: bizName,
+            trade: (site as any).trade || (site as any).industry || (site as any).primaryService,
+            logoUrl: (site as any).logoUrl || (site as any).logo,
+            isFooter: true,
+            href: null,
+          })}
+          <p style="max-width: 500px; margin-top: 0.75rem; color: #94A3B8;">${tagline}</p>
+        </div>
+        <div class="editorial-footer-cta-block" style="text-align: right;">
+          <div style="font-size: 0.85rem; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.05em;">Direct Specialist Dispatch</div>
+          <a href="tel:${cleanPhone}" style="color: var(--color-accent); font-weight: 900; font-size: 1.6rem; display: inline-block; margin-top: 0.25rem;">${phone}</a>
+        </div>
+      </div>
+
+      <div class="footer-grid">
+        <div class="footer-col">
+          <h3>Company</h3>
+          <ul class="footer-links">
+            ${quickLinks.map((q) => `<li><a href="${q.href}">${q.label}</a></li>`).join("\n            ")}
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3>Core Services</h3>
+          <ul class="footer-links">
+            ${displayedServices.map((s) => `<li><a href="${linkTo(currentPage, s, linkStyle)}">${s.navLabel}</a></li>`).join("\n            ")}
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3>Communities</h3>
+          <ul class="footer-links">
+            ${displayedAreas.map((a) => `<li><a href="${linkTo(currentPage, a, linkStyle)}">${a.navLabel}</a></li>`).join("\n            ")}
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h3>Office &amp; Hours</h3>
+          <p>${addressDisplay}</p>
+          <p style="margin-top: 0.5rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>
+          ${email ? `<p style="margin-top: 0.5rem;"><a href="mailto:${email}" style="color: #CBD5E1;">${email}</a></p>` : ""}
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>© <span data-current-year>${new Date().getFullYear()}</span> ${bizName}. Master Craftsmanship &amp; Dedicated Service.</p>
+      </div>
+    </div>
+  </footer>`;
+  }
+
+  // DEFAULT / VARIANT: MULTI-COLUMN (4-Column)
   return `
   <!-- Site Footer: 4-Column Layout -->
   <footer class="site-footer" id="site-footer">
@@ -284,7 +393,7 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
 
         <!-- Col 2: Quick Links -->
         <div class="footer-col">
-          <h4>Quick Links</h4>
+          <h3>Quick Links</h3>
           <ul class="footer-links">
             ${quickLinks.map((q) => `<li><a href="${q.href}">${q.label}</a></li>`).join("\n            ")}
           </ul>
@@ -293,13 +402,13 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
         <!-- Col 3: Services / Areas -->
         <div class="footer-col">
           ${displayedServices.length > 0 ? `
-          <h4>Our Services</h4>
+          <h3>Our Services</h3>
           <ul class="footer-links">
             ${displayedServices.map((s) => `<li><a href="${linkTo(currentPage, s, linkStyle)}">${s.navLabel}</a></li>`).join("\n            ")}
             ${servicesHub ? `<li><a href="${linkTo(currentPage, servicesHub, linkStyle)}" style="color: var(--color-accent); font-weight: 700;">View All Services →</a></li>` : ""}
           </ul>
           ` : `
-          <h4>Service Areas</h4>
+          <h3>Service Areas</h3>
           <ul class="footer-links">
             ${displayedAreas.map((a) => `<li><a href="${linkTo(currentPage, a, linkStyle)}">${a.navLabel}</a></li>`).join("\n            ")}
             ${areasHub ? `<li><a href="${linkTo(currentPage, areasHub, linkStyle)}" style="color: var(--color-accent); font-weight: 700;">View All Areas →</a></li>` : ""}
@@ -309,7 +418,7 @@ export function renderFooterFromRegistry(options: FooterRenderOptions): string {
 
         <!-- Col 4: Contact & Hours -->
         <div class="footer-col">
-          <h4>Dispatch & Contact</h4>
+          <h3>Dispatch & Contact</h3>
           <p>${addressDisplay}</p>
           ${email ? `<p style="margin-top: 0.5rem;"><a href="mailto:${email}" style="color: #CBD5E1;">${email}</a></p>` : ""}
           <p style="margin-top: 0.75rem; font-size: 0.85rem; color: #94A3B8;">${site.hours?.[0] || "24/7 Priority Emergency Service"}</p>

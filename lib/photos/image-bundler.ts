@@ -11,6 +11,12 @@ import {
 } from "./image-provider";
 import { generateTradeSvgBuffer, generateTradeSvgDataUri } from "./trade-svg-fallback";
 import { detectTradeCategory, extractPhotoId, resolvePhoto } from "./photo-service";
+import {
+  ImageEngine,
+  computeImageHash,
+  SupportedImageMode,
+  normalizeImageMode,
+} from "./image-engine";
 
 export interface ImagePlanSlot {
   id: string;
@@ -275,6 +281,7 @@ export async function resolveImagePlanWithValidation(
   city: string,
   options: {
     preferredSource?: ImageProviderType;
+    mode?: SupportedImageMode | string;
     state?: string;
     pexelsKey?: string;
     pixabayKey?: string;
@@ -293,140 +300,121 @@ export async function resolveImagePlanWithValidation(
     validateNetwork?: boolean;
     fastOfflinePreview?: boolean;
     maxValidationTimeMs?: number;
+    imageEngine?: ImageEngine;
   } = {}
 ): Promise<ImagePlanSlot[]> {
   const validatedPlan: ImagePlanSlot[] = [];
   const deduplicationTracker = options.deduplicationTracker || new ImageDeduplicationTracker();
   const tradeCategory = detectTradeCategory(trade);
 
-  if (options.fastOfflinePreview || options.validateNetwork === false) {
-    for (const slot of plan) {
-      const resolved = resolvePageImage(
-        {
-          trade,
-          city,
-          state: options.state,
-          serviceName: slot.serviceName,
-          slot: slot.slot,
-          width: slot.width,
-          height: slot.height,
-          customAlt: slot.alt,
-          pageSlug: slot.pageSlug,
-        },
-        {
-          preferredSource: options.preferredSource,
-          deduplicationTracker,
-        }
-      );
+  const engine =
+    options.imageEngine ||
+    new ImageEngine({
+      mode: options.mode || options.preferredSource,
+      googleApiKey: options.googleKey,
+      googleCx: options.googleCx,
+      validateNetwork: options.fastOfflinePreview ? false : (options.validateNetwork ?? true),
+      timeoutMs: options.maxValidationTimeMs || 1500,
+      fastOfflinePreview: options.fastOfflinePreview,
+    });
 
-      validatedPlan.push({
-        ...slot,
-        query: resolved.query,
-        remoteUrl: resolved.url,
-        fallbackUrl: resolved.fallbackUrl,
-        allFallbacks: resolved.allFallbacks,
-        localSvgFallback: resolved.localSvgFallback,
-        status: "found",
-      });
-    }
-  } else {
-    const startTime = Date.now();
-    const maxBudgetMs = options.maxValidationTimeMs ?? 3500;
-    let networkAllowed: boolean = options.validateNetwork ?? true;
+  // Process in concurrent batches of 6 with aggregate timeout budget
+  const BATCH_SIZE = 6;
+  for (let i = 0; i < plan.length; i += BATCH_SIZE) {
+    const chunk = plan.slice(i, i + BATCH_SIZE);
 
-    // Process in concurrent batches of 6 with aggregate timeout budget
-    const BATCH_SIZE = 6;
-    for (let i = 0; i < plan.length; i += BATCH_SIZE) {
-      const chunk = plan.slice(i, i + BATCH_SIZE);
+    const chunkResults = await Promise.all(
+      chunk.map(async (slot, chunkIdx) => {
+        try {
+          const globalIdx = i + chunkIdx;
+          const engineResult = await engine.processSlot({
+            pageType:
+              slot.pageSlug === "index" || slot.pageSlug === "home"
+                ? "home"
+                : slot.pageSlug.includes("-")
+                ? "service"
+                : "standard",
+            pageSlug: slot.pageSlug,
+            section: slot.slot,
+            niche: trade,
+            service: slot.serviceName,
+            city,
+            state: options.state,
+            width: slot.width,
+            height: slot.height,
+            customAlt: slot.alt,
+            slotIndex: globalIdx,
+          });
 
-      if (networkAllowed && Date.now() - startTime >= maxBudgetMs) {
-        networkAllowed = false;
-      }
-
-      const chunkResults = await Promise.all(
-        chunk.map(async (slot) => {
-          try {
-            const resolved = await resolveValidatedPageImage(
-              {
-                trade,
-                city,
-                state: options.state,
-                serviceName: slot.serviceName,
-                slot: slot.slot,
-                width: slot.width,
-                height: slot.height,
-                customAlt: slot.alt,
-                pageSlug: slot.pageSlug,
-              },
-              {
-                preferredSource: options.preferredSource,
-                pexelsKey: options.pexelsKey,
-                pixabayKey: options.pixabayKey,
-                googleKey: options.googleKey,
-                googleCx: options.googleCx,
-                openaiKey: options.openaiKey,
-                providerCredentials: options.providerCredentials,
-                deduplicationTracker,
-                validateNetwork: networkAllowed,
-              }
-            );
-
-            return {
-              ...slot,
-              query: resolved.query,
-              remoteUrl: resolved.url,
-              fallbackUrl: resolved.fallbackUrl,
-              allFallbacks: resolved.allFallbacks,
-              localSvgFallback: resolved.localSvgFallback,
-              status: resolved.status === "local_fallback" ? ("local_fallback" as const) : ("found" as const),
-            };
-          } catch {
-            return slot;
+          if (engineResult.url) {
+            deduplicationTracker.recordUrl(engineResult.url, engineResult.searchQuery, {
+              page: slot.pageSlug,
+              section: slot.slot,
+            });
           }
-        })
-      );
 
-      validatedPlan.push(...chunkResults);
-    }
+          return {
+            ...slot,
+            query: engineResult.searchQuery,
+            remoteUrl: engineResult.url,
+            fallbackUrl: engineResult.fallbackUrl || engineResult.localSvgFallback,
+            allFallbacks: engineResult.allFallbacks,
+            localSvgFallback: engineResult.localSvgFallback,
+            alt: engineResult.alt,
+            status:
+              engineResult.status === "none"
+                ? ("found" as const)
+                : engineResult.status === "fallback_assigned"
+                ? ("fallback_used" as const)
+                : ("found" as const),
+          };
+        } catch {
+          return slot;
+        }
+      })
+    );
+
+    validatedPlan.push(...chunkResults);
   }
 
   // =========================================================================
   // POST-PLAN STRICT VERIFICATION PASS:
-  // Zero duplicate images permitted! If any collision is detected, mutate immediately!
+  // Zero duplicate images permitted! Enforces pageUsedImages & siteUsedImages via imageHash!
   // =========================================================================
-  const seenPhotoIds = new Set<string>();
-  const seenUrls = new Set<string>();
+  const seenHashes = new Set<string>();
+  const pageSeenHashes = new Map<string, Set<string>>();
 
   for (let i = 0; i < validatedPlan.length; i++) {
     const slot = validatedPlan[i];
-    const photoId = extractPhotoId(slot.remoteUrl);
-    const isDuplicate =
-      (photoId && seenPhotoIds.has(photoId)) ||
-      (slot.remoteUrl && seenUrls.has(slot.remoteUrl));
+    if (!slot.remoteUrl) continue;
 
-    if (isDuplicate) {
-      if (slot.slot === "hero") {
-        // Hero MUST be copyright-free photo
-        const replacement = resolvePhoto(tradeCategory, "hero", slot.query, i + 50, seenPhotoIds);
-        slot.remoteUrl = replacement.url;
-        slot.fallbackUrl = replacement.url;
-        slot.allFallbacks = [replacement.url, slot.localSvgFallback];
-        const newId = extractPhotoId(replacement.url);
-        if (newId) seenPhotoIds.add(newId);
-        seenUrls.add(replacement.url);
+    const pageSlug = (slot.pageSlug || "index").toLowerCase().replace(/\.html$/, "");
+    if (!pageSeenHashes.has(pageSlug)) {
+      pageSeenHashes.set(pageSlug, new Set());
+    }
+    const pageSet = pageSeenHashes.get(pageSlug)!;
+
+    const hash = engine.imageHash(slot.remoteUrl);
+    const isPageDuplicate = hash && pageSet.has(hash);
+    const isSiteDuplicate = hash && seenHashes.has(hash);
+
+    if (isPageDuplicate || isSiteDuplicate) {
+      if (engine.mode === "none") {
+        slot.remoteUrl = "";
       } else {
-        // Small image: mutate keywords dynamically
-        const uniqueQ = deduplicationTracker.generateUniqueBingQuery(`${slot.query}+item${i}`, tradeCategory, slot.slot, i);
-        const newUrl = buildBingThumbnailUrl(uniqueQ, slot.width, slot.height, i + 1);
+        // Generate a fresh unique query variant with distinct modifier
+        const uniqueQ = `licensed ${trade} ${slot.serviceName || slot.slot} diagnostic inspection #${i + 20}`;
+        const newUrl = buildBingThumbnailUrl(uniqueQ, slot.width, slot.height, i + 10);
+        const newHash = engine.imageHash(newUrl);
+
         slot.remoteUrl = newUrl;
         slot.query = uniqueQ;
-        const newId = extractPhotoId(newUrl);
-        if (newId) seenPhotoIds.add(newId);
-        seenUrls.add(newUrl);
+        pageSet.add(newHash);
+        seenHashes.add(newHash);
       }
     } else {
-      if (photoId) seenPhotoIds.add(photoId);
-      if (slot.remoteUrl) seenUrls.add(slot.remoteUrl);
+      pageSet.add(hash);
+      seenHashes.add(hash);
     }
   }
 

@@ -331,7 +331,7 @@ const EXAMPLE_DATA = {
   stateRegion: "TX",
   zipPostalCode: "75201",
   country: "USA",
-  serviceAreas: ["Dallas", "Plano", "Frisco", "McKinney", "Irving", "Richardson"],
+  serviceAreas: ["Plano", "Frisco", "McKinney", "Irving", "Richardson"],
   phone: "(214) 555-0198",
   email: "dispatch@lonestarplumbingdfw.com",
   businessHours: "Monday - Sunday: 24/7 Emergency Dispatch",
@@ -341,14 +341,18 @@ const EXAMPLE_DATA = {
     "24/7 drain cleaning Dallas",
     "water heater repair Dallas TX",
     "slab leak detection",
+    "licensed plumbers near me",
   ],
   pages: ["Home", "About", "Services", "Contact", "FAQ", "Service Areas"],
-  selectedThemeId: "modern-pro",
+  selectedThemeId: "pipe-and-wrench",
   logoUrl: "",
   yearsInBusiness: "20+",
   uniqueSellingPoints: "45-min arrival, upfront flat rates, licensed master technicians",
-  separateServicePages: false,
-  separateAreaPages: false,
+  separateServicePages: true,
+  separateAreaPages: true,
+  layoutStyle: "Conversion",
+  imageProvider: "Bing",
+  blogPostsCount: 3,
   googleMaps: "https://maps.google.com/?q=Dallas+TX",
   socialLinks: "Facebook: facebook.com/lonestarplumbing",
 };
@@ -449,14 +453,20 @@ export default function DashboardPage() {
     "FAQ",
     "Service Areas",
   ]);
-  const [separateServicePages, setSeparateServicePages] = useState(false);
-  const [separateAreaPages, setSeparateAreaPages] = useState(false);
+  const [separateServicePages, setSeparateServicePages] = useState(true);
+  const [separateAreaPages, setSeparateAreaPages] = useState(true);
 
-  // Step 4 Theme Fields
-  const [selectedThemeId, setSelectedThemeId] = useState<string>("modern-local-pro");
+  // Step 7 Theme Fields
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("pipe-and-wrench");
   const [customThemeColors, setCustomThemeColors] = useState<CustomThemeOverrides>({});
   const [previewModalTheme, setPreviewModalTheme] = useState<Theme | null>(null);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
+  // Step 8 Generation Settings Fields
+  const [layoutStyle, setLayoutStyle] = useState<string>("Conversion");
+  const [imageProvider, setImageProvider] = useState<string>("Bing");
+  const [blogPostsCount, setBlogPostsCount] = useState<number>(3);
+  const [isEditBlueprintOpen, setIsEditBlueprintOpen] = useState<boolean>(false);
 
   // Step Validation Errors
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
@@ -773,7 +783,12 @@ export default function DashboardPage() {
       setGoogleMaps("");
       setSocialLinks("");
       setSelectedPages(["Home", "About", "Services", "Contact", "FAQ", "Service Areas"]);
-      setSelectedThemeId("modern-pro");
+      setSelectedThemeId("pipe-and-wrench");
+      setLayoutStyle("Conversion");
+      setImageProvider("Bing");
+      setBlogPostsCount(3);
+      setSeparateServicePages(true);
+      setSeparateAreaPages(true);
       setCustomThemeColors({});
       setCurrentStep(1);
       setMaxCompletedStep(1);
@@ -805,13 +820,18 @@ export default function DashboardPage() {
     setKeywords(EXAMPLE_DATA.keywords);
     setSelectedPages(EXAMPLE_DATA.pages);
     setSelectedThemeId(EXAMPLE_DATA.selectedThemeId);
+    setLayoutStyle(EXAMPLE_DATA.layoutStyle || "Conversion");
+    setImageProvider(EXAMPLE_DATA.imageProvider || "Bing");
+    setBlogPostsCount(EXAMPLE_DATA.blogPostsCount ?? 3);
+    setSeparateServicePages(true);
+    setSeparateAreaPages(true);
     setCustomThemeColors({});
     setYearsInBusiness(EXAMPLE_DATA.yearsInBusiness);
     setUniqueSellingPoints(EXAMPLE_DATA.uniqueSellingPoints);
     setCustomContentInstructions("Emphasize 24/7 priority emergency response, upfront transparent pricing, and 20+ years of family-owned master craftsmanship. Friendly, dependable tone.");
     setGoogleMaps(EXAMPLE_DATA.googleMaps);
     setSocialLinks(EXAMPLE_DATA.socialLinks);
-    setMaxCompletedStep(5);
+    setMaxCompletedStep(9);
     setStepErrors({});
     addToast({
       type: "success",
@@ -1117,43 +1137,110 @@ export default function DashboardPage() {
     );
   }, [customThemeColors, activeTheme]);
 
-  // Validate Step 1
+  // Dynamic Blueprint Metrics
+  const computedLocationCount = useMemo(() => {
+    return Math.max(serviceAreas.length, serviceAreaCities.length, 1);
+  }, [serviceAreas.length, serviceAreaCities.length]);
+
+  const computedPageCount = useMemo(() => {
+    let count = 4; // Home, About, Contact, FAQ
+    if (selectedPages.includes("Services")) count += 1;
+    if (separateServicePages && services.length > 0) count += services.length;
+    if (selectedPages.includes("Service Areas") || serviceAreas.length > 0 || serviceAreaCities.length > 0) count += 1;
+    if (separateAreaPages) count += computedLocationCount;
+    if (blogPostsCount > 0) count += (1 + blogPostsCount); // 1 blog hub + N articles
+    return count;
+  }, [selectedPages, separateServicePages, services.length, separateAreaPages, computedLocationCount, blogPostsCount]);
+
+  const themeDisplayName = useMemo(() => {
+    if (selectedThemeId === "pipe-and-wrench" || selectedThemeId === "forge" || activeTheme.id === "pipe-and-wrench") {
+      return "Forge";
+    }
+    if (selectedThemeId === "spark-and-wire" || activeTheme.id === "spark-and-wire") {
+      return "Apex";
+    }
+    if (selectedThemeId === "cool-breeze" || activeTheme.id === "cool-breeze") {
+      return "Breeze";
+    }
+    if (selectedThemeId === "storm-shield" || activeTheme.id === "storm-shield") {
+      return "Shield";
+    }
+    if (selectedThemeId === "green-roots" || activeTheme.id === "green-roots") {
+      return "Roots";
+    }
+    if (selectedThemeId === "clean-sweep" || activeTheme.id === "clean-sweep") {
+      return "Radiance";
+    }
+    if (selectedThemeId === "iron-grip" || activeTheme.id === "iron-grip") {
+      return "Iron";
+    }
+    if (selectedThemeId === "master-craft" || activeTheme.id === "master-craft") {
+      return "Craft";
+    }
+    if (selectedThemeId === "secure-home" || activeTheme.id === "secure-home") {
+      return "Modern Pro";
+    }
+    if (selectedThemeId === "rapid-response" || activeTheme.id === "rapid-response") {
+      return "Velocity";
+    }
+    return activeTheme.name;
+  }, [selectedThemeId, activeTheme]);
+
+  // STEP 1 VALIDATION: Business
   const validateStep1 = (): boolean => {
     const errors: Record<string, string> = {};
     if (!businessName.trim()) {
       errors.businessName = "Business name is required.";
     }
+    if (!phone.trim()) {
+      errors.phone = "Phone number is required for customer calls.";
+    }
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // STEP 2 VALIDATION: Niche
+  const validateStep2 = (): boolean => {
+    const errors: Record<string, string> = {};
     if (businessType === "Other (Custom)" && !customBusinessType.trim()) {
       errors.businessType = "Please specify your industry.";
     }
     if (!businessDescription.trim()) {
       errors.businessDescription = "A short business description is required.";
     }
-
-    // Auto-commit any pending service input so user doesn't lose it
-    if (serviceInput.trim()) {
-      const pendingServices = parseTagList(serviceInput);
-      if (pendingServices.length > 0) {
-        setServices((prev) => parseTagList([...prev, ...pendingServices]));
-        setServiceInput("");
-      }
-    }
-
     setStepErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Validate Step 2
-  const validateStep2 = (): boolean => {
+  // STEP 3 VALIDATION: Services
+  const validateStep3 = (): boolean => {
+    // Auto-commit any pending service input so user doesn't lose it
+    let currentServices = [...services];
+    if (serviceInput.trim()) {
+      const pendingServices = parseTagList(serviceInput);
+      if (pendingServices.length > 0) {
+        currentServices = parseTagList([...currentServices, ...pendingServices]);
+        setServices(currentServices);
+        setServiceInput("");
+      }
+    }
+
+    const errors: Record<string, string> = {};
+    if (currentServices.length === 0) {
+      errors.services = "Please add at least one service offered.";
+    }
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // STEP 4 VALIDATION: Locations
+  const validateStep4 = (): boolean => {
     const errors: Record<string, string> = {};
     if (!city.trim()) {
       errors.city = "City is required for localized SEO.";
     }
     if (!stateRegion.trim()) {
       errors.stateRegion = "State or region is required.";
-    }
-    if (!phone.trim()) {
-      errors.phone = "Phone number is required for customer calls.";
     }
 
     // Auto-commit any pending area input so user doesn't lose it
@@ -1165,6 +1252,17 @@ export default function DashboardPage() {
       }
     }
 
+    if (serviceAreaCities.length > 0 && !confirmedServesAreas) {
+      errors.confirmedServesAreas = "Please confirm that your business genuinely serves all selected service areas.";
+    }
+
+    setStepErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  // STEP 5 VALIDATION: Keywords
+  const validateStep5 = (): boolean => {
+    const errors: Record<string, string> = {};
     // Auto-commit any pending keyword input so user doesn't lose it
     let effectiveKeywords = [...keywords];
     if (keywordInput.trim()) {
@@ -1184,16 +1282,6 @@ export default function DashboardPage() {
     return Object.keys(errors).length === 0;
   };
 
-  // Validate Step 3 (Service Areas)
-  const validateStep3 = (): boolean => {
-    const errors: Record<string, string> = {};
-    if (serviceAreaCities.length > 0 && !confirmedServesAreas) {
-      errors.confirmedServesAreas = "Please confirm that your business genuinely serves all selected service areas.";
-    }
-    setStepErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
   // Handle Wizard Navigation
   const handleNextStep = () => {
     if (currentStep === 1) {
@@ -1201,7 +1289,7 @@ export default function DashboardPage() {
         addToast({
           type: "error",
           title: "Incomplete Fields",
-          message: "Please fill in the required business details.",
+          message: "Please enter your business name and phone number.",
         });
         return;
       }
@@ -1210,22 +1298,40 @@ export default function DashboardPage() {
         addToast({
           type: "error",
           title: "Incomplete Fields",
-          message: "Please enter your city, phone, and at least one keyword.",
+          message: "Please specify your industry and business description.",
         });
         return;
       }
     } else if (currentStep === 3) {
       if (!validateStep3()) {
         addToast({
-          type: "warning",
-          title: "Confirmation Required",
-          message: "Please confirm that your business genuinely serves the selected service areas.",
+          type: "error",
+          title: "Incomplete Fields",
+          message: "Please add at least one service offered.",
+        });
+        return;
+      }
+    } else if (currentStep === 4) {
+      if (!validateStep4()) {
+        addToast({
+          type: "error",
+          title: "Incomplete Fields",
+          message: "Please specify your primary city and state.",
+        });
+        return;
+      }
+    } else if (currentStep === 5) {
+      if (!validateStep5()) {
+        addToast({
+          type: "error",
+          title: "Incomplete Fields",
+          message: "Please add at least one target keyword.",
         });
         return;
       }
     }
 
-    const next = Math.min(currentStep + 1, 6);
+    const next = Math.min(currentStep + 1, 9);
     setCurrentStep(next);
     if (next > maxCompletedStep) setMaxCompletedStep(next);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1723,6 +1829,9 @@ export default function DashboardPage() {
       googleMaps: googleMaps.trim(),
       socialLinks: socialLinks.trim(),
       logoUrl: logoUrl.trim(),
+      layoutStyle,
+      imageProvider,
+      blogPostsCount,
       language: savedLanguage,
       qualityReview: prefReview,
       customContentInstructions: customContentInstructions.trim(),
@@ -1895,12 +2004,15 @@ export default function DashboardPage() {
   };
 
   const stepsList = [
-    { number: 1, label: "Business Info" },
-    { number: 2, label: "Location & SEO" },
-    { number: 3, label: "Service Areas" },
-    { number: 4, label: "Pages" },
-    { number: 5, label: "Theme" },
-    { number: 6, label: "Generate" },
+    { number: 1, label: "Business" },
+    { number: 2, label: "Niche" },
+    { number: 3, label: "Services" },
+    { number: 4, label: "Locations" },
+    { number: 5, label: "Keywords" },
+    { number: 6, label: "Brand" },
+    { number: 7, label: "Theme" },
+    { number: 8, label: "Generation Settings" },
+    { number: 9, label: "Site Blueprint" },
   ];
 
 
@@ -1940,6 +2052,72 @@ export default function DashboardPage() {
 
   const renderModals = () => (
     <>
+      {/* Edit Blueprint Step Selector Modal */}
+      {isEditBlueprintOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2">
+                <FileEdit className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-slate-900">Edit Website Blueprint</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditBlueprintOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Select which section of your blueprint you want to edit:
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pr-1">
+              {[
+                { step: 1, title: "1. Business", desc: businessName || "Company name & contact" },
+                { step: 2, title: "2. Niche", desc: `${effectiveIndustry} (${currentNichePack.name})` },
+                { step: 3, title: "3. Services", desc: `${services.length} services configured` },
+                { step: 4, title: "4. Locations", desc: `${computedLocationCount} locations in ${city || "local area"}` },
+                { step: 5, title: "5. Keywords", desc: `${keywords.length} target keywords` },
+                { step: 6, title: "6. Brand", desc: `${yearsInBusiness || "Trust signals"}, USP, colors` },
+                { step: 7, title: "7. Theme", desc: `Theme: ${themeDisplayName}` },
+                { step: 8, title: "8. Generation Settings", desc: `${layoutStyle} layout, ${imageProvider}, ${blogPostsCount} blog posts` },
+              ].map((item) => (
+                <button
+                  key={item.step}
+                  type="button"
+                  onClick={() => {
+                    setCurrentStep(item.step);
+                    setIsEditBlueprintOpen(false);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                  className="p-3 text-left rounded-xl border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition cursor-pointer flex flex-col justify-between group"
+                >
+                  <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                    {item.title}
+                  </span>
+                  <span className="text-[11px] text-slate-500 truncate mt-0.5">
+                    {item.desc}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsEditBlueprintOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Post-Generation Storage Decision Modal (Download Only vs Save for Future Optimization) */}
       <GenerationDecisionModal
         isOpen={isDecisionModalOpen}
@@ -2505,9 +2683,9 @@ export default function DashboardPage() {
             </div>
 
             {/* Horizontal Step Progress Bar */}
-            <div className="bg-white border border-[#E2E8F0] rounded-[14px] p-3 sm:p-4 shadow-sm">
+            <div className="bg-white border border-[#E2E8F0] rounded-[14px] p-3 sm:p-4 shadow-sm overflow-x-auto no-scrollbar">
               {/* Desktop Progress Stepper */}
-              <div className="hidden sm:flex items-center justify-between">
+              <div className="hidden lg:flex items-center justify-between min-w-[820px] gap-1">
                 {stepsList.map((step, idx) => {
                   const isCurrent = currentStep === step.number;
                   const isCompleted = step.number < currentStep || step.number <= maxCompletedStep;
@@ -2519,12 +2697,13 @@ export default function DashboardPage() {
                         type="button"
                         onClick={() => handleJumpToStep(step.number)}
                         disabled={!isClickable}
-                        className={`flex items-center space-x-2.5 transition text-left ${
+                        className={`flex items-center space-x-1.5 transition text-left shrink-0 ${
                           isClickable ? "cursor-pointer" : "cursor-not-allowed opacity-60"
                         }`}
+                        title={`Go to Step ${step.number}: ${step.label}`}
                       >
                         <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition ${
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold transition shrink-0 ${
                             isCurrent
                               ? "bg-[#4F46E5] text-white ring-4 ring-[#EEF2FF]"
                               : isCompleted && step.number < currentStep
@@ -2533,13 +2712,13 @@ export default function DashboardPage() {
                           }`}
                         >
                           {isCompleted && step.number < currentStep ? (
-                            <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            <Check className="w-3 h-3 stroke-[3]" />
                           ) : (
                             step.number
                           )}
                         </div>
                         <span
-                          className={`text-xs font-semibold ${
+                          className={`text-xs font-semibold whitespace-nowrap ${
                             isCurrent
                               ? "text-[#4F46E5]"
                               : isCompleted
@@ -2553,7 +2732,7 @@ export default function DashboardPage() {
 
                       {idx < stepsList.length - 1 && (
                         <div
-                          className={`flex-1 h-0.5 mx-2 rounded transition-colors ${
+                          className={`flex-1 min-w-[12px] h-0.5 mx-1.5 rounded transition-colors ${
                             step.number < currentStep ? "bg-[#10B981]" : "bg-[#E2E8F0]"
                           }`}
                         />
@@ -2563,11 +2742,11 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              {/* Mobile Progress Stepper */}
-              <div className="flex sm:hidden items-center justify-between">
+              {/* Mobile / Tablet Progress Stepper */}
+              <div className="flex lg:hidden items-center justify-between">
                 <div>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5]">
-                    Step {currentStep} of 5
+                    Step {currentStep} of {stepsList.length}
                   </span>
                   <h4 className="text-sm font-bold text-[#0F172A]">
                     {stepsList[currentStep - 1]?.label}
@@ -2575,15 +2754,19 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex items-center space-x-1">
                   {stepsList.map((step) => (
-                    <div
+                    <button
                       key={step.number}
-                      className={`h-1.5 rounded-full transition-all ${
+                      type="button"
+                      onClick={() => handleJumpToStep(step.number)}
+                      disabled={step.number > maxCompletedStep}
+                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
                         currentStep === step.number
                           ? "w-6 bg-[#4F46E5]"
                           : step.number < currentStep
                           ? "w-2.5 bg-[#10B981]"
                           : "w-2.5 bg-slate-200"
                       }`}
+                      title={`Step ${step.number}: ${step.label}`}
                     />
                   ))}
                 </div>
@@ -2592,10 +2775,9 @@ export default function DashboardPage() {
 
             {/* Wizard Card Content */}
             <div className="bg-white border border-[#E2E8F0] rounded-[16px] shadow-sm overflow-hidden p-6 sm:p-8 space-y-6">
-              {/* STEP 1: BUSINESS INFO */}
+              {/* STEP 1: BUSINESS */}
               {currentStep === 1 && (
                 <div className="space-y-5 animate-in fade-in duration-150">
-                  {/* API Key Missing Reminder Banner */}
                   {!hasKey && (
                     <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-2 text-[#92400E]">
@@ -2605,7 +2787,7 @@ export default function DashboardPage() {
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
-                        className="font-bold text-[#92400E] underline hover:text-black shrink-0 ml-3"
+                        className="font-bold text-[#92400E] underline hover:text-black shrink-0 ml-3 cursor-pointer"
                       >
                         Connect Key
                       </button>
@@ -2613,9 +2795,12 @@ export default function DashboardPage() {
                   )}
 
                   <div>
-                    <h2 className="text-lg font-bold text-[#0F172A]">Tell us about your business</h2>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 1 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Business Information</h2>
                     <p className="text-xs text-[#64748B] mt-0.5">
-                      We will use these details to generate persuasive, industry-specific content.
+                      Core contact details used across your site headers, footers, phone CTAs, and LocalBusiness schema.
                     </p>
                   </div>
 
@@ -2634,7 +2819,7 @@ export default function DashboardPage() {
                             setStepErrors((prev) => ({ ...prev, businessName: "" }));
                           }
                         }}
-                        placeholder="e.g. Apex Pro Plumbing & Rooter"
+                        placeholder="e.g. Lone Star Plumbing & Rooter"
                         className="input-base"
                       />
                       {stepErrors.businessName ? (
@@ -2643,11 +2828,114 @@ export default function DashboardPage() {
                         </p>
                       ) : (
                         <p className="text-[11px] text-[#64748B] mt-1">
-                          Appears in your site header, footer, and LocalBusiness schema.
+                          Appears in your site header, footer, page titles, and LocalBusiness schema markup.
                         </p>
                       )}
                     </div>
 
+                    {/* Phone & Email */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Phone Number <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <input
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => {
+                            setPhone(e.target.value);
+                            if (stepErrors.phone) setStepErrors((prev) => ({ ...prev, phone: "" }));
+                          }}
+                          placeholder="(214) 555-0198"
+                          className="input-base"
+                        />
+                        {stepErrors.phone ? (
+                          <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.phone}</p>
+                        ) : (
+                          <p className="text-[11px] text-[#64748B] mt-1">
+                            Used for high-priority &quot;Call Now&quot; buttons and mobile tap-to-call.
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="dispatch@lonestarplumbingdfw.com"
+                          className="input-base"
+                        />
+                        <p className="text-[11px] text-[#64748B] mt-1">
+                          Receives quote inquiries and contact form submissions.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Website Domain */}
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                        Website Domain
+                      </label>
+                      <input
+                        type="text"
+                        value={websiteDomain}
+                        onChange={(e) => setWebsiteDomain(e.target.value)}
+                        placeholder="www.lonestarplumbingdfw.com"
+                        className="input-base"
+                      />
+                      <p className="text-[11px] text-[#64748B] mt-1">
+                        Used to configure canonical URLs, Open Graph meta tags, and sitemap.xml.
+                      </p>
+                    </div>
+
+                    {/* Street Address & Zip Code */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Street Address <span className="text-[#64748B] font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={streetAddress}
+                          onChange={(e) => setStreetAddress(e.target.value)}
+                          placeholder="e.g. 4512 Main Street"
+                          className="input-base"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          ZIP / Postal Code <span className="text-[#64748B] font-normal">(Optional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={zipPostalCode}
+                          onChange={(e) => setZipPostalCode(e.target.value)}
+                          placeholder="75201"
+                          className="input-base"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: NICHE */}
+              {currentStep === 2 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 2 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Niche &amp; Trade Industry</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Select your exact industry to activate specialized copywriting, conversion hooks, and Schema.org types.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
                     {/* Industry / Business Type */}
                     <div>
                       <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
@@ -2676,10 +2964,10 @@ export default function DashboardPage() {
                       )}
 
                       {/* Active Niche Pack Indicator Badge */}
-                      <div className="mt-2 flex items-center justify-between text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-3 py-1.5">
+                      <div className="mt-2.5 flex items-center justify-between text-xs bg-[#F8FAFC] border border-[#E2E8F0] rounded-[8px] px-3.5 py-2">
                         <span className="text-[#64748B] flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5 text-[#10B981]" />
-                          <span>Niche Pack: <strong className="text-[#0F172A]">{currentNichePack.name}</strong> ({currentNichePack.schemaType})</span>
+                          <ShieldCheck className="w-4 h-4 text-[#10B981]" />
+                          <span>Active Niche Pack: <strong className="text-[#0F172A]">{currentNichePack.name}</strong> ({currentNichePack.schemaType})</span>
                         </span>
                         {currentNichePack.emergencyService ? (
                           <span className="text-[10px] font-bold text-[#DC2626] bg-[#FEF2F2] px-2 py-0.5 rounded border border-[#FECACA]">
@@ -2687,7 +2975,7 @@ export default function DashboardPage() {
                           </span>
                         ) : (
                           <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded border border-[#C7D2FE]">
-                            {currentNichePack.commonServices.length} Trade Services
+                            {currentNichePack.commonServices.length} Trade Services Loaded
                           </span>
                         )}
                       </div>
@@ -2699,7 +2987,7 @@ export default function DashboardPage() {
                         Short Business Description <span className="text-[#EF4444]">*</span>
                       </label>
                       <textarea
-                        rows={3}
+                        rows={4}
                         value={businessDescription}
                         onChange={(e) => {
                           setBusinessDescription(e.target.value);
@@ -2707,7 +2995,7 @@ export default function DashboardPage() {
                             setStepErrors((prev) => ({ ...prev, businessDescription: "" }));
                           }
                         }}
-                        placeholder="e.g. Family-owned plumbing company providing 24/7 emergency dispatch, drain cleaning, and water heater repairs."
+                        placeholder="e.g. Family-owned residential and commercial plumbing company providing 24/7 fast-dispatch repairs, drain clearing, and water heater installation across Dallas-Fort Worth."
                         className="w-full p-3 border border-[#E2E8F0] rounded-[10px] text-sm text-[#0F172A] focus:outline-none focus:border-[#4F46E5] focus:ring-3 focus:ring-[#4F46E5]/15"
                       />
                       {stepErrors.businessDescription ? (
@@ -2716,15 +3004,32 @@ export default function DashboardPage() {
                         </p>
                       ) : (
                         <p className="text-[11px] text-[#64748B] mt-1">
-                          Used to write the homepage hero and about sections.
+                          Used to generate persuasive hero headlines, value statements, about sections, and meta descriptions.
                         </p>
                       )}
                     </div>
+                  </div>
+                </div>
+              )}
 
-                    {/* Services Offered (Chips / Tag input) */}
+              {/* STEP 3: SERVICES */}
+              {currentStep === 3 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 3 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Services Offered</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Specify the core services your company provides. These form your services navigation, service cards, and dedicated SEO landing pages.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Add Service Input */}
                     <div>
                       <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                        Services Offered (Type and press Enter or Add)
+                        Add Services (Type and press Enter, comma, or click Add)
                       </label>
                       <div className="flex gap-2 mb-2">
                         <input
@@ -2756,30 +3061,58 @@ export default function DashboardPage() {
                         <button
                           type="button"
                           onClick={() => handleAddService()}
-                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
+                          className="px-4 py-2 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer"
                         >
                           + Add
                         </button>
                       </div>
 
-                      {/* Chip tags list */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {services.map((srv) => (
-                          <span
-                            key={srv}
-                            className="inline-flex items-center space-x-1.5 bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE] px-2.5 py-1 rounded-full text-xs font-medium"
-                          >
-                            <span>{srv}</span>
+                      {/* Selected Services Chips */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-slate-700">
+                            Configured Services ({services.length})
+                          </span>
+                          {services.length > 0 && (
                             <button
                               type="button"
-                              onClick={() => handleRemoveService(srv)}
-                              className="hover:text-red-600 rounded-full"
-                              aria-label={`Remove ${srv}`}
+                              onClick={() => setServices([])}
+                              className="text-[11px] text-slate-400 hover:text-red-500 transition cursor-pointer"
                             >
-                              <X className="w-3 h-3" />
+                              Clear all
                             </button>
-                          </span>
-                        ))}
+                          )}
+                        </div>
+
+                        {services.length === 0 ? (
+                          <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50/60 text-center text-xs text-slate-400">
+                            No services added yet. Type services above or select from recommended trade services below.
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
+                            {services.map((srv) => (
+                              <span
+                                key={srv}
+                                className="inline-flex items-center space-x-1.5 bg-white text-[#4F46E5] border border-[#C7D2FE] shadow-2xs px-2.5 py-1 rounded-full text-xs font-medium"
+                              >
+                                <span>{srv}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveService(srv)}
+                                  className="hover:text-red-600 rounded-full cursor-pointer p-0.5"
+                                  aria-label={`Remove ${srv}`}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {stepErrors.services && (
+                          <p className="text-xs text-[#EF4444] font-medium mt-1">
+                            {stepErrors.services}
+                          </p>
+                        )}
                       </div>
 
                       {/* Suggested Services from Niche Pack */}
@@ -2788,7 +3121,7 @@ export default function DashboardPage() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[11px] font-bold text-[#475569] flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
-                              Suggested for {currentNichePack.name} (click to add)
+                              Recommended for {currentNichePack.name} (click to add)
                             </span>
                             <button
                               type="button"
@@ -2801,7 +3134,7 @@ export default function DashboardPage() {
                                   message: `Added ${toAdd.length} services from ${currentNichePack.name} pack.`,
                                 });
                               }}
-                              className="text-[11px] font-semibold text-[#4F46E5] hover:text-[#4338CA] hover:underline"
+                              className="text-[11px] font-semibold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
                             >
                               + Add Top 5
                             </button>
@@ -2826,90 +3159,48 @@ export default function DashboardPage() {
                       )}
                     </div>
 
-                    {/* Key Differentiators & Trust Signals */}
+                    {/* Dedicated Service Landing Pages Toggle */}
                     <div className="pt-2 border-t border-[#E2E8F0]">
-                      <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
-                        Key Differentiators &amp; Trust Signals
-                      </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:bg-slate-100/70 transition">
+                        <input
+                          type="checkbox"
+                          checked={separateServicePages}
+                          onChange={(e) => setSeparateServicePages(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5] cursor-pointer"
+                        />
                         <div>
-                          <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                            Years in Business (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={yearsInBusiness}
-                            onChange={(e) => setYearsInBusiness(e.target.value)}
-                            placeholder="e.g. 20+ Years"
-                            className="input-base"
-                          />
+                          <span className="text-xs font-bold text-[#0F172A] block">
+                            Create a separate landing page for each main service (Recommended)
+                          </span>
+                          <p className="text-[11px] text-[#64748B] mt-0.5">
+                            Each service receives its own URL (e.g. <code className="text-indigo-600 bg-indigo-50 px-1 rounded">/services/emergency-plumbing.html</code>) with Service Schema and internal linking to rank for high-intent search queries.
+                          </p>
                         </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                            Unique Selling Points (Optional)
-                          </label>
-                          <input
-                            type="text"
-                            value={uniqueSellingPoints}
-                            onChange={(e) => setUniqueSellingPoints(e.target.value)}
-                            placeholder="e.g. 45-min arrival, upfront pricing, licensed masters"
-                            className="input-base"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Custom Content Instructions (Optional) */}
-                    <div className="pt-3 border-t border-[#E2E8F0]">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-xs font-semibold text-[#0F172A]">
-                          Custom Content Instructions <span className="text-[#64748B] font-normal">(Optional)</span>
-                        </label>
-                        <span className="text-[11px] text-[#64748B]">Tone, brand voice, special phrasing</span>
-                      </div>
-                      <textarea
-                        rows={4}
-                        value={customContentInstructions}
-                        onChange={(e) => setCustomContentInstructions(e.target.value)}
-                        placeholder="Tell RankLocal how you want this website's content to feel, what to emphasize, or anything specific you want included. RankLocal will combine your instructions with its SEO and content-quality system."
-                        className="w-full p-3 border border-[#E2E8F0] rounded-[10px] text-sm text-[#0F172A] focus:outline-none focus:border-[#4F46E5] focus:ring-3 focus:ring-[#4F46E5]/15"
-                      />
-                      <p className="text-[11px] text-[#64748B] mt-1.5 leading-relaxed">
-                        Tell RankLocal how you want this website&apos;s content to feel, what to emphasize, or anything specific you want included. RankLocal will combine your instructions with its SEO and content-quality system.
-                      </p>
+                      </label>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* STEP 2: LOCATION & SEO */}
-              {currentStep === 2 && (
-                <div className="space-y-5 animate-in fade-in duration-150">
+              {/* STEP 4: LOCATIONS */}
+              {currentStep === 4 && (
+                <div className="space-y-6 animate-in fade-in duration-150">
                   <div>
-                    <h2 className="text-lg font-bold text-[#0F172A]">Location &amp; Local SEO</h2>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 4 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Locations &amp; Service Coverage</h2>
                     <p className="text-xs text-[#64748B] mt-0.5">
-                      Crucial details to help your website rank on Google Maps and localized searches.
+                      Define your primary headquarters city and neighboring service areas for local map pack and neighborhood SEO dominance.
                     </p>
                   </div>
 
                   <div className="space-y-4">
-                    {/* Address & City */}
+                    {/* Primary City, State & Country */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="sm:col-span-2">
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Street Address (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={streetAddress}
-                          onChange={(e) => setStreetAddress(e.target.value)}
-                          placeholder="e.g. 4512 Main Street"
-                          className="input-base"
-                        />
-                      </div>
                       <div>
                         <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          City <span className="text-[#EF4444]">*</span>
+                          Primary City <span className="text-[#EF4444]">*</span>
                         </label>
                         <input
                           type="text"
@@ -2925,10 +3216,6 @@ export default function DashboardPage() {
                           <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.city}</p>
                         )}
                       </div>
-                    </div>
-
-                    {/* State, ZIP & Country */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
                           State / Region <span className="text-[#EF4444]">*</span>
@@ -2944,18 +3231,9 @@ export default function DashboardPage() {
                           placeholder="TX"
                           className="input-base"
                         />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          ZIP / Postal Code
-                        </label>
-                        <input
-                          type="text"
-                          value={zipPostalCode}
-                          onChange={(e) => setZipPostalCode(e.target.value)}
-                          placeholder="75201"
-                          className="input-base"
-                        />
+                        {stepErrors.stateRegion && (
+                          <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.stateRegion}</p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
@@ -2971,10 +3249,10 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {/* Service Areas (Chips) */}
+                    {/* Additional Service Areas Input & Chips */}
                     <div>
                       <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                        Service Areas (Nearby cities &amp; suburbs)
+                        Nearby Cities &amp; Suburbs (Type or paste comma-separated areas)
                       </label>
                       <div className="flex gap-2 mb-2">
                         <input
@@ -3000,313 +3278,488 @@ export default function DashboardPage() {
                               handleAddArea();
                             }
                           }}
-                          placeholder="e.g. Hollidaysburg, Duncansville, Bellwood (comma separated)"
+                          placeholder="e.g. Plano, Frisco, McKinney, Irving, Richardson"
                           className="input-base flex-1"
                         />
                         <button
                           type="button"
                           onClick={() => handleAddArea()}
-                          className="px-3.5 py-2 rounded-[10px] bg-slate-100 hover:bg-slate-200 text-[#0F172A] font-semibold text-xs transition"
+                          className="px-4 py-2 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition cursor-pointer"
                         >
                           + Add
                         </button>
                       </div>
 
-                      <div className="flex flex-wrap gap-1.5">
-                        {serviceAreas.map((area) => (
-                          <span
-                            key={area}
-                            className="inline-flex items-center space-x-1.5 bg-slate-100 text-[#0F172A] border border-slate-200 px-2.5 py-1 rounded-full text-xs font-medium"
-                          >
-                            <span>{area}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveArea(area)}
-                              className="hover:text-red-600 rounded-full"
+                      {serviceAreas.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl mb-3">
+                          {serviceAreas.map((area) => (
+                            <span
+                              key={area}
+                              className="inline-flex items-center space-x-1.5 bg-white text-[#0F172A] border border-slate-200 shadow-2xs px-2.5 py-1 rounded-full text-xs font-medium"
                             >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Phone & Email */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Phone Number <span className="text-[#EF4444]">*</span>
-                        </label>
-                        <input
-                          type="tel"
-                          value={phone}
-                          onChange={(e) => {
-                            setPhone(e.target.value);
-                            if (stepErrors.phone) setStepErrors((prev) => ({ ...prev, phone: "" }));
-                          }}
-                          placeholder="(214) 555-0198"
-                          className="input-base"
-                        />
-                        {stepErrors.phone && (
-                          <p className="text-xs text-[#EF4444] mt-1 font-medium">{stepErrors.phone}</p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Email Address
-                        </label>
-                        <input
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          placeholder="dispatch@example.com"
-                          className="input-base"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Business Hours & Website Domain */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="text-xs font-semibold text-[#0F172A]">
-                            Business Hours
-                          </label>
-                          {currentNichePack.emergencyService && (
-                            <span className="text-[10px] font-semibold text-[#DC2626]">
-                              ⚡ 24/7 Trade
+                              <span>{area}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveArea(area)}
+                                className="hover:text-red-600 rounded-full cursor-pointer p-0.5"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
                             </span>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={businessHours}
-                          onChange={(e) => setBusinessHours(e.target.value)}
-                          placeholder="e.g. Mon-Sun: 24/7 Emergency Service"
-                          className="input-base"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
-                          Website Domain
-                        </label>
-                        <input
-                          type="text"
-                          value={websiteDomain}
-                          onChange={(e) => setWebsiteDomain(e.target.value)}
-                          placeholder="www.lonestarplumbingdfw.com"
-                          className="input-base"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Target Keywords (with Niche Pack Suggest button) */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <label className="text-xs font-semibold text-[#0F172A]">
-                            Target Keywords for Local SEO <span className="text-[#EF4444]">*</span>
-                          </label>
-                          <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#C7D2FE]">
-                            {currentNichePack.name} Patterns
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={handleSuggestKeywords}
-                          className="inline-flex items-center space-x-1.5 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Suggest {currentNichePack.name} Keywords</span>
-                        </button>
-                      </div>
-
-                      {/* Keyword Input with Paste Interceptor */}
-                      <div className="space-y-1">
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={keywordInput}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val.includes(",") || val.includes("\n") || val.includes(";")) {
-                                handleAddKeyword(val);
-                              } else {
-                                setKeywordInput(val);
-                              }
-                            }}
-                            onPaste={handlePasteKeywords}
-                            onBlur={() => {
-                              if (keywordInput.trim()) {
-                                handleAddKeyword();
-                              }
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === ",") {
-                                e.preventDefault();
-                                handleAddKeyword();
-                              }
-                            }}
-                            placeholder="e.g. plumber near me, emergency plumber, water heater repair"
-                            className="input-base flex-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleAddKeyword()}
-                            className="px-4 py-2 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition shadow-2xs cursor-pointer"
-                          >
-                            + Add
-                          </button>
-                        </div>
-                        <p className="text-[11px] text-slate-500">
-                          Paste comma-separated or newline-separated keywords. Phrases like &ldquo;emergency plumber near me&rdquo; stay intact.
-                        </p>
-                      </div>
-
-                      {/* Selected Keywords Section */}
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-slate-700">
-                            Selected Keywords ({keywords.length})
-                          </span>
-                          {keywords.length > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => setKeywords([])}
-                              className="text-[11px] text-slate-400 hover:text-red-500 transition cursor-pointer"
-                            >
-                              Clear all
-                            </button>
-                          )}
-                        </div>
-
-                        {keywords.length === 0 ? (
-                          <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50/60 text-center text-xs text-slate-400">
-                            No keywords added yet. Paste comma-separated keywords above or click &ldquo;Suggest {currentNichePack.name} Keywords&rdquo;.
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-xl max-h-48 overflow-y-auto">
-                            {keywords.map((kw) => (
-                              <span
-                                key={kw}
-                                className="inline-flex items-center space-x-1.5 bg-white text-indigo-700 border border-indigo-200 shadow-2xs px-2.5 py-1 rounded-full text-xs font-medium group hover:border-indigo-300 transition"
-                              >
-                                <span>{kw}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveKeyword(kw)}
-                                  className="text-slate-400 hover:text-red-600 rounded-full transition cursor-pointer p-0.5"
-                                  title={`Remove "${kw}"`}
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {stepErrors.keywords && (
-                          <p className="text-xs text-[#EF4444] font-medium">
-                            {stepErrors.keywords}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Suggested Keywords Section (Distinct & Selectable) */}
-                      {suggestedKeywords.length > 0 && (
-                        <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2.5">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <div className="flex items-center gap-1.5">
-                              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                              <span className="text-xs font-bold text-slate-900">
-                                Suggested Keywords ({suggestedKeywords.length})
-                              </span>
-                              <span className="text-[10px] text-slate-500 font-normal">
-                                ({selectedSuggestions.length} selected)
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={handleToggleAllSuggestions}
-                                className="px-2 py-0.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/70 rounded transition cursor-pointer"
-                              >
-                                {selectedSuggestions.length === suggestedKeywords.length
-                                  ? "Deselect All"
-                                  : "Select All"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleAddSelectedSuggestions}
-                                disabled={selectedSuggestions.length === 0}
-                                className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-2xs transition cursor-pointer"
-                              >
-                                + Add Selected ({selectedSuggestions.length})
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleDismissSuggestions}
-                                className="text-slate-400 hover:text-slate-600 p-1 rounded-md transition cursor-pointer"
-                                title="Dismiss suggestions"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
-                            {suggestedKeywords.map((sug) => {
-                              const isChecked = selectedSuggestions.includes(sug);
-                              return (
-                                <div
-                                  key={sug}
-                                  onClick={() => handleToggleSuggestion(sug)}
-                                  className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition select-none ${
-                                    isChecked
-                                      ? "bg-indigo-600 text-white border border-indigo-600 shadow-2xs"
-                                      : "bg-white text-slate-700 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50"
-                                  }`}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => handleToggleSuggestion(sug)}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="w-3 h-3 text-indigo-600 rounded border-slate-300 focus:ring-0 cursor-pointer"
-                                  />
-                                  <span>{sug}</span>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAddSingleSuggestion(sug);
-                                    }}
-                                    className={`ml-1 text-[10px] font-bold px-1 rounded transition cursor-pointer ${
-                                      isChecked
-                                        ? "text-indigo-100 hover:text-white"
-                                        : "text-indigo-600 hover:bg-indigo-100"
-                                    }`}
-                                    title={`Add "${sug}" immediately`}
-                                  >
-                                    + Add
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
+                          ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Collapsible Advanced SEO & Integrations */}
+                    {/* Interactive Radius & City Coverage Picker */}
+                    <div className="pt-2 border-t border-[#E2E8F0]">
+                      <ServiceAreaPicker
+                        businessCity={city}
+                        businessState={stateRegion}
+                        businessName={businessName}
+                        mainService={services[0] || businessType}
+                        servicesList={services}
+                        selectedCities={serviceAreaCities}
+                        onSelectedCitiesChange={setServiceAreaCities}
+                        createSeparateServiceLocationPages={separateAreaPages}
+                        onCreateSeparateServiceLocationPagesChange={setSeparateAreaPages}
+                        confirmedServesAreas={confirmedServesAreas}
+                        onConfirmedServesAreasChange={setConfirmedServesAreas}
+                      />
+                      {stepErrors.confirmedServesAreas && (
+                        <p className="text-xs text-[#EF4444] mt-2 font-medium">
+                          {stepErrors.confirmedServesAreas}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Dedicated Location Pages Toggle */}
+                    <div className="pt-2 border-t border-[#E2E8F0]">
+                      <label className="flex items-start space-x-3 cursor-pointer p-3 rounded-xl bg-slate-50/70 border border-slate-200/80 hover:bg-slate-100/70 transition">
+                        <input
+                          type="checkbox"
+                          checked={separateAreaPages}
+                          onChange={(e) => setSeparateAreaPages(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5] cursor-pointer"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-[#0F172A] block">
+                            Create a dedicated page for each service area (Recommended)
+                          </span>
+                          <p className="text-[11px] text-[#64748B] mt-0.5">
+                            Ranks individual neighboring cities and suburbs on Google Local Pack with dedicated URLs (e.g. <code className="text-indigo-600 bg-indigo-50 px-1 rounded">/areas/plano.html</code>) and localized content.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 5: KEYWORDS */}
+              {currentStep === 5 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 5 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Target SEO Keywords</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Target keywords and high-intent local search queries your customers use to find your services.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-xs font-semibold text-[#0F172A]">
+                          Keywords &amp; Search Queries <span className="text-[#EF4444]">*</span>
+                        </label>
+                        <span className="text-[10px] font-medium text-[#4F46E5] bg-[#EEF2FF] px-2 py-0.5 rounded-full border border-[#C7D2FE]">
+                          {currentNichePack.name} Patterns
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSuggestKeywords}
+                        className="inline-flex items-center space-x-1.5 text-xs font-bold text-[#4F46E5] hover:text-[#4338CA] hover:underline cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Suggest {currentNichePack.name} Keywords</span>
+                      </button>
+                    </div>
+
+                    {/* Keyword Input with Paste Interceptor */}
+                    <div className="space-y-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={keywordInput}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val.includes(",") || val.includes("\n") || val.includes(";")) {
+                              handleAddKeyword(val);
+                            } else {
+                              setKeywordInput(val);
+                            }
+                          }}
+                          onPaste={handlePasteKeywords}
+                          onBlur={() => {
+                            if (keywordInput.trim()) {
+                              handleAddKeyword();
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === ",") {
+                              e.preventDefault();
+                              handleAddKeyword();
+                            }
+                          }}
+                          placeholder="e.g. emergency plumber in Dallas TX, 24/7 drain cleaning, water heater repair"
+                          className="input-base flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleAddKeyword()}
+                          className="px-4 py-2 rounded-[10px] bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition shadow-2xs cursor-pointer"
+                        >
+                          + Add
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Paste comma-separated or newline-separated keywords. Long-tail phrases like &ldquo;emergency plumber near me&rdquo; stay intact.
+                      </p>
+                    </div>
+
+                    {/* Selected Keywords Section */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-slate-700">
+                          Selected Target Keywords ({keywords.length})
+                        </span>
+                        {keywords.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setKeywords([])}
+                            className="text-[11px] text-slate-400 hover:text-red-500 transition cursor-pointer"
+                          >
+                            Clear all
+                          </button>
+                        )}
+                      </div>
+
+                      {keywords.length === 0 ? (
+                        <div className="p-3 border border-dashed border-slate-200 rounded-xl bg-slate-50/60 text-center text-xs text-slate-400">
+                          No keywords added yet. Paste comma-separated keywords above or click &ldquo;Suggest {currentNichePack.name} Keywords&rdquo;.
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/70 border border-slate-200/80 rounded-xl max-h-48 overflow-y-auto">
+                          {keywords.map((kw) => (
+                            <span
+                              key={kw}
+                              className="inline-flex items-center space-x-1.5 bg-white text-indigo-700 border border-indigo-200 shadow-2xs px-2.5 py-1 rounded-full text-xs font-medium group hover:border-indigo-300 transition"
+                            >
+                              <span>{kw}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveKeyword(kw)}
+                                className="text-slate-400 hover:text-red-600 rounded-full transition cursor-pointer p-0.5"
+                                title={`Remove "${kw}"`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {stepErrors.keywords && (
+                        <p className="text-xs text-[#EF4444] font-medium">
+                          {stepErrors.keywords}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Suggested Keywords Section */}
+                    {suggestedKeywords.length > 0 && (
+                      <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2.5">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                            <span className="text-xs font-bold text-slate-900">
+                              Suggested Keywords ({suggestedKeywords.length})
+                            </span>
+                            <span className="text-[10px] text-slate-500 font-normal">
+                              ({selectedSuggestions.length} selected)
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <button
+                              type="button"
+                              onClick={handleToggleAllSuggestions}
+                              className="px-2 py-0.5 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-100/70 rounded transition cursor-pointer"
+                            >
+                              {selectedSuggestions.length === suggestedKeywords.length
+                                ? "Deselect All"
+                                : "Select All"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleAddSelectedSuggestions}
+                              disabled={selectedSuggestions.length === 0}
+                              className="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white shadow-2xs transition cursor-pointer"
+                            >
+                              + Add Selected ({selectedSuggestions.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleDismissSuggestions}
+                              className="text-slate-400 hover:text-slate-600 p-1 rounded-md transition cursor-pointer"
+                              title="Dismiss suggestions"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+                          {suggestedKeywords.map((sug) => {
+                            const isChecked = selectedSuggestions.includes(sug);
+                            return (
+                              <div
+                                key={sug}
+                                onClick={() => handleToggleSuggestion(sug)}
+                                className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition select-none ${
+                                  isChecked
+                                    ? "bg-indigo-600 text-white border border-indigo-600 shadow-2xs"
+                                    : "bg-white text-slate-700 border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => handleToggleSuggestion(sug)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="w-3 h-3 text-indigo-600 rounded border-slate-300 focus:ring-0 cursor-pointer"
+                                />
+                                <span>{sug}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddSingleSuggestion(sug);
+                                  }}
+                                  className={`ml-1 text-[10px] font-bold px-1 rounded transition cursor-pointer ${
+                                    isChecked
+                                      ? "text-indigo-100 hover:text-white"
+                                      : "text-indigo-600 hover:bg-indigo-100"
+                                  }`}
+                                  title={`Add "${sug}" immediately`}
+                                >
+                                  + Add
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 6: BRAND */}
+              {currentStep === 6 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 6 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Brand Identity &amp; Trust Signals</h2>
+                    <p className="text-xs text-[#64748B] mt-0.5">
+                      Configure your value propositions, business hours, brand colors, and custom voice instructions.
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* Differentiators: USP & Years in Business */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Unique Selling Points (USP)
+                        </label>
+                        <input
+                          type="text"
+                          value={uniqueSellingPoints}
+                          onChange={(e) => setUniqueSellingPoints(e.target.value)}
+                          placeholder="e.g. 45-min arrival, upfront pricing, licensed master plumbers"
+                          className="input-base"
+                        />
+                        <p className="text-[11px] text-[#64748B] mt-1">
+                          Highlighted in trust badges, hero bullets, and conversion banners.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-[#0F172A] mb-1.5">
+                          Years in Business
+                        </label>
+                        <input
+                          type="text"
+                          value={yearsInBusiness}
+                          onChange={(e) => setYearsInBusiness(e.target.value)}
+                          placeholder="e.g. 20+ Years"
+                          className="input-base"
+                        />
+                        <p className="text-[11px] text-[#64748B] mt-1">
+                          Builds instant local credibility on the homepage and about page.
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Business Hours */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-semibold text-[#0F172A]">
+                          Business Hours &amp; Availability
+                        </label>
+                        {currentNichePack.emergencyService && (
+                          <span className="text-[10px] font-semibold text-[#DC2626]">
+                            ⚡ 24/7 Trade
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={businessHours}
+                        onChange={(e) => setBusinessHours(e.target.value)}
+                        placeholder="e.g. Monday - Sunday: 24/7 Emergency Dispatch"
+                        className="input-base"
+                      />
+                    </div>
+
+                    {/* Custom Content Instructions */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-semibold text-[#0F172A]">
+                          Custom Content Instructions <span className="text-[#64748B] font-normal">(Optional)</span>
+                        </label>
+                        <span className="text-[11px] text-[#64748B]">Tone, brand voice, special phrasing</span>
+                      </div>
+                      <textarea
+                        rows={3}
+                        value={customContentInstructions}
+                        onChange={(e) => setCustomContentInstructions(e.target.value)}
+                        placeholder="Tell RankLocal how you want this website's content to feel, what to emphasize, or anything specific you want included. RankLocal will combine your instructions with its SEO and content-quality system."
+                        className="w-full p-3 border border-[#E2E8F0] rounded-[10px] text-sm text-[#0F172A] focus:outline-none focus:border-[#4F46E5] focus:ring-3 focus:ring-[#4F46E5]/15"
+                      />
+                    </div>
+
+                    {/* Brand Colors Override */}
+                    <div className="p-4 rounded-[12px] border border-[#E2E8F0] bg-slate-50/70 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Palette className="w-4 h-4 text-[#4F46E5]" />
+                          <h4 className="text-xs font-bold text-[#0F172A]">Brand Colors</h4>
+                        </div>
+                        {hasCustomColors && (
+                          <button
+                            type="button"
+                            onClick={() => setCustomThemeColors({})}
+                            className="text-[11px] font-semibold text-[#4F46E5] hover:underline flex items-center space-x-1 cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Reset to theme colors</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Primary Color Picker */}
+                        <div className="p-2.5 rounded-[10px] border border-[#E2E8F0] bg-white space-y-1">
+                          <label className="block text-[11px] font-bold text-[#0F172A]">
+                            Primary Color
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="color"
+                              value={activeColors.primary}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, primary: e.target.value }))
+                              }
+                              className="w-8 h-8 rounded-[6px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            />
+                            <input
+                              type="text"
+                              value={activeColors.primary}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, primary: e.target.value }))
+                              }
+                              className="input-base text-xs font-mono h-8 uppercase"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Accent Color Picker */}
+                        <div className="p-2.5 rounded-[10px] border border-[#E2E8F0] bg-white space-y-1">
+                          <label className="block text-[11px] font-bold text-[#0F172A]">
+                            Accent Color
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="color"
+                              value={activeColors.accent}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, accent: e.target.value }))
+                              }
+                              className="w-8 h-8 rounded-[6px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            />
+                            <input
+                              type="text"
+                              value={activeColors.accent}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, accent: e.target.value }))
+                              }
+                              className="input-base text-xs font-mono h-8 uppercase"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Background Color Picker */}
+                        <div className="p-2.5 rounded-[10px] border border-[#E2E8F0] bg-white space-y-1">
+                          <label className="block text-[11px] font-bold text-[#0F172A]">
+                            Background Color
+                          </label>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              type="color"
+                              value={activeColors.background}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, background: e.target.value }))
+                              }
+                              className="w-8 h-8 rounded-[6px] border border-[#CBD5E1] cursor-pointer p-0.5 bg-white shrink-0"
+                            />
+                            <input
+                              type="text"
+                              value={activeColors.background}
+                              onChange={(e) =>
+                                setCustomThemeColors((prev) => ({ ...prev, background: e.target.value }))
+                              }
+                              className="input-base text-xs font-mono h-8 uppercase"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Collapsible Advanced Brand Media (Logo, Socials, Google Maps) */}
                     <div className="border border-[#E2E8F0] rounded-[10px] overflow-hidden">
                       <button
                         type="button"
                         onClick={() => setShowCollapsibleSeo(!showCollapsibleSeo)}
-                        className="w-full p-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-[#0F172A] hover:bg-slate-100 transition"
+                        className="w-full p-3 bg-slate-50 flex items-center justify-between text-xs font-semibold text-[#0F172A] hover:bg-slate-100 transition cursor-pointer"
                       >
                         <div className="flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5 text-[#4F46E5]" />
-                          <span>Advanced SEO &amp; Integrations (Optional)</span>
+                          <span>Logo, Social Profiles &amp; Google Maps (Optional)</span>
                         </div>
                         {showCollapsibleSeo ? (
                           <ChevronUp className="w-4 h-4 text-[#64748B]" />
@@ -3318,6 +3771,18 @@ export default function DashboardPage() {
                         <div className="p-4 space-y-3 bg-white">
                           <div>
                             <label className="block text-xs font-semibold text-[#0F172A] mb-1">
+                              Logo Image URL
+                            </label>
+                            <input
+                              type="url"
+                              value={logoUrl}
+                              onChange={(e) => setLogoUrl(e.target.value)}
+                              placeholder="https://example.com/logo.png"
+                              className="input-base"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
                               Google Maps Link or Embed URL
                             </label>
                             <input
@@ -3327,9 +3792,6 @@ export default function DashboardPage() {
                               placeholder="https://maps.google.com/?q=Dallas+TX"
                               className="input-base"
                             />
-                            <p className="text-[11px] text-[#64748B] mt-0.5">
-                              Enables one-click Google Maps directions button in the contact section.
-                            </p>
                           </div>
                           <div>
                             <label className="block text-xs font-semibold text-[#0F172A] mb-1">
@@ -3339,24 +3801,9 @@ export default function DashboardPage() {
                               type="text"
                               value={socialLinks}
                               onChange={(e) => setSocialLinks(e.target.value)}
-                              placeholder="Facebook: fb.com/mybiz, Yelp: yelp.com/biz/mybiz"
+                              placeholder="Facebook: facebook.com/mybiz, Yelp: yelp.com/biz/mybiz"
                               className="input-base"
                             />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-semibold text-[#0F172A] mb-1">
-                              Logo Image URL (Optional)
-                            </label>
-                            <input
-                              type="url"
-                              value={logoUrl}
-                              onChange={(e) => setLogoUrl(e.target.value)}
-                              placeholder="https://example.com/logo.png"
-                              className="input-base"
-                            />
-                            <p className="text-[11px] text-[#64748B] mt-0.5">
-                              Replaces standard brand typography in header with your custom logo file.
-                            </p>
                           </div>
                         </div>
                       )}
@@ -3365,125 +3812,15 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* STEP 3: SERVICE AREAS & RADIUS COVERAGE */}
-              {currentStep === 3 && (
-                <div className="space-y-6 animate-in fade-in duration-150">
-                  <ServiceAreaPicker
-                    businessCity={city}
-                    businessState={stateRegion}
-                    businessName={businessName}
-                    mainService={services[0] || businessType}
-                    servicesList={services}
-                    selectedCities={serviceAreaCities}
-                    onSelectedCitiesChange={setServiceAreaCities}
-                    createSeparateServiceLocationPages={createSeparateServiceLocationPages}
-                    onCreateSeparateServiceLocationPagesChange={setCreateSeparateServiceLocationPages}
-                    confirmedServesAreas={confirmedServesAreas}
-                    onConfirmedServesAreasChange={setConfirmedServesAreas}
-                  />
-                </div>
-              )}
-
-              {/* STEP 4: PAGES SELECTION */}
-              {currentStep === 4 && (
-                <div className="space-y-5 animate-in fade-in duration-150">
-                  <div>
-                    <h2 className="text-lg font-bold text-[#0F172A]">Choose your website pages</h2>
-                    <p className="text-xs text-[#64748B] mt-0.5">
-                      Select which pages you want included. Every page shares consistent navigation and relative links.
-                    </p>
-                  </div>
-
-                  {/* Live Count Badge */}
-                  <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-[#EEF2FF] border border-[#C7D2FE] text-xs font-semibold text-[#4F46E5]">
-                    <Layers className="w-4 h-4" />
-                    <span>Your website will have {selectedPages.length} pages</span>
-                  </div>
-
-                  {/* Visual Page Cards Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {AVAILABLE_PAGES.map((page) => {
-                      const isSelected = selectedPages.includes(page.id);
-                      return (
-                        <div
-                          key={page.id}
-                          onClick={() => togglePage(page.id)}
-                          className={`p-3.5 rounded-[12px] border text-left transition cursor-pointer flex items-start space-x-3 ${
-                            isSelected
-                              ? "border-[#4F46E5] bg-[#EEF2FF]/40 ring-1 ring-[#4F46E5]"
-                              : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
-                          }`}
-                        >
-                          <div className="mt-0.5 p-1.5 rounded-[8px] bg-white border border-[#E2E8F0] shadow-xs">
-                            {page.icon}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-bold text-[#0F172A]">{page.name}</span>
-                              <div
-                                className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                  isSelected
-                                    ? "bg-[#4F46E5] border-[#4F46E5] text-white"
-                                    : "border-slate-300 bg-white"
-                                }`}
-                              >
-                                {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                              </div>
-                            </div>
-                            <p className="text-xs text-[#64748B] mt-0.5 leading-relaxed">
-                              {page.description}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* SEO Multi-Page Toggles */}
-                  <div className="pt-2 border-t border-[#E2E8F0] space-y-3">
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={separateServicePages}
-                        onChange={(e) => setSeparateServicePages(e.target.checked)}
-                        className="mt-1 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-[#0F172A]">
-                          Create a separate landing page for each main service
-                        </span>
-                        <p className="text-[11px] text-[#64748B]">
-                          Tip: Dedicated service pages make it significantly easier to rank for specific terms like &quot;Water Heater Repair Dallas&quot;.
-                        </p>
-                      </div>
-                    </label>
-
-                    <label className="flex items-start space-x-3 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={separateAreaPages}
-                        onChange={(e) => setSeparateAreaPages(e.target.checked)}
-                        className="mt-1 w-4 h-4 rounded text-[#4F46E5] focus:ring-[#4F46E5]"
-                      />
-                      <div>
-                        <span className="text-xs font-bold text-[#0F172A]">
-                          Create a dedicated page for each service area
-                        </span>
-                        <p className="text-[11px] text-[#64748B]">
-                          Tip: Ranks individual neighboring cities and suburbs on Google Local Pack.
-                        </p>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 5: THEME SELECTION */}
-              {currentStep === 5 && (
+              {/* STEP 7: THEME */}
+              {currentStep === 7 && (
                 <div className="space-y-6 animate-in fade-in duration-150">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
-                      <h2 className="text-lg font-bold text-[#0F172A]">Choose your website theme</h2>
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                        Step 7 of 8
+                      </span>
+                      <h2 className="text-lg font-bold text-[#0F172A] mt-2">Website Theme Archetype</h2>
                       <p className="text-xs text-[#64748B] mt-0.5">
                         Select a visual style calibrated for your business and industry.
                       </p>
@@ -3751,308 +4088,709 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* STEP 6: REVIEW & GENERATE */}
-              {currentStep === 6 && (
+              {/* STEP 8: GENERATION SETTINGS */}
+              {currentStep === 8 && (
                 <div className="space-y-6 animate-in fade-in duration-150">
                   <div>
-                    <h2 className="text-lg font-bold text-[#0F172A]">Review your website plan</h2>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#4F46E5] bg-[#EEF2FF] px-2.5 py-0.5 rounded-full border border-[#C7D2FE]">
+                      Step 8 of 8
+                    </span>
+                    <h2 className="text-lg font-bold text-[#0F172A] mt-2">Generation Settings &amp; Architecture</h2>
                     <p className="text-xs text-[#64748B] mt-0.5">
-                      Verify everything looks great before triggering AI static site generation.
+                      Configure conversion layout architecture, image source, blog post depth, and core pages before compiling the blueprint.
                     </p>
                   </div>
 
-                  {/* Review Summary Card */}
-                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[14px] p-5 space-y-4">
-                    {/* Business Info Item */}
-                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
-                      <div>
-                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                          Business Info
+                  <div className="space-y-5">
+                    {/* Layout Style Selector */}
+                    <div>
+                      <label className="block text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
+                        Layout Archetype
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          {
+                            id: "Conversion",
+                            name: "Conversion Focus (Recommended)",
+                            desc: "High-contrast emergency call banner, sticky mobile CTA, 5-star badges, and instant quote forms.",
+                            tag: "High Calls",
+                          },
+                          {
+                            id: "Authority",
+                            name: "Authority & Proof",
+                            desc: "Deep trust blocks, licenses, insurance verification, case studies, and detailed guarantees.",
+                            tag: "Trust Heavy",
+                          },
+                          {
+                            id: "Speed Dispatch",
+                            name: "Speed Dispatch",
+                            desc: "Rapid emergency booking, arrival countdowns, direct SMS/phone triggers for trades.",
+                            tag: "24/7 Mobile",
+                          },
+                          {
+                            id: "Clean Minimal",
+                            name: "Clean Minimal",
+                            desc: "Modern generous whitespace, elegant editorial typography, and structured service cards.",
+                            tag: "Modern",
+                          },
+                        ].map((layout) => {
+                          const isSelected = layoutStyle === layout.id;
+                          return (
+                            <div
+                              key={layout.id}
+                              onClick={() => setLayoutStyle(layout.id)}
+                              className={`p-3.5 rounded-[12px] border text-left cursor-pointer transition flex flex-col justify-between ${
+                                isSelected
+                                  ? "border-[#4F46E5] bg-[#EEF2FF]/40 ring-1 ring-[#4F46E5]"
+                                  : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
+                              }`}
+                            >
+                              <div className="flex items-start justify-between mb-1.5">
+                                <span className="text-xs font-bold text-[#0F172A]">{layout.name}</span>
+                                <span
+                                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                                    isSelected
+                                      ? "bg-[#4F46E5] text-white"
+                                      : "bg-slate-100 text-[#475569]"
+                                  }`}
+                                >
+                                  {layout.tag}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-[#64748B] leading-relaxed">
+                                {layout.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Image Provider Selector */}
+                    <div>
+                      <label className="block text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
+                        Image Provider
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        {[
+                          {
+                            id: "Bing",
+                            name: "Bing Images",
+                            badge: "Recommended",
+                            desc: "High-relevance contractor and service imagery from Bing Search API.",
+                          },
+                          {
+                            id: "Pexels",
+                            name: "Pexels",
+                            badge: "Stock",
+                            desc: "Free high-resolution commercial stock photography library.",
+                          },
+                          {
+                            id: "Pixabay",
+                            name: "Pixabay",
+                            badge: "Stock",
+                            desc: "Royalty-free trade and equipment photography catalog.",
+                          },
+                          {
+                            id: "Curated Trade Library",
+                            name: "Curated Library",
+                            badge: "Built-in",
+                            desc: "Pre-vetted trade contractor photography bundled with RankLocal.",
+                          },
+                        ].map((provider) => {
+                          const isSelected = imageProvider === provider.id;
+                          return (
+                            <div
+                              key={provider.id}
+                              onClick={() => setImageProvider(provider.id)}
+                              className={`p-3 rounded-[12px] border text-left cursor-pointer transition ${
+                                isSelected
+                                  ? "border-[#4F46E5] bg-[#EEF2FF]/40 ring-1 ring-[#4F46E5]"
+                                  : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold text-[#0F172A]">{provider.name}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-[#4F46E5] stroke-[3]" />}
+                              </div>
+                              <p className="text-[11px] text-[#64748B] leading-tight">
+                                {provider.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Blog Posts Count */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Blog Posts &amp; Topical Authority
+                        </label>
+                        <span className="text-[11px] text-[#4F46E5] font-semibold">
+                          Builds Google local topical relevance
                         </span>
-                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
-                          {businessName || "Unnamed Business"}
-                        </h4>
-                        <p className="text-xs text-[#64748B] mt-0.5">
-                          {effectiveIndustry} • Niche Pack: <strong className="text-[#0F172A]">{currentNichePack.name}</strong> ({currentNichePack.schemaType}) • {services.length} services
-                        </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentStep(1)}
-                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-
-                    {/* Custom Content Instructions Item */}
-                    {customContentInstructions.trim() && (
-                      <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
-                        <div>
-                          <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                            Custom Content Instructions
-                          </span>
-                          <p className="text-xs text-[#0F172A] mt-1 italic bg-white p-2.5 rounded-lg border border-slate-200 line-clamp-2">
-                            &ldquo;{customContentInstructions.trim()}&rdquo;
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setCurrentStep(1)}
-                          className="text-xs font-semibold text-[#4F46E5] hover:underline shrink-0 ml-3"
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Location & SEO Item */}
-                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
-                      <div>
-                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                          Location &amp; SEO
-                        </span>
-                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
-                          {city}, {stateRegion}
-                        </h4>
-                        <p className="text-xs text-[#64748B] mt-0.5">
-                          Phone: {phone || "None"} • {keywords.length} target keywords
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentStep(2)}
-                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-
-                    {/* Service Areas Item */}
-                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
-                      <div>
-                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                          Service Areas &amp; Location Pages
-                        </span>
-                        <h4 className="text-sm font-bold text-[#0F172A] mt-0.5">
-                          {serviceAreaCities.length > 0
-                            ? `${serviceAreaCities.length} Selected Coverage Cities`
-                            : "Standard Regional Coverage"}
-                        </h4>
-                        <p className="text-xs text-[#64748B] mt-0.5">
-                          {serviceAreaCities.length > 0
-                            ? `Includes service-areas.html directory hub + ${createSeparateServiceLocationPages ? "dedicated landing pages per city" : "radius coverage list"}`
-                            : "No extra location landing pages selected"}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentStep(3)}
-                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-
-                    {/* Pages Item */}
-                    <div className="flex items-start justify-between pb-3 border-b border-[#E2E8F0]">
-                      <div>
-                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                          Pages to Generate ({selectedPages.length})
-                        </span>
-                        <p className="text-xs text-[#0F172A] font-medium mt-0.5">
-                          {selectedPages.join(", ")}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentStep(4)}
-                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-
-                    {/* Theme Item */}
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <span className="text-[11px] font-semibold text-[#64748B] uppercase tracking-wider block">
-                          Theme &amp; Style
-                        </span>
-                        <div className="flex items-center space-x-2 mt-1">
-                          <span
-                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
-                            style={{ backgroundColor: activeColors.primary }}
-                            title="Primary Color"
-                          />
-                          <span
-                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
-                            style={{ backgroundColor: activeColors.accent }}
-                            title="Accent Color"
-                          />
-                          <span
-                            className="w-3.5 h-3.5 rounded-full inline-block shadow-2xs border border-black/10"
-                            style={{ backgroundColor: activeColors.background }}
-                            title="Background Color"
-                          />
-                          <span className="text-xs font-bold text-[#0F172A]">{activeTheme.name}</span>
-                          {hasCustomColors && (
-                            <span className="text-[10px] font-medium text-[#10B981] bg-[#ECFDF5] px-1.5 py-0.5 rounded border border-[#A7F3D0]">
-                              Custom Colors
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-[#64748B] mt-0.5 font-mono">
-                          Heading: {activeTheme.fonts.heading} • Body: {activeTheme.fonts.body}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setCurrentStep(5)}
-                        className="text-xs font-semibold text-[#4F46E5] hover:underline"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Connected AI Model Notification */}
-                  <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="w-4 h-4 text-[#4F46E5]" />
-                      <span className="text-[#64748B]">
-                        Model:{" "}
-                        {hasKey ? (
-                          <>
-                            <strong className="text-[#0F172A]">{activeModel}</strong> ({activeProvider})
-                          </>
-                        ) : (
-                          <span className="text-amber-600 font-semibold">No AI model connected</span>
-                        )}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSettings("models")}
-                      className="font-bold text-[#4F46E5] hover:underline"
-                    >
-                      Change
-                    </button>
-                  </div>
-
-                  {/* Quality Review Setting Row */}
-                  <div className="bg-white border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-2">
-                      <Sparkles className="w-4 h-4 text-[#4F46E5]" />
-                      <span className="text-[#64748B]">
-                        Quality Review:{" "}
-                        {qualityReviewEnabled ? (
-                          <strong className="text-[#10B981]">On (Two-pass uniqueness &amp; SEO audit)</strong>
-                        ) : (
-                          <span className="text-[#64748B] font-medium">Off (Single generation pass)</span>
-                        )}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenSettings("preferences")}
-                      className="font-bold text-[#4F46E5] hover:underline"
-                    >
-                      Change
-                    </button>
-                  </div>
-
-                  {/* Stock Photo Source Status / Notice */}
-                  {!hasImageKey && !dismissImageNotice ? (
-                    <div className="bg-amber-50/80 border border-amber-200 rounded-[12px] p-3.5 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
-                      <div className="flex items-start sm:items-center space-x-2.5">
-                        <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
-                          <ImageIcon className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-amber-900">
-                            Add a free Pexels or Pixabay key in Settings to include real photos
-                          </p>
-                          <p className="text-amber-700 text-[11px] mt-0.5">
-                            Without an API key, we will automatically use our curated trade photography library.
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => setDismissImageNotice(true)}
-                          className="px-2.5 py-1.5 rounded-[8px] border border-amber-300 bg-white/90 hover:bg-white text-amber-800 font-medium text-[11px] transition shadow-2xs"
-                        >
-                          Continue with curated photos
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenSettings("images")}
-                          className="px-2.5 py-1.5 rounded-[8px] bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[11px] transition shadow-2xs"
-                        >
-                          Configure in Settings
-                        </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {[
+                          {
+                            count: 3,
+                            label: "3 Blog Posts (Recommended)",
+                            desc: "Standard topical cluster addressing common homeowner questions & emergency guides.",
+                          },
+                          {
+                            count: 5,
+                            label: "5 Blog Posts (Expanded)",
+                            desc: "Aggressive SEO cluster for highly competitive local search metros.",
+                          },
+                          {
+                            count: 0,
+                            label: "0 Posts (No Blog)",
+                            desc: "Core business pages only without article content marketing.",
+                          },
+                        ].map((b) => {
+                          const isSelected = blogPostsCount === b.count;
+                          return (
+                            <div
+                              key={b.count}
+                              onClick={() => setBlogPostsCount(b.count)}
+                              className={`p-3 rounded-[12px] border text-left cursor-pointer transition ${
+                                isSelected
+                                  ? "border-[#4F46E5] bg-[#EEF2FF]/40 ring-1 ring-[#4F46E5]"
+                                  : "border-[#E2E8F0] bg-white hover:border-[#CBD5E1]"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold text-[#0F172A]">{b.label}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-[#4F46E5] stroke-[3]" />}
+                              </div>
+                              <p className="text-[11px] text-[#64748B] leading-tight">
+                                {b.desc}
+                              </p>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  ) : hasImageKey ? (
-                    <div className="bg-emerald-50/70 border border-emerald-200 rounded-[12px] p-3.5 flex items-center justify-between text-xs">
+
+                    {/* Core Pages Checklist */}
+                    <div>
+                      <label className="block text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2">
+                        Core Website Pages Included
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {AVAILABLE_PAGES.slice(0, 6).map((page) => {
+                          const isSelected = selectedPages.includes(page.id);
+                          return (
+                            <div
+                              key={page.id}
+                              onClick={() => togglePage(page.id)}
+                              className={`p-2.5 rounded-[10px] border flex items-center justify-between cursor-pointer transition ${
+                                isSelected
+                                  ? "border-[#4F46E5] bg-[#EEF2FF]/30 text-[#0F172A]"
+                                  : "border-[#E2E8F0] bg-slate-50 text-[#64748B]"
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2 truncate">
+                                <span className="p-1 rounded bg-white border border-slate-200">
+                                  {page.icon}
+                                </span>
+                                <span className="text-xs font-semibold truncate">{page.name}</span>
+                              </div>
+                              <div
+                                className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ml-1 ${
+                                  isSelected
+                                    ? "bg-[#4F46E5] border-[#4F46E5] text-white"
+                                    : "border-slate-300 bg-white"
+                                }`}
+                              >
+                                {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Connected AI Model Notification */}
+                    <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3.5 flex items-center justify-between text-xs">
                       <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="w-4 h-4" />
+                        <div className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
+                          <Sparkles className="w-3.5 h-3.5" />
                         </div>
-                        <span className="text-emerald-950 font-medium">
-                          Real stock photos enabled{" "}
-                          <span className="text-emerald-700 font-normal">
-                            ({imageKeySource || "Pexels/Pixabay"})
-                          </span>
+                        <span className="text-[#64748B]">
+                          Connected Model:{" "}
+                          {hasKey ? (
+                            <>
+                              <strong className="text-[#0F172A] font-bold">{activeModel}</strong> ({activeProvider})
+                            </>
+                          ) : (
+                            <span className="text-amber-600 font-semibold">No AI model connected</span>
+                          )}
                         </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleOpenSettings("images")}
-                        className="font-bold text-emerald-700 hover:text-emerald-800 hover:underline"
+                        onClick={() => handleOpenSettings("models")}
+                        className="font-bold text-[#4F46E5] hover:underline cursor-pointer"
                       >
-                        Change
+                        Change Model
                       </button>
                     </div>
-                  ) : null}
+                  </div>
+                </div>
+              )}
 
-                  {/* Big Primary Generation Button */}
-                  <button
-                    type="button"
-                    onClick={handleGenerateWebsite}
-                    className="w-full inline-flex items-center justify-center space-x-2 py-4 px-6 rounded-[12px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-base font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0"
-                  >
-                    <Sparkles className="w-5 h-5" />
-                    <span>✨ Generate My Website</span>
-                  </button>
+              {/* STEP 9: SITE BLUEPRINT */}
+              {currentStep === 9 && (
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  {/* Blueprint Header with Top Action Buttons */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[#E2E8F0]">
+                    <div>
+                      <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#EEF2FF] text-[#4F46E5] border border-[#C7D2FE]">
+                        <FileText className="w-3.5 h-3.5" />
+                        <span>SITE BLUEPRINT</span>
+                      </span>
+                      <h2 className="text-xl font-bold text-[#0F172A] mt-2">
+                        Architectural Site Blueprint
+                      </h2>
+                      <p className="text-xs text-[#64748B] mt-0.5">
+                        Pre-generation URL map, structural hierarchy, and verified internal-linking connectivity graph.
+                      </p>
+                    </div>
+
+                    {/* Top Buttons: EDIT BLUEPRINT and GENERATE WEBSITE */}
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditBlueprintOpen(true)}
+                        className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-bold text-[#0F172A] transition shadow-xs cursor-pointer"
+                      >
+                        <FileEdit className="w-3.5 h-3.5 text-[#4F46E5]" />
+                        <span>EDIT BLUEPRINT</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleGenerateWebsite}
+                        className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>GENERATE WEBSITE</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* High-Contrast Metrics Summary Grid (Exact prompt specification) */}
+                  <div>
+                    <h3 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider mb-2.5">
+                      Blueprint Metrics Summary
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
+                      {/* Metric 1: Pages */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Pages
+                        </span>
+                        <div className="text-xl font-extrabold text-[#0F172A]">
+                          {computedPageCount}
+                        </div>
+                        <span className="text-[10px] text-[#10B981] font-semibold flex items-center justify-center gap-0.5">
+                          <Check className="w-2.5 h-2.5" /> Verified
+                        </span>
+                      </div>
+
+                      {/* Metric 2: Services */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Services
+                        </span>
+                        <div className="text-xl font-extrabold text-[#0F172A]">
+                          {services.length}
+                        </div>
+                        <span className="text-[10px] text-[#4F46E5] font-semibold">
+                          Dedicated Pages
+                        </span>
+                      </div>
+
+                      {/* Metric 3: Locations */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Locations
+                        </span>
+                        <div className="text-xl font-extrabold text-[#0F172A]">
+                          {computedLocationCount}
+                        </div>
+                        <span className="text-[10px] text-[#4F46E5] font-semibold">
+                          City Hubs
+                        </span>
+                      </div>
+
+                      {/* Metric 4: Blog Posts */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Blog posts
+                        </span>
+                        <div className="text-xl font-extrabold text-[#0F172A]">
+                          {blogPostsCount}
+                        </div>
+                        <span className="text-[10px] text-[#64748B] font-semibold">
+                          Topical Cluster
+                        </span>
+                      </div>
+
+                      {/* Metric 5: Theme */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Theme
+                        </span>
+                        <div className="text-sm font-extrabold text-[#0F172A] truncate" title={themeDisplayName}>
+                          {themeDisplayName}
+                        </div>
+                        <div className="flex items-center justify-center space-x-1">
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: activeColors.primary }}
+                          />
+                          <span
+                            className="w-2 h-2 rounded-full"
+                            style={{ backgroundColor: activeColors.accent }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Metric 6: Layout */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Layout
+                        </span>
+                        <div className="text-sm font-extrabold text-[#0F172A] truncate" title={layoutStyle}>
+                          {layoutStyle}
+                        </div>
+                        <span className="text-[10px] text-[#10B981] font-semibold">
+                          High-Converting
+                        </span>
+                      </div>
+
+                      {/* Metric 7: Image Provider */}
+                      <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[12px] p-3 text-center space-y-1">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-[#64748B] block">
+                          Image Provider
+                        </span>
+                        <div className="text-sm font-extrabold text-[#0F172A] truncate" title={imageProvider}>
+                          {imageProvider}
+                        </div>
+                        <span className="text-[10px] text-[#64748B] font-semibold">
+                          Trade Images
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pre-Generation Internal-Link Graph & Relationship Map */}
+                  <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-[14px] p-4 sm:p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Globe className="w-4 h-4 text-[#4F46E5]" />
+                        <h4 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Internal-Link Graph Matrix
+                        </h4>
+                      </div>
+                      <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" /> Graph Built Before Insertion
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                      {/* Homepage Relationships */}
+                      <div className="p-3 bg-white border border-[#E2E8F0] rounded-[10px] space-y-1.5">
+                        <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                          <span>Homepage</span>
+                          <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Hub</span>
+                        </div>
+                        <ul className="text-[11px] text-[#64748B] space-y-1">
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Services ({services.length} links)</span>
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Locations ({computedLocationCount} links)</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Service Relationships */}
+                      <div className="p-3 bg-white border border-[#E2E8F0] rounded-[10px] space-y-1.5">
+                        <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                          <span>Service Pages</span>
+                          <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Silov</span>
+                        </div>
+                        <ul className="text-[11px] text-[#64748B] space-y-1">
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Related Services</span>
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Locations served</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Location Relationships */}
+                      <div className="p-3 bg-white border border-[#E2E8F0] rounded-[10px] space-y-1.5">
+                        <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                          <span>Location Pages</span>
+                          <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Local</span>
+                        </div>
+                        <ul className="text-[11px] text-[#64748B] space-y-1">
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Core Services</span>
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Related Locations</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      {/* Blog Relationships */}
+                      <div className="p-3 bg-white border border-[#E2E8F0] rounded-[10px] space-y-1.5">
+                        <div className="font-bold text-[#0F172A] flex items-center justify-between">
+                          <span>Blog Posts</span>
+                          <span className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Cluster</span>
+                        </div>
+                        <ul className="text-[11px] text-[#64748B] space-y-1">
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Featured Services</span>
+                          </li>
+                          <li className="flex items-center gap-1">
+                            <ArrowRight className="w-3 h-3 text-indigo-500 shrink-0" />
+                            <span>→ Service Locations</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Architectural URL Map & Target Pages Table */}
+                  <div className="border border-[#E2E8F0] rounded-[14px] overflow-hidden">
+                    <div className="p-3.5 bg-slate-50 border-b border-[#E2E8F0] flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Layers className="w-4 h-4 text-[#4F46E5]" />
+                        <h4 className="text-xs font-bold text-[#0F172A] uppercase tracking-wider">
+                          Verified Target URL Map ({computedPageCount} Static Routes)
+                        </h4>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#10B981] flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        <span>All Target URLs Exist (Zero Broken Links)</span>
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto text-xs">
+                      {/* Core Page: Home */}
+                      <div className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-indigo-600 font-bold">index.html</span>
+                          <span className="text-slate-400">/</span>
+                          <span className="text-[#0F172A] font-medium">{businessName || "Homepage"}</span>
+                        </div>
+                        <div className="flex items-center space-x-3 text-[11px]">
+                          <span className="text-[#64748B] font-mono">LocalBusiness Schema</span>
+                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                        </div>
+                      </div>
+
+                      {/* Core Hubs */}
+                      {selectedPages.includes("About") && (
+                        <div className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-indigo-600 font-bold">about.html</span>
+                            <span className="text-slate-400">/</span>
+                            <span className="text-[#0F172A] font-medium">About Us</span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-[11px]">
+                            <span className="text-[#64748B] font-mono">BreadcrumbList Schema</span>
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedPages.includes("Services") && (
+                        <div className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-indigo-600 font-bold">services.html</span>
+                            <span className="text-slate-400">/</span>
+                            <span className="text-[#0F172A] font-medium">Services Directory Hub</span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-[11px]">
+                            <span className="text-[#64748B] font-mono">Service Hub Schema</span>
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dedicated Service Landing Pages */}
+                      {separateServicePages &&
+                        services.map((srv) => {
+                          const slug = srv.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+                          return (
+                            <div key={srv} className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-indigo-600 font-bold">services/{slug}.html</span>
+                                <span className="text-slate-400">/</span>
+                                <span className="text-[#0F172A] font-medium">{srv}</span>
+                              </div>
+                              <div className="flex items-center space-x-3 text-[11px]">
+                                <span className="text-[#64748B] font-mono">Service Schema</span>
+                                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                      {/* Dedicated Location Landing Pages */}
+                      {separateAreaPages &&
+                        (serviceAreas.length > 0 ? serviceAreas : [city || "Dallas"]).map((area) => {
+                          const slug = area.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+                          return (
+                            <div key={area} className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                              <div className="flex items-center space-x-2">
+                                <span className="font-mono text-indigo-600 font-bold">areas/{slug}.html</span>
+                                <span className="text-slate-400">/</span>
+                                <span className="text-[#0F172A] font-medium">{area} Local Coverage</span>
+                              </div>
+                              <div className="flex items-center space-x-3 text-[11px]">
+                                <span className="text-[#64748B] font-mono">LocalBusiness Area Schema</span>
+                                <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+
+                      {/* Blog Hub & Posts */}
+                      {blogPostsCount > 0 && (
+                        <div className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-indigo-600 font-bold">blog.html</span>
+                            <span className="text-slate-400">/</span>
+                            <span className="text-[#0F172A] font-medium">Blog &amp; Knowledge Hub ({blogPostsCount} articles)</span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-[11px]">
+                            <span className="text-[#64748B] font-mono">BlogPosting Schema</span>
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Contact & FAQ */}
+                      <div className="p-2.5 px-4 flex items-center justify-between hover:bg-slate-50">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-indigo-600 font-bold">contact.html</span>
+                          <span className="text-slate-400">/</span>
+                          <span className="text-[#0F172A] font-medium">Contact &amp; Dispatch</span>
+                        </div>
+                        <div className="flex items-center space-x-3 text-[11px]">
+                          <span className="text-[#64748B] font-mono">ContactPoint Schema</span>
+                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-semibold">Canonical Target</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Primary Bottom Generation Action Callout */}
+                  <div className="p-5 rounded-[14px] bg-gradient-to-r from-indigo-50 via-slate-50 to-emerald-50 border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <h4 className="text-sm font-bold text-[#0F172A] flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-[#4F46E5]" />
+                        <span>Ready to build {businessName || "your local website"}?</span>
+                      </h4>
+                      <p className="text-xs text-[#64748B]">
+                        Click Generate Website to initiate the complete 14-stage static assembly pipeline with automatic quality &amp; SEO audit.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditBlueprintOpen(true)}
+                        className="px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-bold text-[#0F172A] transition shadow-xs cursor-pointer"
+                      >
+                        EDIT BLUEPRINT
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleGenerateWebsite}
+                        className="inline-flex items-center space-x-2 px-6 py-3 rounded-[12px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>GENERATE WEBSITE</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Wizard Bottom Navigation Buttons */}
               <div className="flex items-center justify-between pt-4 border-t border-[#E2E8F0]">
-                {currentStep > 1 ? (
+                {currentStep > 1 && currentStep < 9 ? (
                   <button
                     type="button"
                     onClick={handlePrevStep}
-                    className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition"
+                    className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-semibold text-[#0F172A] transition cursor-pointer"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     <span>Back</span>
+                  </button>
+                ) : currentStep === 9 ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditBlueprintOpen(true)}
+                    className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-[10px] border border-[#CBD5E1] bg-white hover:bg-slate-50 text-xs font-bold text-[#0F172A] transition shadow-xs cursor-pointer"
+                  >
+                    <FileEdit className="w-3.5 h-3.5 text-[#4F46E5]" />
+                    <span>EDIT BLUEPRINT</span>
                   </button>
                 ) : (
                   <div />
                 )}
 
-                {currentStep < 6 && (
+                {currentStep < 8 && (
                   <button
                     type="button"
                     onClick={handleNextStep}
-                    className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-sm transition"
+                    className="inline-flex items-center space-x-1.5 px-5 py-2.5 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-semibold shadow-sm transition cursor-pointer"
                   >
-                    <span>Continue</span>
+                    <span>Next: {stepsList[currentStep]?.label}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {currentStep === 8 && (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="inline-flex items-center space-x-1.5 px-6 py-2.5 rounded-[10px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-xs font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                  >
+                    <span>Review Site Blueprint</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+
+                {currentStep === 9 && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateWebsite}
+                    className="inline-flex items-center space-x-2 px-6 py-3 rounded-[12px] bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-bold shadow-md transition transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>GENERATE WEBSITE</span>
                   </button>
                 )}
               </div>

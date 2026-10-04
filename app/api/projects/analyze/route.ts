@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auditWebsiteQuality, SiteFile, SiteMetaInfo } from "@/lib/quality/website-quality-auditor";
+import { auditWebsiteQuality, SiteFile, SiteMetaInfo, QualityAuditEngine } from "@/lib/quality/website-quality-auditor";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -40,10 +40,19 @@ export async function POST(req: NextRequest) {
     }
 
     const report = auditWebsiteQuality(files, meta);
+    const siteQualityAudit = QualityAuditEngine.audit(files, {
+      businessName: meta.businessName,
+      phone: meta.phone,
+      email: meta.email,
+      city: meta.city,
+      state: meta.state,
+      domain: meta.domain,
+    });
 
     return NextResponse.json({
       success: true,
       report,
+      siteQualityAudit,
     });
   } catch (error: any) {
     console.error("[Quality Audit API] Error during site analysis:", error);

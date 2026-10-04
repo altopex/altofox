@@ -122,7 +122,7 @@ export interface InternalLinkingStrategy {
 }
 
 export interface ImageStrategy {
-  provider: "bing" | "pexels" | "pixabay" | "google" | "ai";
+  provider: "bing" | "google" | "none" | "pexels" | "pixabay" | "ai" | string;
   imageProvider: string; // compatibility alias
   heroStyle: string;
   slotsRequired: number;
@@ -197,8 +197,8 @@ export interface BlueprintInput {
   theme?: string | Theme;
   selectedTheme?: string;
   layoutFamily?: string;
-  imageProvider?: "bing" | "pexels" | "pixabay" | "google" | "ai";
-  preferredSource?: "bing" | "pexels" | "pixabay" | "google" | "ai";
+  imageProvider?: "bing" | "google" | "none" | "pexels" | "pixabay" | "ai" | string;
+  preferredSource?: "bing" | "google" | "none" | "pexels" | "pixabay" | "ai" | string;
   separateServicePages?: boolean;
   separateAreaPages?: boolean;
   pagesToCreate?: string[];
@@ -863,3 +863,9 @@ export function validateSiteBlueprint(bp: any): { valid: boolean; errors: string
 
   return { valid: errors.length === 0, errors };
 }
+
+export const SiteBlueprintEngine = {
+  createBlueprint: createSiteBlueprint,
+  validateBlueprint: validateSiteBlueprint,
+};
+

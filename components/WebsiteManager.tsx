@@ -1965,6 +1965,9 @@ export function WebsiteManager({
           handleSelectPage(pagePath);
           setActiveTab("overview");
         }}
+        onNavigateToTab={(tab) => {
+          setActiveTab(tab);
+        }}
       />
 
       {/* Cloudflare Direct Publishing Modal */}

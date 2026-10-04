@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
     lightboxModal.className = 'lightbox-modal';
     lightboxModal.innerHTML = `
       <button class="lightbox-close" aria-label="Close Lightbox">&times;</button>
-      <img class="lightbox-img" src="" alt="Enlarged view">
+      <img class="lightbox-img" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E" alt="Enlarged view">
     `;
     document.body.appendChild(lightboxModal);
   }
