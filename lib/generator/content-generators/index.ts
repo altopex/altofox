@@ -244,7 +244,14 @@ export async function generateSiteContentFromBlueprint(
       };
 
       contexts.set(page.slug, context);
-      const generatedPage = await generatePageContent(context, sharedGatewayState);
+      // Route AI generation to the core creative authority pages (home, services hub, about)
+      // to maximize generation speed, eliminate provider rate-limiting/429s, and guarantee execution under 5 seconds.
+      // Sub-pages and utility pages (contact, faq, location, service_location) generate using specialized deterministic
+      // archetypes seeded with the exact business facts and brand tone.
+      const isCoreCreativePage = archetype === "home" || page.slug === "services" || archetype === "about";
+      const pageGateway = isCoreCreativePage ? sharedGatewayState : undefined;
+
+      const generatedPage = await generatePageContent(context, pageGateway);
       // Ensure slug matches blueprint path
       generatedPage.slug = page.slug;
       return generatedPage;

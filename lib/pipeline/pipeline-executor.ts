@@ -471,17 +471,7 @@ export async function executeGenerationPipeline(
         };
       }
     } catch (err: any) {
-      console.warn("Could not resolve credentials for provider:", err);
-      const errMsg = `No API key configured for provider "${providerType}". Please add your API key in Settings or click "Assemble with Curated Templates".`;
-      tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, true);
-      return {
-        success: false,
-        failedStage: "FAILED_PROVIDER",
-        error: errMsg,
-        canFallbackToTemplates: true,
-        provider: providerType,
-        pipeline: tracker.getState(),
-      };
+      console.warn("[Pipeline] Credential resolution error, proceeding statelessly:", err);
     }
 
     if (!creds?.apiKey) {
@@ -512,8 +502,8 @@ export async function executeGenerationPipeline(
           providerName: creds.providerName,
         },
         model: targetModel,
-        maxTokens: 4000,
-        timeoutMs: 7500,
+        maxTokens: 3000,
+        timeoutMs: 6500,
       };
 
       try {
@@ -547,8 +537,8 @@ export async function executeGenerationPipeline(
           },
           model: targetModel,
           responseFormat: "text",
-          maxTokens: 4000,
-          timeoutMs: 7000,
+          maxTokens: 3000,
+          timeoutMs: 5000,
           feature: "quality-review",
         });
         const parsedReview = extractAndParseJSON(reviewResponse.text);
