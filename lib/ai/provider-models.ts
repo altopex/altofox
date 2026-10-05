@@ -217,8 +217,13 @@ export function normalizeModelForProvider(provider: string, model: string): stri
   }
 
   const raw = model.trim();
+  const lower = raw.toLowerCase();
 
   if (provider.includes("gemini")) {
+    // If a non-Gemini model was passed to Gemini provider, fall back to flagship Gemini
+    if (lower.startsWith("gpt") || lower.startsWith("claude") || lower.startsWith("deepseek")) {
+      return "gemini-3.8-flash";
+    }
     const cleaned = raw.replace(/^models\//, "");
     // Deprecated experimental aliases remapping
     if (cleaned === "gemini-2.0-flash-exp") {
@@ -231,6 +236,34 @@ export function normalizeModelForProvider(provider: string, model: string): stri
       return "gemini-3.8-flash";
     }
     return cleaned;
+  }
+
+  if (provider.includes("openai") && !provider.includes("openrouter")) {
+    if (lower.startsWith("gemini") || lower.startsWith("claude") || lower.startsWith("llama")) {
+      return "gpt-6-astra";
+    }
+    return raw;
+  }
+
+  if (provider.includes("anthropic")) {
+    if (lower.startsWith("gemini") || lower.startsWith("gpt") || lower.startsWith("llama")) {
+      return "claude-sonnet-5-5";
+    }
+    return raw;
+  }
+
+  if (provider.includes("deepseek")) {
+    if (!lower.startsWith("deepseek")) {
+      return "deepseek-v4.1-flash";
+    }
+    return raw;
+  }
+
+  if (provider.includes("groq")) {
+    if (lower.startsWith("gemini") || lower.startsWith("gpt") || lower.startsWith("claude")) {
+      return "llama-3.3-70b-versatile";
+    }
+    return raw;
   }
 
   return raw;

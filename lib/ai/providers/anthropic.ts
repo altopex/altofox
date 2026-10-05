@@ -84,7 +84,12 @@ export class AnthropicProvider implements IAIProvider {
       throw new Error(errorMsg);
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error("Malformed response from Anthropic: Server did not return valid JSON.");
+    }
     const content =
       data.content
         ?.map((part: { type: string; text?: string }) => (part.type === "text" ? part.text : ""))

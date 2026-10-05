@@ -483,76 +483,48 @@ export async function executeGenerationPipeline(
     }
 
     if (!creds?.apiKey) {
-      const errMsg = `No API key configured for provider "${providerType}". Please configure your API key in Settings or click "Assemble with Curated Templates".`;
-      tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, true);
-      return {
-        success: false,
-        failedStage: "FAILED_PROVIDER",
-        error: errMsg,
-        canFallbackToTemplates: true,
-        provider: providerType,
-        pipeline: tracker.getState(),
-      };
-    }
-
-    const rawTargetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-3.8-flash";
-    targetModel = normalizeModelForProvider(
-      ((resolvedProvider || providerType) as ProviderType) || "gemini",
-      rawTargetModel
-    );
-    if (assembleOptions.providerCredentials) {
-      assembleOptions.providerCredentials.model = targetModel;
-    }
-
-    const gatewayParams = {
-      directCredentials: {
-        provider: resolvedProvider || providerType,
-        apiKey: creds.apiKey,
-        baseUrl: creds.baseUrl,
-        model: targetModel,
-        organizationId: creds.organizationId,
-        providerName: creds.providerName,
-      },
-      model: targetModel,
-      maxTokens: 4000,
-      timeoutMs: 18000,
-    };
-
-    try {
-      console.log(`[Pipeline] Generating blueprint pages via dedicated archetype generators (${resolvedProvider || providerType} - ${targetModel})...`);
-      contentJSON = await generateSiteContentFromBlueprint(siteBlueprint, verifiedFacts, gatewayParams);
-      contentJSON = validateContentJSON(contentJSON);
-      generationMethod = "ai-archetypes";
-    } catch (genErr: any) {
-      console.warn("[Pipeline] Archetype AI generation failed, checking error type:", genErr?.message || genErr);
-      const errLower = String(genErr?.message || genErr).toLowerCase();
-      const isAuthError =
-        errLower.includes("401") ||
-        errLower.includes("unauthorized") ||
-        errLower.includes("invalid api key") ||
-        errLower.includes("403") ||
-        errLower.includes("forbidden");
-
-      if (isAuthError) {
-        console.warn(`[Pipeline] Authentication failure for ${providerType}.`);
-        const errMsg = `AI generation failed: ${genErr?.message || genErr}`;
-        tracker.failStage("GENERATING_CONTENT", "FAILED_PROVIDER", errMsg, false);
-        return {
-          success: false,
-          failedStage: "FAILED_PROVIDER",
-          error: errMsg,
-          canFallbackToTemplates: true,
-          isAuthError: true,
-          provider: providerType,
-          model: targetModel,
-          pipeline: tracker.getState(),
-        };
-      }
-
-      console.log(`[Pipeline] Falling back cleanly to deterministic blueprint generator for all ${siteBlueprint.pageCount} pages...`);
+      console.log(`[Pipeline] No API key configured for provider "${providerType}". Generating complete website using deterministic blueprint engine...`);
       contentJSON = await generateSiteContentFromBlueprint(siteBlueprint, verifiedFacts);
       contentJSON = validateContentJSON(contentJSON);
       generationMethod = "blueprint-deterministic";
+    } else {
+      let rawTargetModel = model || creds.defaultModel || PROVIDER_PRESETS[providerType]?.defaultModel || "gemini-3.8-flash";
+      if (resolvedProvider && resolvedProvider !== providerType) {
+        rawTargetModel = creds.defaultModel || PROVIDER_PRESETS[resolvedProvider as ProviderType]?.defaultModel || "default";
+      }
+      targetModel = normalizeModelForProvider(
+        ((resolvedProvider || providerType) as ProviderType) || "gemini",
+        rawTargetModel
+      );
+      if (assembleOptions.providerCredentials) {
+        assembleOptions.providerCredentials.model = targetModel;
+      }
+
+      const gatewayParams = {
+        directCredentials: {
+          provider: resolvedProvider || providerType,
+          apiKey: creds.apiKey,
+          baseUrl: creds.baseUrl,
+          model: targetModel,
+          organizationId: creds.organizationId,
+          providerName: creds.providerName,
+        },
+        model: targetModel,
+        maxTokens: 4000,
+        timeoutMs: 18000,
+      };
+
+      try {
+        console.log(`[Pipeline] Generating blueprint pages via dedicated archetype generators (${resolvedProvider || providerType} - ${targetModel})...`);
+        contentJSON = await generateSiteContentFromBlueprint(siteBlueprint, verifiedFacts, gatewayParams);
+        contentJSON = validateContentJSON(contentJSON);
+        generationMethod = "ai-archetypes";
+      } catch (genErr: any) {
+        console.warn(`[Pipeline] AI provider generation encountered an issue (${genErr?.message || genErr}). Seamlessly falling back to deterministic blueprint generator for all ${siteBlueprint.pageCount} pages...`);
+        contentJSON = await generateSiteContentFromBlueprint(siteBlueprint, verifiedFacts);
+        contentJSON = validateContentJSON(contentJSON);
+        generationMethod = "blueprint-deterministic";
+      }
     }
 
     // Optional Quality Review Pass

@@ -234,21 +234,15 @@ export async function initializeOrMigrateProviders(): Promise<{
   profiles: SavedProviderProfile[];
   settings: ProviderManagerSettings;
 }> {
-  // If already populated in memory, return
-  if (inMemoryProfiles.size > 0) {
-    return {
-      profiles: Array.from(inMemoryProfiles.values()),
-      settings: inMemorySettings,
-    };
-  }
-
-  // 1. Populate defaults
-  for (const tmpl of PRESET_PROVIDERS_TEMPLATE) {
-    inMemoryProfiles.set(tmpl.id, {
-      ...tmpl,
-      apiKey: "",
-      maskedKey: "",
-    });
+  // 1. Populate defaults if empty
+  if (inMemoryProfiles.size === 0) {
+    for (const tmpl of PRESET_PROVIDERS_TEMPLATE) {
+      inMemoryProfiles.set(tmpl.id, {
+        ...tmpl,
+        apiKey: "",
+        maskedKey: "",
+      });
+    }
   }
 
   // 2. Load keys from DB ApiKey records if present
@@ -263,8 +257,16 @@ export async function initializeOrMigrateProviders(): Promise<{
       });
 
       if (decrypted && decrypted.trim()) {
-        const pType = rec.provider as ProviderType;
-        const profileId = rec.provider === "custom" ? "custom-default" : `${rec.provider}-default`;
+        const rawProv = rec.provider.toLowerCase();
+        let profileId = rec.provider.endsWith("-default") ? rec.provider : `${rec.provider}-default`;
+        if (rawProv === "custom") profileId = "custom-default";
+        else if (rawProv.includes("gemini")) profileId = "gemini-default";
+        else if (rawProv.includes("openai")) profileId = "openai-default";
+        else if (rawProv.includes("anthropic") || rawProv.includes("claude")) profileId = "anthropic-default";
+        else if (rawProv.includes("openrouter")) profileId = "openrouter-default";
+        else if (rawProv.includes("deepseek")) profileId = "deepseek-default";
+        else if (rawProv.includes("groq")) profileId = "groq-default";
+
         const existing = inMemoryProfiles.get(profileId);
 
         if (existing) {

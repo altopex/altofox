@@ -282,7 +282,12 @@ async function callProviderProfile(
       }
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error("Malformed response from Gemini: Server did not return valid JSON.");
+    }
     const candidate = data.candidates?.[0];
 
     // Safely extract generated text across all parts (excluding pure thought parts first)
@@ -377,7 +382,12 @@ async function callProviderProfile(
       throw new Error(errorMsg);
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error("Malformed response from Anthropic: Server did not return valid JSON.");
+    }
     const { content } = extractChoiceContent(data);
     if (!content || typeof content !== "string") {
       throw new Error("Anthropic returned an empty response.");

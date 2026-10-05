@@ -43,9 +43,21 @@ export async function getProviderCredentials(
 
   // 2. Check Database for encrypted key for requested provider
   try {
-    const record = await db.apiKey.findUnique({
+    let record = await db.apiKey.findUnique({
       where: { provider },
     });
+
+    if (!record) {
+      record = await db.apiKey.findFirst({
+        where: {
+          OR: [
+            { provider: `${provider}-default` },
+            { provider: `default-${provider}` },
+            { providerName: { contains: provider } },
+          ],
+        },
+      });
+    }
 
     if (record) {
       const decrypted = decryptApiKey({
@@ -114,9 +126,20 @@ export async function getProviderCredentials(
 
     // Check DB for altProvider
     try {
-      const altRecord = await db.apiKey.findUnique({
+      let altRecord = await db.apiKey.findUnique({
         where: { provider: altProvider },
       });
+      if (!altRecord) {
+        altRecord = await db.apiKey.findFirst({
+          where: {
+            OR: [
+              { provider: `${altProvider}-default` },
+              { provider: `default-${altProvider}` },
+              { providerName: { contains: altProvider } },
+            ],
+          },
+        });
+      }
       if (altRecord) {
         const decrypted = decryptApiKey({
           encryptedKey: altRecord.encryptedKey,

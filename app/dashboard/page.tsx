@@ -1775,7 +1775,19 @@ export default function DashboardPage() {
         }),
       });
 
-      const data = await res.json();
+      const resText = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        const cleanSnippet = resText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
+        throw new Error(
+          cleanSnippet
+            ? `Server response error (${res.status}): ${cleanSnippet}`
+            : `Server returned HTTP ${res.status} ${res.statusText || "without JSON content"}`
+        );
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || "Instant assembly failed");
       }
@@ -2037,7 +2049,18 @@ export default function DashboardPage() {
         }),
       });
 
-      const data = await res.json();
+      const resText = await res.text();
+      let data: any = null;
+      try {
+        data = JSON.parse(resText);
+      } catch {
+        const cleanSnippet = resText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
+        throw new Error(
+          cleanSnippet
+            ? `Server response error (${res.status}): ${cleanSnippet}`
+            : `Server returned HTTP ${res.status} ${res.statusText || "without JSON content"}`
+        );
+      }
 
       if (!res.ok || !data.success) {
         const failedStage: GenerationFailureStage = data.failedStage || "FAILED_PROVIDER";

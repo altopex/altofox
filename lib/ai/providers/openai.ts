@@ -75,7 +75,12 @@ export class OpenAIProvider implements IAIProvider {
       throw new Error(errorMsg);
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error("Malformed response from OpenAI: Server did not return valid JSON.");
+    }
     const content = data.choices?.[0]?.message?.content || "";
 
     return {

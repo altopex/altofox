@@ -138,9 +138,24 @@ export function extractAndParseJSON(raw: string): unknown {
   // Look for the first '{' and last '}'
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
+  const firstBracket = cleaned.indexOf("[");
+  const lastBracket = cleaned.lastIndexOf("]");
+
+  // Guard: if no brace or bracket exists, this is plain text / error message, not JSON
+  if (firstBrace === -1 && firstBracket === -1) {
+    const preview = cleaned.slice(0, 150).replace(/\s+/g, " ");
+    throw new Error(`AI response did not contain JSON structure: "${preview}"`);
+  }
 
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     const slice = cleaned.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(slice);
+    } catch {}
+  }
+
+  if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    const slice = cleaned.slice(firstBracket, lastBracket + 1);
     try {
       return JSON.parse(slice);
     } catch {}
@@ -157,8 +172,9 @@ export function extractAndParseJSON(raw: string): unknown {
         return JSON.parse(repairedFromBrace);
       } catch {}
     }
+    const cleanErr = err instanceof Error ? err.message : String(err);
     throw new Error(
-      `Failed to parse AI output as JSON: ${err instanceof Error ? err.message : String(err)}`
+      `Failed to parse AI output as JSON: ${cleanErr}`
     );
   }
 }

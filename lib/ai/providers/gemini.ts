@@ -92,7 +92,12 @@ export class GeminiProvider implements IAIProvider {
       }
     }
 
-    const data = await res.json();
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error("Malformed response from Gemini: Server did not return valid JSON.");
+    }
     const candidate = data.candidates?.[0];
     const text =
       candidate?.content?.parts
