@@ -37,16 +37,44 @@ export function TopBar({
   onOpenLogin,
   onOpenDashboard,
 }: TopBarProps) {
-  // Format model display name cleanly
   const getModelDisplayName = () => {
     if (!hasKey) return "No AI connected";
-    if (activeModel.includes("gpt-4o-mini")) return "GPT-4o Mini";
-    if (activeModel.includes("gpt-4o")) return "GPT-4o";
+    // Gemini
+    if (activeModel.includes("gemini-3.8-flash-cyber")) return "Gemini 3.8 Flash Cyber";
+    if (activeModel.includes("gemini-3.8-flash")) return "Gemini 3.8 Flash";
+    if (activeModel.includes("gemini-3.8-pro")) return "Gemini 3.8 Pro";
+    if (activeModel.includes("gemini-2.5-flash")) return "Gemini 2.5 Flash";
+    if (activeModel.includes("gemini-2.0")) return "Gemini 2.0 Flash";
     if (activeModel.includes("gemini-1.5-pro")) return "Gemini 1.5 Pro";
     if (activeModel.includes("gemini-1.5-flash")) return "Gemini 1.5 Flash";
-    if (activeModel.includes("gemini-2.0")) return "Gemini 2.0 Flash";
-    if (activeModel.includes("claude-3.5-sonnet")) return "Claude 3.5 Sonnet";
+    // OpenAI
+    if (activeModel.includes("gpt-6-astra")) return "GPT-6 Astra";
+    if (activeModel.includes("gpt-6-sol")) return "GPT-6 Sol";
+    if (activeModel.includes("gpt-6-luna")) return "GPT-6 Luna";
+    if (activeModel.includes("gpt-4o-mini")) return "GPT-4o Mini";
+    if (activeModel.includes("gpt-4o")) return "GPT-4o";
+    if (activeModel.includes("o3-mini")) return "o3-mini";
+    if (activeModel.includes("o1")) return "o1";
+    // Anthropic
+    if (activeModel.includes("claude-sonnet-5-5") || activeModel.includes("claude-sonnet-5.5")) return "Claude Sonnet 5.5";
+    if (activeModel.includes("claude-opus-5-5") || activeModel.includes("claude-opus-5.5")) return "Claude Opus 5.5";
+    if (activeModel.includes("claude-fable-5")) return "Claude Fable 5.1";
+    if (activeModel.includes("claude-3-7")) return "Claude 3.7 Sonnet";
+    if (activeModel.includes("claude-3-5-sonnet")) return "Claude 3.5 Sonnet";
+    if (activeModel.includes("claude-3-5-haiku")) return "Claude 3.5 Haiku";
+    // DeepSeek
+    if (activeModel.includes("deepseek-v4.1-flash")) return "DeepSeek V4.1 Flash";
+    if (activeModel.includes("deepseek-chat")) return "DeepSeek V3";
+    if (activeModel.includes("deepseek-reasoner")) return "DeepSeek R1";
+    // Groq
     if (activeModel.includes("llama-3.3")) return "Llama 3.3 70B";
+    if (activeModel.includes("llama-3.1")) return "Llama 3.1 8B";
+    if (activeModel.includes("mixtral")) return "Mixtral 8x7B";
+    // Fallback: clean up OpenRouter format "provider/model-name"
+    if (activeModel.includes("/")) {
+      const parts = activeModel.split("/");
+      return parts[parts.length - 1].replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
     return activeModel || activeProvider.toUpperCase();
   };
 

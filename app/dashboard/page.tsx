@@ -1997,7 +1997,7 @@ export default function DashboardPage() {
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
       setGenerationElapsedSeconds(elapsed);
 
-      if (elapsed >= 45) {
+      if (elapsed >= 120) {
         setIsGenerationTakingLong(true);
       }
     }, 1000);
