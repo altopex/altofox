@@ -511,6 +511,15 @@ export default function DashboardPage() {
   const generationTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastFormDataRef = useRef<any>(null);
 
+  // Page-Level Queue Progress State
+  const [pageQueueStatus, setPageQueueStatus] = useState<{
+    total: number;
+    completed: number;
+    processing: string[];
+    completedList: string[];
+    remaining: number;
+  } | null>(null);
+
   // Post-Generation Storage Decision State (Default: Ephemeral Preview & Download; Explicit Choice to Save)
   const [isDecisionModalOpen, setIsDecisionModalOpen] = useState(false);
   const [pendingGeneratedSite, setPendingGeneratedSite] = useState<any>(null);
@@ -2042,6 +2051,14 @@ export default function DashboardPage() {
       // Step B: Controlled Batch Queue Execution
       setGenerationStage("GENERATING_CONTENT");
       const allCompletedPages: any[] = [];
+      setPageQueueStatus({
+        total: job.totalPages,
+        completed: 0,
+        processing: job.batches[0]?.pageSlugs || [],
+        completedList: [],
+        remaining: job.totalPages,
+      });
+
       const credentials = {
         provider: activeProvider,
         model: activeModel,
@@ -2075,6 +2092,14 @@ export default function DashboardPage() {
         const completedCount = allCompletedPages.length;
         const processingCount = batch.pageSlugs.length;
         const remainingCount = Math.max(0, job.totalPages - completedCount - processingCount);
+
+        setPageQueueStatus({
+          total: job.totalPages,
+          completed: completedCount,
+          processing: batch.pageSlugs,
+          completedList: allCompletedPages.map((p) => p.title?.split("|")[0]?.trim() || p.slug),
+          remaining: remainingCount,
+        });
 
         const progressPercent = Math.min(80, Math.round(20 + (completedCount / job.totalPages) * 60));
         setGenerationPercent(progressPercent);
@@ -2134,6 +2159,14 @@ export default function DashboardPage() {
         }
 
         allCompletedPages.push(...batchData.completedPages);
+        setPageQueueStatus({
+          total: job.totalPages,
+          completed: allCompletedPages.length,
+          processing: job.batches[i + 1]?.pageSlugs || [],
+          completedList: allCompletedPages.map((p) => p.title?.split("|")[0]?.trim() || p.slug),
+          remaining: Math.max(0, job.totalPages - allCompletedPages.length),
+        });
+
         addGenLog(
           `Batch ${i + 1}/${job.totalBatches} completed (${batchData.completedPages.length} pages). Total completed: ${allCompletedPages.length}/${job.totalPages}`,
           "success"
@@ -2911,6 +2944,43 @@ export default function DashboardPage() {
                               Cancel Generation
                             </button>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Granular Page-Level Progress Card */}
+                      {pageQueueStatus && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-left space-y-2.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                              Page Progress: {pageQueueStatus.completed} / {pageQueueStatus.total} Completed
+                            </span>
+                            <span className="text-slate-500 font-medium">
+                              {pageQueueStatus.remaining} Remaining
+                            </span>
+                          </div>
+                          {pageQueueStatus.processing.length > 0 && (
+                            <div className="text-xs text-indigo-700 bg-indigo-50 px-2.5 py-1.5 rounded-lg border border-indigo-100 flex items-center space-x-2">
+                              <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-indigo-600" />
+                              <span className="font-semibold shrink-0">Processing:</span>
+                              <span className="truncate">{pageQueueStatus.processing.join(", ")}</span>
+                            </div>
+                          )}
+                          {pageQueueStatus.completedList.length > 0 && (
+                            <div className="max-h-24 overflow-y-auto space-y-1 text-[11px] font-mono pr-1">
+                              {pageQueueStatus.completedList.slice(-6).map((name, idx) => (
+                                <div key={idx} className="flex items-center space-x-1.5 text-emerald-600">
+                                  <span className="font-bold">✓</span>
+                                  <span className="truncate text-slate-700">{name}</span>
+                                </div>
+                              ))}
+                              {pageQueueStatus.completedList.length > 6 && (
+                                <div className="text-[10px] text-slate-400 italic">
+                                  + {pageQueueStatus.completedList.length - 6} earlier pages completed
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
 
