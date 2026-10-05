@@ -5,7 +5,7 @@ import {
 } from "@/lib/pipeline/pipeline-executor";
 import { GenerationPipelineTracker } from "@/lib/pipeline/generation-pipeline";
 
-export const maxDuration = 180;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

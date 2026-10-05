@@ -346,6 +346,8 @@ export async function executeGenerationPipeline(
     hasBlog: Boolean((websiteData as any)?.hasBlog || (websiteData as any)?.includeBlog || (input as any)?.includeBlog || (formData as any)?.hasBlog),
     blogPosts: Array.isArray((formData as any)?.blogPosts) ? (formData as any).blogPosts : undefined,
     tracker,
+    validateNetwork: false,
+    fastOfflinePreview: true,
     onProgress: (stageName: GenerationStageName, progressPct: number, msg: string) => {
       tracker.updateProgress(stageName, progressPct, msg);
     },
@@ -511,7 +513,7 @@ export async function executeGenerationPipeline(
         },
         model: targetModel,
         maxTokens: 4000,
-        timeoutMs: 18000,
+        timeoutMs: 7500,
       };
 
       try {
@@ -546,7 +548,7 @@ export async function executeGenerationPipeline(
           model: targetModel,
           responseFormat: "text",
           maxTokens: 4000,
-          timeoutMs: 20000,
+          timeoutMs: 7000,
           feature: "quality-review",
         });
         const parsedReview = extractAndParseJSON(reviewResponse.text);
