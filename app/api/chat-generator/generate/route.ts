@@ -9,7 +9,7 @@ import {
 } from "@/lib/chat-generator/generator-prompt";
 import { getThemeById, THEMES } from "@/lib/themes";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

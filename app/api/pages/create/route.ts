@@ -7,7 +7,7 @@ import { ProviderType } from "@/lib/ai/types";
 import { SavedProject, ProjectVersion, ProjectChangeLogEntry } from "@/lib/storage/project-types";
 import { QualityAuditEngine } from "@/lib/quality/quality-audit-engine";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

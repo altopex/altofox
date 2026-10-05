@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getAnyConfiguredProviderCredentials } from "@/lib/ai/keys";
 import { ProviderType } from "@/lib/ai/types";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

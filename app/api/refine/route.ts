@@ -6,7 +6,7 @@ import { SYSTEM_PROMPT } from "@/lib/generator/prompt";
 import { extractAndParseJSON, validateGeneratedWebsite } from "@/lib/generator/validator";
 import { gatewayRequest, gatewayErrorMessage, GatewayError } from "@/lib/ai/provider-gateway";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {

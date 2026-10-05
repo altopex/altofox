@@ -3,7 +3,7 @@ import { deletePageFromProject } from "@/lib/seo/connectivity-engine";
 import { db } from "@/lib/db";
 import { SavedProject, ProjectVersion, ProjectChangeLogEntry } from "@/lib/storage/project-types";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
