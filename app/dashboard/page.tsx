@@ -2002,15 +2002,14 @@ export default function DashboardPage() {
       setGenerationProgressText(`Analyzing niche and connecting to ${activeProvider.toUpperCase()} (${activeModel})…`);
       addGenLog(`Provider connection established: ${activeProvider.toUpperCase()} (${activeModel})`, "info");
 
-      // Allow UI to paint stage transition
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 150));
 
-      setGenerationStage("GENERATING_CONTENT");
-      setGenerationPercent(STAGE_CONFIG.GENERATING_CONTENT.defaultPercent);
-      setGenerationProgressText(`Generating high-converting local trade copy with ${activeProvider.toUpperCase()}…`);
-      addGenLog("Generating multi-page content with deterministic seed variation...", "info");
+      // Step A: Initialize Structured Generation Job and Blueprint
+      setGenerationStage("BLUEPRINT_READY");
+      setGenerationPercent(STAGE_CONFIG.BLUEPRINT_READY.defaultPercent);
+      setGenerationProgressText("Creating targeted multi-page blueprint and partitioning queue…");
 
-      const res = await fetch("/api/generate", {
+      const initJobRes = await fetch("/api/generate/job", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: abortController.signal,
@@ -2018,88 +2017,199 @@ export default function DashboardPage() {
           provider: activeProvider,
           model: activeModel,
           apiKey: localKey || undefined,
-          baseUrl:
-            (typeof window !== "undefined"
-              ? localStorage.getItem(`altofox_base_url_${activeProvider}`) ||
-                localStorage.getItem(`ranklocal_base_url_${activeProvider}`) ||
-                localStorage.getItem("altofox_base_url_custom") ||
-                localStorage.getItem("ranklocal_base_url_custom")
-              : undefined) || undefined,
-          organizationId:
-            (typeof window !== "undefined"
-              ? localStorage.getItem(`altofox_org_id_${activeProvider}`) ||
-                localStorage.getItem(`ranklocal_org_id_${activeProvider}`) ||
-                localStorage.getItem("altofox_org_id_custom") ||
-                localStorage.getItem("ranklocal_org_id_custom")
-              : undefined) || undefined,
-          providerName:
-            (typeof window !== "undefined"
-              ? localStorage.getItem(`altofox_provider_name_${activeProvider}`) ||
-                localStorage.getItem(`ranklocal_provider_name_${activeProvider}`) ||
-                localStorage.getItem("altofox_provider_name_custom") ||
-                localStorage.getItem("ranklocal_provider_name_custom")
-              : undefined) || undefined,
-          pexelsKey,
-          pixabayKey,
-          googleKey,
-          googleCx,
-          preferredSource,
-          qualityReview: prefReview,
           formData,
+          preferredSource,
+          batchSize: 5,
         }),
       });
 
-      const resText = await res.text();
-      let data: any = null;
+      const initJobText = await initJobRes.text();
+      let initJobData: any = null;
       try {
-        data = JSON.parse(resText);
+        initJobData = JSON.parse(initJobText);
       } catch {
-        const cleanSnippet = resText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
-        throw new Error(
-          cleanSnippet
-            ? `Server response error (${res.status}): ${cleanSnippet}`
-            : `Server returned HTTP ${res.status} ${res.statusText || "without JSON content"}`
+        const cleanSnippet = initJobText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
+        throw new Error(cleanSnippet ? `Job initialization failed (${initJobRes.status}): ${cleanSnippet}` : `Job init failed HTTP ${initJobRes.status}`);
+      }
+
+      if (!initJobRes.ok || !initJobData.success || !initJobData.job) {
+        throw new Error(initJobData?.error || "Failed to initialize website generation job.");
+      }
+
+      const job = initJobData.job;
+      addGenLog(`Job created: ${job.totalPages} pages planned across ${job.totalBatches} batches (${job.batchSize} pages/batch).`, "info");
+
+      // Step B: Controlled Batch Queue Execution
+      setGenerationStage("GENERATING_CONTENT");
+      const allCompletedPages: any[] = [];
+      const credentials = {
+        provider: activeProvider,
+        model: activeModel,
+        apiKey: localKey || undefined,
+        baseUrl:
+          (typeof window !== "undefined"
+            ? localStorage.getItem(`altofox_base_url_${activeProvider}`) ||
+              localStorage.getItem(`ranklocal_base_url_${activeProvider}`) ||
+              localStorage.getItem("altofox_base_url_custom") ||
+              localStorage.getItem("ranklocal_base_url_custom")
+            : undefined) || undefined,
+        organizationId:
+          (typeof window !== "undefined"
+            ? localStorage.getItem(`altofox_org_id_${activeProvider}`) ||
+              localStorage.getItem(`ranklocal_org_id_${activeProvider}`) ||
+              localStorage.getItem("altofox_org_id_custom") ||
+              localStorage.getItem("ranklocal_org_id_custom")
+            : undefined) || undefined,
+        providerName:
+          (typeof window !== "undefined"
+            ? localStorage.getItem(`altofox_provider_name_${activeProvider}`) ||
+              localStorage.getItem(`ranklocal_provider_name_${activeProvider}`) ||
+              localStorage.getItem("altofox_provider_name_custom") ||
+              localStorage.getItem("ranklocal_provider_name_custom")
+            : undefined) || undefined,
+      };
+
+      for (let i = 0; i < job.batches.length; i++) {
+        if (abortController.signal.aborted) throw new Error("AbortError");
+        const batch = job.batches[i];
+        const completedCount = allCompletedPages.length;
+        const processingCount = batch.pageSlugs.length;
+        const remainingCount = Math.max(0, job.totalPages - completedCount - processingCount);
+
+        const progressPercent = Math.min(80, Math.round(20 + (completedCount / job.totalPages) * 60));
+        setGenerationPercent(progressPercent);
+        setGenerationProgressText(
+          `Generating pages ${completedCount + 1}–${completedCount + processingCount} of ${job.totalPages} (Batch ${i + 1}/${job.totalBatches})…`
+        );
+        addGenLog(
+          `Batch ${i + 1}/${job.totalBatches}: [${batch.pageSlugs.slice(0, 3).join(", ")}${batch.pageSlugs.length > 3 ? "..." : ""}] — Completed: ${completedCount} | Processing: ${processingCount} | Remaining: ${remainingCount}`,
+          "info"
+        );
+
+        let batchData: any = null;
+        let attempts = 0;
+        const maxAttempts = 2;
+
+        while (attempts < maxAttempts && !batchData) {
+          attempts++;
+          try {
+            const batchRes = await fetch("/api/generate/batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              signal: abortController.signal,
+              body: JSON.stringify({
+                jobId: job.jobId,
+                blueprint: job.blueprint,
+                batchIndex: i,
+                pageSlugs: batch.pageSlugs,
+                verifiedFacts: job.verifiedFacts,
+                credentials,
+              }),
+            });
+
+            const batchText = await batchRes.text();
+            let parsedBatch: any = null;
+            try {
+              parsedBatch = JSON.parse(batchText);
+            } catch {
+              throw new Error(`Batch HTTP ${batchRes.status}: ${batchText.slice(0, 150)}`);
+            }
+
+            if (batchRes.ok && parsedBatch.success && Array.isArray(parsedBatch.completedPages)) {
+              batchData = parsedBatch;
+            } else {
+              if (attempts < maxAttempts) {
+                addGenLog(`Batch ${i + 1} transient warning: ${parsedBatch?.error || "Retrying batch..."}`, "warn");
+                await new Promise((r) => setTimeout(r, 1000));
+              } else {
+                throw new Error(parsedBatch?.error || `Batch ${i + 1} failed after ${maxAttempts} attempts.`);
+              }
+            }
+          } catch (batchErr: any) {
+            if (abortController.signal.aborted) throw batchErr;
+            if (attempts >= maxAttempts) throw batchErr;
+            addGenLog(`Batch ${i + 1} retry attempt ${attempts}: ${batchErr?.message || "error"}`, "warn");
+            await new Promise((r) => setTimeout(r, 1000));
+          }
+        }
+
+        allCompletedPages.push(...batchData.completedPages);
+        addGenLog(
+          `Batch ${i + 1}/${job.totalBatches} completed (${batchData.completedPages.length} pages). Total completed: ${allCompletedPages.length}/${job.totalPages}`,
+          "success"
         );
       }
 
-      if (!res.ok || !data.success) {
-        const failedStage: GenerationFailureStage = data.failedStage || "FAILED_PROVIDER";
-        addGenLog(`Generation halted at stage ${failedStage}: ${data.error || "Provider error"}`, "error");
-        setGenerationStage(failedStage);
-        setGenerationError({
-          message: data.error || `Server returned HTTP ${res.status}: ${res.statusText}`,
-          canFallback: Boolean(data.canFallbackToTemplates),
-          failedStage,
-        });
-        if (data.pipeline) {
-          setActivePipeline(data.pipeline);
-        }
-        setGenerating(false);
-        addToast({
-          type: "error",
-          title: `Generation Error: ${failedStage.replace("FAILED_", "")}`,
-          message: data.error || "Generation could not be completed.",
-        });
-        return;
+      // Step C: Assemble and Package the Static Website
+      setGenerationStage("COLLECTING_IMAGES");
+      setGenerationPercent(82);
+      setGenerationProgressText("Gathering licensed trade photography and media…");
+      addGenLog("Resolving trade photography and responsive media assets...", "info");
+
+      await new Promise((r) => setTimeout(r, 120));
+
+      setGenerationStage("BUILDING_PAGES");
+      setGenerationPercent(86);
+      setGenerationProgressText("Rendering static HTML templates and responsive layouts…");
+
+      setGenerationStage("GENERATING_INTERNAL_LINKS");
+      setGenerationPercent(90);
+      setGenerationProgressText("Wiring contextual silo links and internal cross-references…");
+
+      setGenerationStage("GENERATING_SEO");
+      setGenerationPercent(93);
+      setGenerationProgressText("Generating local SEO schemas, meta tags, and sitemaps…");
+
+      const assembleRes = await fetch("/api/generate/assemble", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortController.signal,
+        body: JSON.stringify({
+          jobId: job.jobId,
+          blueprint: job.blueprint,
+          allPages: allCompletedPages,
+          theme: job.theme,
+          websiteData: job.websiteData,
+          options: {
+            preferredSource,
+            pexelsKey,
+            pixabayKey,
+            googleKey,
+            googleCx,
+            serviceAreaCities: formData.serviceAreaCities,
+            domain: websiteDomain.trim(),
+            mapEmbed: googleMaps.trim(),
+          },
+          saveToDb: false,
+        }),
+      });
+
+      const assembleText = await assembleRes.text();
+      let assembleData: any = null;
+      try {
+        assembleData = JSON.parse(assembleText);
+      } catch {
+        const cleanSnippet = assembleText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
+        throw new Error(cleanSnippet ? `Assembly failed (${assembleRes.status}): ${cleanSnippet}` : `Assembly failed HTTP ${assembleRes.status}`);
       }
 
-      if (data.pipeline) {
-        setActivePipeline(data.pipeline);
+      if (!assembleRes.ok || !assembleData.success) {
+        throw new Error(assembleData.error || "Failed to assemble static website.");
       }
 
       setGenerationStage("PACKAGING");
-      setGenerationPercent(STAGE_CONFIG.PACKAGING.defaultPercent);
+      setGenerationPercent(97);
       setGenerationProgressText("Packaging zero-build static pages and assets…");
-      addGenLog(`Packaging ${data.files?.length || 0} static HTML pages, CSS, and metadata...`, "info");
+      addGenLog(`Packaging ${assembleData.files?.length || 0} static HTML pages, CSS, and metadata...`, "info");
 
       await new Promise((r) => setTimeout(r, 150));
 
       setGenerationStage("READY");
       setGenerationPercent(100);
       setGenerationProgressText("Website generation complete! Preparing preview…");
-      addGenLog(`Website generated successfully! Quality score: ${data.qualityReport?.overallScore || 90}/100`, "success");
+      addGenLog(`Website generated successfully! Quality score: ${assembleData.qualityReport?.overallScore || 90}/100`, "success");
 
-      const success = await handleProcessGeneratedSite(data, formData);
+      const success = await handleProcessGeneratedSite(assembleData, formData);
       if (success) {
         setGenerationStage("READY");
       } else {

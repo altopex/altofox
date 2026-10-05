@@ -698,8 +698,31 @@ export function auditSiteSimilarity(
   let totalScore = 0;
   let pairCount = 0;
 
+  // Adaptive comparison strategy:
+  // For small sites (<= 15 pages), run exhaustive all-pairs comparison.
+  // For large sites (20-100+ pages), compare each page against its immediate archetype peers
+  // and adjacent siblings to avoid O(N^2) CPU starvation (e.g. 4,950 pairs on 100 pages).
+  const isLargeSite = pages.length > 15;
+  const maxSiblingDistance = isLargeSite ? 4 : pages.length;
+
   for (let i = 0; i < pages.length; i++) {
+    const pageA = pages[i];
+    const slugA = ("seo" in pageA ? pageA.slug : pageA.slug) || "";
+
     for (let j = i + 1; j < pages.length; j++) {
+      // In large sites, compare with adjacent siblings (within window) or same-silo pages
+      if (isLargeSite && j - i > maxSiblingDistance) {
+        // Also check if both are service or both are location pages to catch cross-silo duplication
+        const pageB = pages[j];
+        const slugB = ("seo" in pageB ? pageB.slug : pageB.slug) || "";
+        const sameSilo =
+          (slugA.includes("service") && slugB.includes("service")) ||
+          (slugA.startsWith("plumber-") && slugB.startsWith("plumber-"));
+        if (!sameSilo && j % 5 !== 0) {
+          continue; // Sample every 5th page for cross-checking
+        }
+      }
+
       const pair = comparePages(pages[i], pages[j], options);
       comparisons.push(pair);
       totalScore += pair.overallSimilarity;

@@ -181,83 +181,89 @@ export async function generateSiteContentFromBlueprint(
     ? { ...gatewayParams, _state: { disabled: false } }
     : undefined;
 
-  // Concurrently generate all blueprint pages in parallel to maximize throughput and finish well within serverless timeouts
-  const batchResults = await Promise.all(
-    blueprint.pages.map(async (page) => {
-      let archetype: PageArchetype = "service";
-      const pageTypeStr = page.type as string;
-      if (pageTypeStr === "home") archetype = "home";
-      else if (pageTypeStr === "about") archetype = "about";
-      else if (pageTypeStr === "contact") archetype = "contact";
-      else if (pageTypeStr === "faq") archetype = "faq";
-      else if (pageTypeStr === "individual-service-area" || (page.serviceName && page.locationName && pageTypeStr !== "home")) archetype = "service_location";
-      else if (pageTypeStr === "individual-area" || pageTypeStr === "service-areas") archetype = "location";
-      else if (pageTypeStr === "individual-service" || pageTypeStr === "services") archetype = "service";
-      else if (pageTypeStr === "blog") archetype = "blog";
+  // Controlled Page-Generation Queue:
+  // Generate pages in configurable batches of 5 to enforce controlled concurrency,
+  // eliminate event-loop starvation, and ensure predictable execution across any page count (10 to 100+).
+  const BATCH_SIZE = 5;
+  for (let b = 0; b < blueprint.pages.length; b += BATCH_SIZE) {
+    const batchPages = blueprint.pages.slice(b, b + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batchPages.map(async (page) => {
+        let archetype: PageArchetype = "service";
+        const pageTypeStr = page.type as string;
+        if (pageTypeStr === "home") archetype = "home";
+        else if (pageTypeStr === "about") archetype = "about";
+        else if (pageTypeStr === "contact") archetype = "contact";
+        else if (pageTypeStr === "faq") archetype = "faq";
+        else if (pageTypeStr === "individual-service-area" || (page.serviceName && page.locationName && pageTypeStr !== "home")) archetype = "service_location";
+        else if (pageTypeStr === "individual-area" || pageTypeStr === "service-areas") archetype = "location";
+        else if (pageTypeStr === "individual-service" || pageTypeStr === "services") archetype = "service";
+        else if (pageTypeStr === "blog") archetype = "blog";
 
-      const pageSeed = `${blueprint.siteSeed}-${page.slug}`;
+        const pageSeed = `${blueprint.siteSeed}-${page.slug}`;
 
-      const context: PageGenerationContext = {
-        pageType: archetype,
-        pagePurpose: `Dedicated ${page.type} for ${page.title}`,
-        primaryKeyword: page.targetKeywords[0] || `${blueprint.niche} in ${blueprint.primaryCity}`,
-        secondaryKeywords: page.targetKeywords.slice(1),
-        searchIntent:
-          archetype === "home"
-            ? "commercial"
-            : archetype === "service" || (archetype as any) === "service_location"
-            ? "transactional"
-            : archetype === "location"
-            ? "local_navigational"
-            : archetype === "contact"
-            ? "transactional"
-            : "informational",
-        service: page.serviceName
-          ? {
-              name: page.serviceName,
-              slug: page.slug,
-            }
-          : {
-              name: `${blueprint.primaryService || blueprint.niche} Services`,
-              slug: page.slug,
-            },
-        location: page.locationName
-          ? {
-              city: page.locationName,
-              state: blueprint.state,
-            }
-          : {
-              city: blueprint.primaryCity,
-              state: blueprint.state,
-              neighborhoods: blueprint.neighborhoods,
-            },
-        relatedServices: blueprint.services.map((s) => ({ name: s.name, slug: s.slug })),
-        relatedLocations: blueprint.locations.map((l) => ({ name: l.name, slug: l.slug, state: l.state })),
-        internalLinkTargets,
-        contentVariationSeed: {
-          siteSeed: blueprint.siteSeed,
-          pageSeed,
-          sectionSeed: `sec-${page.slug}`,
-        },
-        businessFacts: verifiedFacts,
-        brandTone: blueprint.brandInformation.tone,
-      };
+        const context: PageGenerationContext = {
+          pageType: archetype,
+          pagePurpose: `Dedicated ${page.type} for ${page.title}`,
+          primaryKeyword: page.targetKeywords[0] || `${blueprint.niche} in ${blueprint.primaryCity}`,
+          secondaryKeywords: page.targetKeywords.slice(1),
+          searchIntent:
+            archetype === "home"
+              ? "commercial"
+              : archetype === "service" || (archetype as any) === "service_location"
+              ? "transactional"
+              : archetype === "location"
+              ? "local_navigational"
+              : archetype === "contact"
+              ? "transactional"
+              : "informational",
+          service: page.serviceName
+            ? {
+                name: page.serviceName,
+                slug: page.slug,
+              }
+            : {
+                name: `${blueprint.primaryService || blueprint.niche} Services`,
+                slug: page.slug,
+              },
+          location: page.locationName
+            ? {
+                city: page.locationName,
+                state: blueprint.state,
+              }
+            : {
+                city: blueprint.primaryCity,
+                state: blueprint.state,
+                neighborhoods: blueprint.neighborhoods,
+              },
+          relatedServices: blueprint.services.map((s) => ({ name: s.name, slug: s.slug })),
+          relatedLocations: blueprint.locations.map((l) => ({ name: l.name, slug: l.slug, state: l.state })),
+          internalLinkTargets,
+          contentVariationSeed: {
+            siteSeed: blueprint.siteSeed,
+            pageSeed,
+            sectionSeed: `sec-${page.slug}`,
+          },
+          businessFacts: verifiedFacts,
+          brandTone: blueprint.brandInformation.tone,
+        };
 
-      contexts.set(page.slug, context);
-      // Route AI generation to the core creative authority pages (home, services hub, about)
-      // to maximize generation speed, eliminate provider rate-limiting/429s, and guarantee execution under 5 seconds.
-      // Sub-pages and utility pages (contact, faq, location, service_location) generate using specialized deterministic
-      // archetypes seeded with the exact business facts and brand tone.
-      const isCoreCreativePage = archetype === "home" || page.slug === "services" || archetype === "about";
-      const pageGateway = isCoreCreativePage ? sharedGatewayState : undefined;
+        contexts.set(page.slug, context);
+        // Route AI generation to the core creative authority pages (home, services hub, about)
+        // to maximize generation speed, eliminate provider rate-limiting/429s, and guarantee execution under 5 seconds.
+        // Sub-pages and utility pages (contact, faq, location, service_location) generate using specialized deterministic
+        // archetypes seeded with the exact business facts and brand tone.
+        const isCoreCreativePage = archetype === "home" || page.slug === "services" || archetype === "about";
+        const pageGateway = isCoreCreativePage ? sharedGatewayState : undefined;
 
-      const generatedPage = await generatePageContent(context, pageGateway);
-      // Ensure slug matches blueprint path
-      generatedPage.slug = page.slug;
-      return generatedPage;
-    })
-  );
-  generatedPages.push(...batchResults);
+        const generatedPage = await generatePageContent(context, pageGateway);
+        // Ensure slug matches blueprint path
+        generatedPage.slug = page.slug;
+        return generatedPage;
+      })
+    );
+    generatedPages.push(...batchResults);
+  }
 
   // Deterministic Content Similarity Checker & Self-Healing Remediation Pass
   const { pages: differentiatedPages, audit: similarityAudit } = await auditAndDifferentiateSitePages(
